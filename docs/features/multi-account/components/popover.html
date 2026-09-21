@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClaudeBar — Menu Bar Popover (Multi-Account)</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css">
+<style>
+  body { align-items: center; }
+
+  .frame {
+    width: 400px;
+    opacity: 0;
+    animation: popoverIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.1s forwards;
+  }
+  .popover { width: 400px; }
+  .popover-content {
+    position: relative;
+    z-index: 1;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* ── Header ── */
+  .popover-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 4px;
+  }
+  .logo-group { display: flex; align-items: center; gap: 8px; }
+  .logo-icon {
+    width: 28px; height: 28px; border-radius: 8px;
+    background: var(--accent-gradient);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px; color: white;
+    box-shadow: 0 2px 10px rgba(140,82,218,0.4);
+  }
+  .logo-text { font-weight: 700; font-size: 15px; letter-spacing: -0.3px; }
+  .header-actions { display: flex; gap: 6px; }
+  .header-btn {
+    width: 28px; height: 28px; border-radius: 8px; border: none;
+    background: var(--glass-bg); color: var(--text-secondary);
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    font-size: 13px; transition: all 0.15s ease;
+  }
+  .header-btn:hover { background: var(--hover-overlay); color: var(--text-primary); transform: scale(1.05); }
+
+  /* ── Account filter toggles ── */
+  .account-section-header { display: flex; align-items: center; gap: 6px; padding: 0 2px; }
+  .account-section-label {
+    font-size: 9px; font-weight: 600; letter-spacing: 1.2px;
+    text-transform: uppercase; color: var(--text-tertiary); flex-shrink: 0;
+  }
+  .account-filter-pills { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: none; flex: 1; }
+  .account-filter-pills::-webkit-scrollbar { display: none; }
+  .account-filter {
+    display: flex; align-items: center; gap: 4px;
+    padding: 4px 8px; border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.15); background: transparent;
+    cursor: pointer; white-space: nowrap; transition: all 0.2s ease; flex-shrink: 0;
+  }
+  .account-filter:hover { background: var(--hover-overlay); border-color: rgba(255,255,255,0.25); }
+  .account-filter.on { background: rgba(140,82,218,0.15); border-color: rgba(140,82,218,0.5); }
+  .account-filter.on .filter-avatar { background: var(--accent-gradient); color: white; }
+  .account-filter.on .filter-name { font-weight: 600; color: var(--text-primary); }
+  .filter-avatar {
+    width: 16px; height: 16px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 8px; font-weight: 700; background: var(--glass-bg); color: var(--text-secondary);
+  }
+  .filter-name { font-size: 10px; font-weight: 500; color: var(--text-secondary); line-height: 1; }
+  .filter-status { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+
+  /* ── Account groups ── */
+  .account-group {
+    display: flex; flex-direction: column; gap: 6px;
+    opacity: 0; animation: cardIn 0.5s ease forwards;
+  }
+  .account-group:nth-child(1) { animation-delay: 0.25s; }
+  .account-group:nth-child(2) { animation-delay: 0.40s; }
+  .account-group:nth-child(3) { animation-delay: 0.55s; }
+  .account-group-header { display: flex; align-items: center; gap: 6px; padding: 0 2px; }
+  .group-avatar {
+    width: 18px; height: 18px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 8px; font-weight: 700; flex-shrink: 0;
+  }
+  .group-name {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.5px;
+    text-transform: uppercase; color: var(--text-secondary); flex: 1;
+  }
+  .group-status-badge {
+    font-size: 7px; font-weight: 600; padding: 2px 6px; border-radius: 5px; letter-spacing: 0.3px;
+  }
+  .group-status-badge.healthy { background: rgba(90,235,174,0.12); color: var(--status-healthy); }
+  .group-status-badge.warning { background: rgba(250,184,90,0.12); color: var(--status-warning); }
+  .group-status-badge.unreachable { background: rgba(120,120,135,0.15); color: var(--status-unreachable); }
+
+  /* Active indicator on group header */
+  .group-active-tag {
+    font-size: 7px; font-weight: 700; letter-spacing: 0.5px;
+    text-transform: uppercase; color: var(--status-healthy);
+    padding: 2px 5px; border-radius: 4px;
+    background: rgba(90,235,174,0.1);
+    border: 1px solid rgba(90,235,174,0.2);
+    display: flex; align-items: center; gap: 3px;
+  }
+  .group-active-dot {
+    width: 4px; height: 4px; border-radius: 50%;
+    background: var(--status-healthy);
+    animation: activePulse 2s ease-in-out infinite;
+  }
+  @keyframes activePulse {
+    0%, 100% { box-shadow: 0 0 2px rgba(90,235,174,0.3); }
+    50% { box-shadow: 0 0 6px rgba(90,235,174,0.7); }
+  }
+
+  /* Rotation info banner */
+  .rotation-banner {
+    display: flex; align-items: center; gap: 6px;
+    padding: 6px 10px; border-radius: 8px;
+    background: linear-gradient(135deg, rgba(90,235,174,0.06), rgba(140,82,218,0.05));
+    border: 1px solid rgba(90,235,174,0.15);
+    font-size: 9px; color: var(--text-secondary);
+    opacity: 0; animation: cardIn 0.5s ease 0.65s forwards;
+  }
+  .rotation-banner .rotation-icon { font-size: 12px; flex-shrink: 0; }
+  .rotation-banner strong { color: var(--status-healthy); }
+  .rotation-banner .muted { color: var(--text-tertiary); }
+
+  /* ── Compact stat cards ── */
+  .compact-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .compact-card {
+    padding: 10px; border-radius: 10px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04));
+    border: 1px solid var(--card-border); transition: all 0.15s ease; cursor: default;
+  }
+  .compact-card:hover {
+    transform: scale(1.015);
+    background: linear-gradient(135deg, rgba(255,255,255,0.13), rgba(255,255,255,0.06));
+  }
+  .compact-label { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+  .compact-label-left { display: flex; align-items: center; gap: 3px; }
+  .compact-label-icon { font-size: 8px; font-weight: 700; }
+  .compact-label-text {
+    font-size: 7px; font-weight: 600; letter-spacing: 0.8px;
+    text-transform: uppercase; color: var(--text-secondary);
+  }
+  .compact-value { font-size: 22px; font-weight: 700; letter-spacing: -1px; line-height: 1; margin-bottom: 5px; }
+  .compact-value .unit { font-size: 11px; font-weight: 500; color: var(--text-secondary); letter-spacing: 0; }
+  .compact-progress { height: 3px; border-radius: 2px; background: rgba(255,255,255,0.06); overflow: hidden; }
+  .compact-progress-fill {
+    height: 100%; border-radius: 2px; background: var(--accent-gradient);
+    transition: width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .compact-progress-fill.warning { background: linear-gradient(90deg, var(--status-warning), #f59e0b); }
+  .compact-card.unreachable { opacity: 0.5; position: relative; }
+  .compact-card.unreachable::after {
+    content: 'Re-auth needed'; position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%); font-size: 8px; font-weight: 600;
+    letter-spacing: 0.5px; color: var(--status-unreachable);
+    background: rgba(30,20,56,0.85); padding: 3px 8px; border-radius: 4px; white-space: nowrap;
+  }
+
+  /* ── Back link ── */
+  .back-link {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; color: var(--text-tertiary); text-decoration: none;
+    font-family: var(--font-mono); letter-spacing: 0.5px;
+    margin-bottom: 8px; transition: color 0.15s ease;
+  }
+  .back-link:hover { color: var(--accent-purple); }
+</style>
+</head>
+<body>
+
+<div class="frame">
+  <a href="../index.html" class="back-link">← All Views</a>
+  <div class="section-label">Menu Bar Popover — Parallel Monitoring</div>
+
+  <div class="popover panel orb-purple orb-pink">
+    <div class="popover-content">
+
+      <!-- Header -->
+      <div class="popover-header">
+        <div class="logo-group">
+          <div class="logo-icon">C</div>
+          <div class="logo-text">ClaudeBar</div>
+        </div>
+        <div class="header-actions">
+          <button class="header-btn" title="Refresh">↻</button>
+          <button class="header-btn" title="Settings">⚙</button>
+        </div>
+      </div>
+
+      <!-- Provider pills -->
+      <div class="provider-pills">
+        <div class="provider-pill active"><span class="pill-icon">◎</span> Claude</div>
+        <div class="provider-pill"><span class="pill-icon">◈</span> Codex</div>
+        <div class="provider-pill"><span class="pill-icon">✦</span> Gemini</div>
+        <div class="provider-pill"><span class="pill-icon">⬡</span> Copilot</div>
+        <div class="provider-pill"><span class="pill-icon">◇</span> Amp</div>
+      </div>
+
+      <!-- Account filter toggles — just identity + status, no duplicate numbers -->
+      <div class="account-section-header">
+        <span class="account-section-label">Accounts</span>
+        <div class="account-filter-pills">
+          <div class="account-filter on" onclick="toggleFilter(this)">
+            <div class="filter-avatar">P</div>
+            <span class="filter-name">Personal</span>
+            <div class="filter-status" style="background:var(--status-healthy)"></div>
+          </div>
+          <div class="account-filter on" onclick="toggleFilter(this)">
+            <div class="filter-avatar">W</div>
+            <span class="filter-name">Work</span>
+            <div class="filter-status" style="background:var(--status-warning)"></div>
+          </div>
+          <div class="account-filter on" onclick="toggleFilter(this)">
+            <div class="filter-avatar">S</div>
+            <span class="filter-name">Side</span>
+            <div class="filter-status" style="background:var(--status-unreachable)"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Account 1: Personal — ACTIVE (single indicator, no duplicate %) -->
+      <div class="account-group" data-account="Personal">
+        <div class="account-group-header">
+          <div class="group-avatar" style="background:rgba(140,82,218,0.25);color:rgb(180,140,240)">P</div>
+          <span class="group-name">Personal</span>
+          <span class="group-active-tag"><span class="group-active-dot"></span> In Use</span>
+          <span class="group-status-badge healthy">Healthy</span>
+        </div>
+        <div class="compact-stats">
+          <div class="compact-card">
+            <div class="compact-label"><div class="compact-label-left"><span class="compact-label-icon">⚡</span><span class="compact-label-text">Opus</span></div></div>
+            <div class="compact-value">72<span class="unit">%</span></div>
+            <div class="compact-progress"><div class="compact-progress-fill" style="width:72%"></div></div>
+          </div>
+          <div class="compact-card">
+            <div class="compact-label"><div class="compact-label-left"><span class="compact-label-icon">✧</span><span class="compact-label-text">Sonnet</span></div></div>
+            <div class="compact-value">88<span class="unit">%</span></div>
+            <div class="compact-progress"><div class="compact-progress-fill" style="width:88%"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Account 2: Work — not active -->
+      <div class="account-group" data-account="Work">
+        <div class="account-group-header">
+          <div class="group-avatar" style="background:rgba(218,90,166,0.25);color:rgb(240,140,190)">W</div>
+          <span class="group-name">Work — Acme</span>
+          <span class="group-status-badge warning">Warning</span>
+        </div>
+        <div class="compact-stats">
+          <div class="compact-card">
+            <div class="compact-label"><div class="compact-label-left"><span class="compact-label-icon">⚡</span><span class="compact-label-text">Opus</span></div></div>
+            <div class="compact-value">18<span class="unit">%</span></div>
+            <div class="compact-progress"><div class="compact-progress-fill warning" style="width:18%"></div></div>
+          </div>
+          <div class="compact-card">
+            <div class="compact-label"><div class="compact-label-left"><span class="compact-label-icon">✧</span><span class="compact-label-text">Sonnet</span></div></div>
+            <div class="compact-value">41<span class="unit">%</span></div>
+            <div class="compact-progress"><div class="compact-progress-fill warning" style="width:41%"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Account 3: Side Project — unreachable -->
+      <div class="account-group" data-account="Side">
+        <div class="account-group-header">
+          <div class="group-avatar" style="background:rgba(120,120,135,0.2);color:var(--status-unreachable)">S</div>
+          <span class="group-name">Side Project</span>
+          <span class="group-status-badge unreachable">Unreachable</span>
+        </div>
+        <div class="compact-stats">
+          <div class="compact-card unreachable">
+            <div class="compact-label"><div class="compact-label-left"><span class="compact-label-icon">⚡</span><span class="compact-label-text">Opus</span></div></div>
+            <div class="compact-value">—</div>
+            <div class="compact-progress"><div class="compact-progress-fill" style="width:0%"></div></div>
+          </div>
+          <div class="compact-card unreachable">
+            <div class="compact-label"><div class="compact-label-left"><span class="compact-label-icon">✧</span><span class="compact-label-text">Sonnet</span></div></div>
+            <div class="compact-value">—</div>
+            <div class="compact-progress"><div class="compact-progress-fill" style="width:0%"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Single status banner — rotation reason + worst account -->
+      <div class="rotation-banner">
+        <span class="rotation-icon">🔄</span>
+        <span>Rotated to <strong>Personal</strong> — Work dropped to 18% Opus</span>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="annotation">
+    <strong>Information hierarchy:</strong> Pills = identity + health dot (filter controls).
+    Group header = one <strong>"In Use"</strong> tag on the active account (pulsing dot).
+    Cards = the actual numbers (no duplication above).
+    <strong>Rotation banner</strong> = single line explaining why the active account changed, combining what was previously two separate callouts.
+  </div>
+</div>
+
+<script>
+  function toggleFilter(el) {
+    el.classList.toggle('on');
+    const name = el.querySelector('.filter-name').textContent;
+    document.querySelectorAll('.account-group').forEach(group => {
+      if (group.dataset.account === name) {
+        group.style.display = el.classList.contains('on') ? '' : 'none';
+      }
+    });
+  }
+  document.querySelectorAll('.provider-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      document.querySelectorAll('.provider-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+    });
+  });
+</script>
+</body>
+</html>

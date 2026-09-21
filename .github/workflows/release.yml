@@ -1,0 +1,365 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: 'Exact main commit to release (required by gha-safe)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: cortex-release
+  cancel-in-progress: false
+
+env:
+  APP_NAME: Cortex
+  PROJECT_NAME: ClaudeBar
+  BUNDLE_ID: fr.yoyaku.cortex
+  NOTARYTOOL_PROFILE: YOYAKU-NOTARY
+
+jobs:
+  release:
+    name: Build, sign, notarize, and release
+    runs-on: [self-hosted, macos, arm64, cortex-release]
+    timeout-minutes: 90
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Checkout the release commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify immutable release provenance
+        id: release
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+
+          RESOLVED_SHA="$(git rev-parse HEAD)"
+          git fetch origin main --no-tags
+          MAIN_SHA="$(git rev-parse origin/main)"
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if ! [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error::expected_sha must be a full lowercase commit SHA"
+              exit 1
+            fi
+            if [[ "$RESOLVED_SHA" != "$EXPECTED_SHA" ]]; then
+              echo "::error::Checkout $RESOLVED_SHA does not match expected_sha $EXPECTED_SHA"
+              exit 1
+            fi
+          else
+            TAG_SHA="$(git rev-list -n 1 "$GITHUB_REF")"
+            if [[ "$RESOLVED_SHA" != "$TAG_SHA" ]]; then
+              echo "::error::Tag resolves to $TAG_SHA but checkout is $RESOLVED_SHA"
+              exit 1
+            fi
+          fi
+
+          if [[ "$RESOLVED_SHA" != "$MAIN_SHA" ]]; then
+            echo "::error::Releases must use the exact current main commit ($MAIN_SHA)"
+            exit 1
+          fi
+
+          VERSION="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Sources/App/Info.plist)"
+          BASE_BUILD="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' Sources/App/Info.plist)"
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+(\.[a-zA-Z0-9]+)*)?$ ]]; then
+            echo "::error::Invalid checked-in version: $VERSION"
+            exit 1
+          fi
+          if ! [[ "$BASE_BUILD" =~ ^[0-9]+$ ]]; then
+            echo "::error::CFBundleVersion must be an integer baseline"
+            exit 1
+          fi
+          if ! grep -q "^## \[$VERSION\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no section for $VERSION"
+            exit 1
+          fi
+          if [[ "${{ github.event_name }}" == "push" && "$GITHUB_REF_NAME" != "v$VERSION" ]]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match checked-in version v$VERSION"
+            exit 1
+          fi
+
+          BUILD_NUMBER="$((BASE_BUILD + GITHUB_RUN_NUMBER))"
+          IS_PRERELEASE=false
+          [[ "$VERSION" == *-* ]] && IS_PRERELEASE=true
+
+          {
+            echo "version=$VERSION"
+            echo "build_number=$BUILD_NUMBER"
+            echo "is_prerelease=$IS_PRERELEASE"
+            echo "resolved_sha=$RESOLVED_SHA"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "VERSION=$VERSION"
+            echo "BUILD_NUMBER=$BUILD_NUMBER"
+          } >> "$GITHUB_ENV"
+
+      - name: Verify runner signing authorities
+        env:
+          SPARKLE_EDDSA_PRIVATE_KEY: ${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$SPARKLE_EDDSA_PRIVATE_KEY" ]]; then
+            echo "::error::Missing required release secret: SPARKLE_EDDSA_PRIVATE_KEY"
+            exit 1
+          fi
+
+          SIGNING_IDENTITY="$(security find-identity -v -p codesigning \
+            | sed -n 's/.*"\(Developer ID Application:.*\)"/\1/p' \
+            | head -1)"
+          if [[ -z "$SIGNING_IDENTITY" ]]; then
+            echo "::error::The self-hosted runner has no Developer ID Application identity"
+            exit 1
+          fi
+
+          xcrun notarytool history --keychain-profile "$NOTARYTOOL_PROFILE" >/dev/null
+          echo "SIGNING_IDENTITY=$SIGNING_IDENTITY" >> "$GITHUB_ENV"
+
+      - name: Cache Tuist
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/tuist
+            .tuist-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-tuist-${{ hashFiles('Project.swift', 'Tuist.swift', 'Package.swift', 'Tuist/Package.swift') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-tuist-
+
+      - name: Install build tools
+        run: |
+          set -euo pipefail
+          command -v tuist >/dev/null || brew install tuist
+          command -v create-dmg >/dev/null || brew install create-dmg
+          tuist version
+
+      - name: Apply release build number
+        run: |
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" Sources/App/Info.plist
+
+      - name: Install dependencies and generate project
+        run: |
+          set -euo pipefail
+          tuist install
+          tuist generate --no-open
+          ./scripts/fix-swiftterm-metal.sh
+
+      - name: Build universal app bundle
+        run: |
+          set -euo pipefail
+          ARCHIVE_PATH="build/${APP_NAME}.xcarchive"
+          xcodebuild archive \
+            -workspace "${PROJECT_NAME}.xcworkspace" \
+            -scheme "${PROJECT_NAME}" \
+            -configuration Release \
+            -archivePath "$ARCHIVE_PATH" \
+            -destination "generic/platform=macOS" \
+            -skipMacroValidation \
+            ARCHS="arm64 x86_64" \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO
+
+          cp -R "$ARCHIVE_PATH/Products/Applications/${APP_NAME}.app" .
+          file "${APP_NAME}.app/Contents/MacOS/${APP_NAME}"
+
+      - name: Sign and notarize app
+        run: |
+          set -euo pipefail
+          ./scripts/sign-app.sh \
+            "${APP_NAME}.app" \
+            "$SIGNING_IDENTITY" \
+            Sources/App/entitlements.plist
+          ./scripts/notarize-app.sh \
+            "${APP_NAME}.app"
+
+          codesign --verify --deep --strict --verbose=2 "${APP_NAME}.app"
+          xcrun stapler validate "${APP_NAME}.app"
+          spctl --assess --type execute --verbose=2 "${APP_NAME}.app"
+
+      - name: Package signed artifacts
+        run: |
+          set -euo pipefail
+          APP_ZIP="${APP_NAME}-${VERSION}.zip"
+          DMG_FILE="${APP_NAME}-${VERSION}.dmg"
+
+          ditto -c -k --keepParent "${APP_NAME}.app" "$APP_ZIP"
+
+          CREATE_DMG_STATUS=0
+          create-dmg \
+            --volname "$APP_NAME" \
+            --window-pos 200 120 \
+            --window-size 600 400 \
+            --icon-size 100 \
+            --icon "${APP_NAME}.app" 150 190 \
+            --hide-extension "${APP_NAME}.app" \
+            --app-drop-link 450 185 \
+            --no-internet-enable \
+            "$DMG_FILE" \
+            "${APP_NAME}.app" || CREATE_DMG_STATUS=$?
+          if [[ ! -f "$DMG_FILE" ]]; then
+            echo "::error::DMG creation failed with status $CREATE_DMG_STATUS"
+            exit 1
+          fi
+
+          codesign --force --sign "$SIGNING_IDENTITY" --timestamp "$DMG_FILE"
+          xcrun notarytool submit "$DMG_FILE" \
+            --keychain-profile "$NOTARYTOOL_PROFILE" \
+            --wait \
+            --timeout 30m
+          xcrun stapler staple "$DMG_FILE"
+          xcrun stapler validate "$DMG_FILE"
+          spctl --assess --type open --context context:primary-signature --verbose=2 "$DMG_FILE"
+
+          shasum -a 256 "$APP_ZIP" > "${APP_ZIP}.sha256"
+          shasum -a 256 "$DMG_FILE" > "${DMG_FILE}.sha256"
+          echo "APP_ZIP=$APP_ZIP" >> "$GITHUB_ENV"
+          echo "DMG_FILE=$DMG_FILE" >> "$GITHUB_ENV"
+
+      - name: Create commit-bound provenance manifest
+        run: |
+          set -euo pipefail
+          PROVENANCE_FILE="${APP_NAME}-${VERSION}.provenance.json"
+          ZIP_SHA="$(awk '{print $1}' "${APP_ZIP}.sha256")"
+          DMG_SHA="$(awk '{print $1}' "${DMG_FILE}.sha256")"
+          jq -n \
+            --arg schema_version "1" \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg git_sha "${{ steps.release.outputs.resolved_sha }}" \
+            --arg git_ref "$GITHUB_REF" \
+            --arg workflow_run "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            --arg version "$VERSION" \
+            --arg build_number "$BUILD_NUMBER" \
+            --arg zip_file "$APP_ZIP" \
+            --arg zip_sha256 "$ZIP_SHA" \
+            --arg dmg_file "$DMG_FILE" \
+            --arg dmg_sha256 "$DMG_SHA" \
+            '{
+              schema_version: ($schema_version | tonumber),
+              repository: $repository,
+              git_sha: $git_sha,
+              git_ref: $git_ref,
+              workflow_run: $workflow_run,
+              version: $version,
+              build_number: $build_number,
+              artifacts: [
+                {file: $zip_file, sha256: $zip_sha256},
+                {file: $dmg_file, sha256: $dmg_sha256}
+              ]
+            }' > "$PROVENANCE_FILE"
+          shasum -a 256 "$PROVENANCE_FILE" > "${PROVENANCE_FILE}.sha256"
+          echo "PROVENANCE_FILE=$PROVENANCE_FILE" >> "$GITHUB_ENV"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            ${{ env.APP_ZIP }}
+            ${{ env.DMG_FILE }}
+
+      - name: Extract release notes
+        run: |
+          set -euo pipefail
+          NOTES="$(./scripts/extract-changelog.sh "$VERSION")"
+          if [[ -z "$NOTES" ]]; then
+            echo "::error::Release notes for $VERSION are empty"
+            exit 1
+          fi
+          {
+            echo 'RELEASE_NOTES<<EOF'
+            echo "$NOTES"
+            echo 'EOF'
+          } >> "$GITHUB_ENV"
+
+      - name: Generate signed Sparkle appcast
+        env:
+          SPARKLE_EDDSA_PRIVATE_KEY: ${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          DOWNLOAD_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/v${VERSION}/${APP_ZIP}"
+          SIGN_UPDATE="$(find Tuist/.build -name sign_update -path '*/Sparkle/bin/*' | head -1)"
+          if [[ -z "$SIGN_UPDATE" || ! -x "$SIGN_UPDATE" ]]; then
+            echo "::error::Sparkle sign_update was not found"
+            exit 1
+          fi
+
+          SPARKLE_KEY_PATH="$RUNNER_TEMP/claudebar-sparkle-key"
+          printf '%s' "$SPARKLE_EDDSA_PRIVATE_KEY" > "$SPARKLE_KEY_PATH"
+          chmod 600 "$SPARKLE_KEY_PATH"
+          FILE_SIZE="$(stat -f%z "$APP_ZIP")"
+          SIGNATURE="$("$SIGN_UPDATE" "$APP_ZIP" --ed-key-file "$SPARKLE_KEY_PATH")"
+          ED_SIGNATURE="$(printf '%s' "$SIGNATURE" | sed -n 's/.*edSignature="\([^"]*\)".*/\1/p')"
+          if [[ -z "$ED_SIGNATURE" ]]; then
+            echo "::error::Sparkle did not return an EdDSA signature"
+            exit 1
+          fi
+
+          CHANNEL=""
+          [[ "${{ steps.release.outputs.is_prerelease }}" == "true" ]] && CHANNEL=beta
+          ./scripts/update-appcast.sh \
+            "$VERSION" \
+            "$BUILD_NUMBER" \
+            "$DOWNLOAD_URL" \
+            "$ED_SIGNATURE" \
+            "$FILE_SIZE" \
+            "$RELEASE_NOTES" \
+            "$CHANNEL"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.release.outputs.version }}
+          target_commitish: ${{ steps.release.outputs.resolved_sha }}
+          name: Cortex v${{ steps.release.outputs.version }}
+          draft: false
+          prerelease: ${{ steps.release.outputs.is_prerelease }}
+          make_latest: ${{ steps.release.outputs.is_prerelease == 'false' }}
+          files: |
+            ${{ env.APP_ZIP }}
+            ${{ env.APP_ZIP }}.sha256
+            ${{ env.DMG_FILE }}
+            ${{ env.DMG_FILE }}.sha256
+            ${{ env.PROVENANCE_FILE }}
+            ${{ env.PROVENANCE_FILE }}.sha256
+          body: |
+            ## What's New
+
+            ${{ env.RELEASE_NOTES }}
+
+            The ZIP and DMG are Developer ID signed, notarized, and bound to
+            `${{ steps.release.outputs.resolved_sha }}` by the attached provenance manifest.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload appcast to Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - name: Deploy appcast to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Clean temporary Sparkle key
+        if: always()
+        run: |
+          set +e
+          rm -f "${RUNNER_TEMP}/claudebar-sparkle-key"

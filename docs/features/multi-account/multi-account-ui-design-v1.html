@@ -1,0 +1,1818 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClaudeBar — Multi-Account UI Design (Phase 3)</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-deep: rgb(30, 20, 56);
+    --bg-mid: rgb(46, 26, 72);
+    --bg-surface: rgb(56, 30, 82);
+    --card-bg: rgba(255,255,255,0.10);
+    --card-bg-hover: rgba(255,255,255,0.14);
+    --card-border: rgba(255,255,255,0.18);
+    --card-border-highlight: rgba(255,255,255,0.28);
+    --glass-bg: rgba(255,255,255,0.08);
+    --text-primary: rgba(255,255,255,0.93);
+    --text-secondary: rgba(255,255,255,0.65);
+    --text-tertiary: rgba(255,255,255,0.42);
+    --accent-purple: rgb(140, 82, 218);
+    --accent-pink: rgb(218, 90, 166);
+    --accent-gradient: linear-gradient(135deg, rgb(140,82,218), rgb(218,90,166));
+    --status-healthy: rgb(90, 235, 174);
+    --status-warning: rgb(250, 184, 90);
+    --status-critical: rgb(250, 107, 133);
+    --status-depleted: rgb(217, 64, 90);
+    --status-unreachable: rgb(120, 120, 135);
+    --hover-overlay: rgba(255,255,255,0.06);
+    --pill-radius: 20px;
+    --card-radius: 14px;
+    --font-body: 'DM Sans', -apple-system, sans-serif;
+    --font-mono: 'Space Mono', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0612;
+    font-family: var(--font-body);
+    color: var(--text-primary);
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    padding: 40px 20px;
+    overflow-x: hidden;
+  }
+
+  .design-canvas {
+    display: flex;
+    gap: 60px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 1200px;
+  }
+
+  /* ── Annotation labels ── */
+  .section-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: var(--accent-pink);
+    margin-bottom: 16px;
+    opacity: 0;
+    animation: labelIn 0.6s ease forwards;
+  }
+  .section-label::before {
+    content: '◆ ';
+    color: var(--accent-purple);
+  }
+
+  /* ── Popover frame ── */
+  .popover-frame {
+    width: 400px;
+    flex-shrink: 0;
+    opacity: 0;
+    animation: popoverIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.1s forwards;
+  }
+
+  .popover {
+    width: 400px;
+    border-radius: 16px;
+    background: linear-gradient(165deg, var(--bg-deep) 0%, var(--bg-mid) 50%, var(--bg-surface) 100%);
+    border: 1px solid rgba(255,255,255,0.12);
+    overflow: hidden;
+    position: relative;
+    box-shadow:
+      0 25px 60px rgba(0,0,0,0.5),
+      0 8px 20px rgba(0,0,0,0.3),
+      inset 0 1px 0 rgba(255,255,255,0.08);
+  }
+
+  /* Orb effects */
+  .popover::before {
+    content: '';
+    position: absolute;
+    width: 240px;
+    height: 240px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(140,82,218,0.25), transparent 70%);
+    top: -80px;
+    left: -60px;
+    filter: blur(40px);
+    pointer-events: none;
+    animation: orbFloat 8s ease-in-out infinite;
+  }
+  .popover::after {
+    content: '';
+    position: absolute;
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(218,90,166,0.2), transparent 70%);
+    bottom: -40px;
+    right: -40px;
+    filter: blur(30px);
+    pointer-events: none;
+    animation: orbFloat 8s ease-in-out 4s infinite;
+  }
+
+  .popover-content {
+    position: relative;
+    z-index: 1;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* ── Header ── */
+  .popover-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 4px;
+  }
+  .logo-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .logo-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: var(--accent-gradient);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 13px;
+    color: white;
+    box-shadow: 0 2px 10px rgba(140,82,218,0.4);
+  }
+  .logo-text {
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: -0.3px;
+  }
+  .header-actions {
+    display: flex;
+    gap: 6px;
+  }
+  .header-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    border: none;
+    background: var(--glass-bg);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    transition: all 0.15s ease;
+  }
+  .header-btn:hover {
+    background: var(--hover-overlay);
+    color: var(--text-primary);
+    transform: scale(1.05);
+  }
+
+  /* ── Provider pills row ── */
+  .provider-pills {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding: 2px 0;
+  }
+  .provider-pills::-webkit-scrollbar { display: none; }
+  .provider-pill {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 10px;
+    border-radius: var(--pill-radius);
+    border: 1px solid var(--card-border);
+    background: var(--glass-bg);
+    cursor: pointer;
+    white-space: nowrap;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+  }
+  .provider-pill:hover {
+    background: var(--hover-overlay);
+    border-color: var(--card-border-highlight);
+    color: var(--text-primary);
+  }
+  .provider-pill.active {
+    background: var(--accent-gradient);
+    border-color: rgba(140,82,218,0.5);
+    color: white;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(140,82,218,0.35);
+  }
+  .pill-icon {
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  /* ── ACCOUNT SECTION HEADER ── */
+  .account-section-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 2px;
+  }
+  .account-section-label {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+  }
+  .account-filter-pills {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    flex: 1;
+  }
+  .account-filter-pills::-webkit-scrollbar { display: none; }
+
+  /* Filter pills — toggle (not radio) */
+  .account-filter {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: transparent;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+  }
+  .account-filter:hover {
+    background: var(--hover-overlay);
+    border-color: rgba(255,255,255,0.25);
+  }
+  .account-filter.on {
+    background: rgba(140,82,218,0.15);
+    border-color: rgba(140,82,218,0.5);
+  }
+  .account-filter.on .filter-avatar {
+    background: var(--accent-gradient);
+    color: white;
+  }
+  .account-filter.on .filter-name {
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .filter-avatar {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    font-weight: 700;
+    background: var(--glass-bg);
+    color: var(--text-secondary);
+    flex-shrink: 0;
+  }
+  .filter-name {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    line-height: 1;
+  }
+  /* Per-account status dot on pill */
+  .filter-status {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* ── Per-account card groups ── */
+  .account-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    opacity: 0;
+    animation: cardIn 0.5s ease forwards;
+  }
+  .account-group:nth-child(1) { animation-delay: 0.25s; }
+  .account-group:nth-child(2) { animation-delay: 0.40s; }
+  .account-group:nth-child(3) { animation-delay: 0.55s; }
+
+  .account-group-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 2px;
+  }
+  .group-avatar {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .group-name {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+    flex: 1;
+  }
+  .group-status-badge {
+    font-size: 7px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 5px;
+    letter-spacing: 0.3px;
+  }
+  .group-status-badge.healthy { background: rgba(90,235,174,0.12); color: var(--status-healthy); }
+  .group-status-badge.warning { background: rgba(250,184,90,0.12); color: var(--status-warning); }
+  .group-status-badge.unreachable { background: rgba(120,120,135,0.15); color: var(--status-unreachable); }
+
+  /* Compact stat row within account group */
+  .compact-stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+
+  .compact-card {
+    padding: 10px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04));
+    border: 1px solid var(--card-border);
+    transition: all 0.15s ease;
+    cursor: default;
+  }
+  .compact-card:hover {
+    transform: scale(1.015);
+    background: linear-gradient(135deg, rgba(255,255,255,0.13), rgba(255,255,255,0.06));
+  }
+  .compact-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+  }
+  .compact-label-left {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .compact-label-icon {
+    font-size: 8px;
+    font-weight: 700;
+  }
+  .compact-label-text {
+    font-size: 7px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+  .compact-value {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -1px;
+    line-height: 1;
+    margin-bottom: 5px;
+  }
+  .compact-value .unit {
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    letter-spacing: 0;
+  }
+  .compact-progress {
+    height: 3px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.06);
+    overflow: hidden;
+  }
+  .compact-progress-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: var(--accent-gradient);
+    transition: width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .compact-progress-fill.warning { background: linear-gradient(90deg, var(--status-warning), #f59e0b); }
+  .compact-progress-fill.critical { background: linear-gradient(90deg, var(--status-critical), #ef4444); }
+
+  /* Unreachable overlay */
+  .compact-card.unreachable {
+    opacity: 0.5;
+    position: relative;
+  }
+  .compact-card.unreachable::after {
+    content: 'Re-auth needed';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 8px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    color: var(--status-unreachable);
+    background: rgba(30,20,56,0.85);
+    padding: 3px 8px;
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+
+  /* ── Worst-status callout ── */
+  .worst-status-callout {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    background: rgba(250,184,90,0.08);
+    border: 1px solid rgba(250,184,90,0.2);
+    font-size: 9px;
+    color: var(--text-secondary);
+    opacity: 0;
+    animation: cardIn 0.5s ease 0.7s forwards;
+  }
+  .worst-status-callout .callout-icon {
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+  .worst-status-callout strong {
+    color: var(--status-warning);
+  }
+
+  /* ── Settings panel frame ── */
+  .settings-frame {
+    width: 420px;
+    flex-shrink: 0;
+    opacity: 0;
+    animation: popoverIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.25s forwards;
+  }
+
+  .settings-panel {
+    width: 420px;
+    border-radius: 16px;
+    background: linear-gradient(165deg, var(--bg-deep) 0%, var(--bg-mid) 50%, var(--bg-surface) 100%);
+    border: 1px solid rgba(255,255,255,0.12);
+    overflow: hidden;
+    position: relative;
+    box-shadow:
+      0 25px 60px rgba(0,0,0,0.5),
+      0 8px 20px rgba(0,0,0,0.3),
+      inset 0 1px 0 rgba(255,255,255,0.08);
+  }
+  .settings-panel::before {
+    content: '';
+    position: absolute;
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(218,90,166,0.18), transparent 70%);
+    top: -60px;
+    right: -40px;
+    filter: blur(40px);
+    pointer-events: none;
+  }
+
+  .settings-content {
+    position: relative;
+    z-index: 1;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .settings-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-bottom: 4px;
+  }
+  .settings-header-icon {
+    font-size: 16px;
+  }
+  .settings-title {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+
+  /* ── Aggregate status row ── */
+  .aggregate-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: var(--card-radius);
+    background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+    border: 1px solid var(--card-border);
+    opacity: 0;
+    animation: cardIn 0.5s ease 0.45s forwards;
+  }
+  .aggregate-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    flex: 1;
+  }
+  .aggregate-dots {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .aggregate-dot-group {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .agg-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+  .agg-dot-label {
+    font-size: 8px;
+    color: var(--text-tertiary);
+    font-weight: 500;
+  }
+  .aggregate-worst {
+    font-size: 8px;
+    font-weight: 600;
+    color: var(--status-warning);
+    padding: 2px 6px;
+    border-radius: 5px;
+    background: rgba(250,184,90,0.12);
+    margin-left: 4px;
+  }
+
+  /* ── Account Management Card ── */
+  .account-mgmt-card {
+    border-radius: var(--card-radius);
+    background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.05));
+    border: 1px solid var(--card-border);
+    overflow: hidden;
+    opacity: 0;
+    animation: cardIn 0.5s ease 0.5s forwards;
+  }
+
+  .mgmt-header {
+    padding: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .mgmt-header:hover {
+    background: var(--hover-overlay);
+  }
+  .mgmt-header-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--accent-gradient);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    color: white;
+    flex-shrink: 0;
+  }
+  .mgmt-header-text {
+    flex: 1;
+  }
+  .mgmt-header-title {
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .mgmt-header-sub {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-tertiary);
+    margin-top: 2px;
+  }
+  .mgmt-header-badge {
+    font-size: 9px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+  }
+  .stat-badge { font-size: 8px; font-weight: 600; padding: 2px 6px; border-radius: 6px; letter-spacing: 0.3px; }
+  .stat-badge.healthy { background: rgba(90,235,174,0.15); color: var(--status-healthy); }
+  .stat-badge.warning { background: rgba(250,184,90,0.15); color: var(--status-warning); }
+  .stat-badge.critical { background: rgba(250,107,133,0.15); color: var(--status-critical); }
+
+  .mgmt-chevron {
+    color: var(--text-tertiary);
+    font-size: 11px;
+    transition: transform 0.2s ease;
+  }
+  .account-mgmt-card.expanded .mgmt-chevron {
+    transform: rotate(90deg);
+  }
+
+  .mgmt-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .account-mgmt-card.expanded .mgmt-body {
+    max-height: 600px;
+  }
+  .mgmt-body-inner {
+    padding: 0 14px 14px;
+  }
+  .mgmt-divider {
+    height: 1px;
+    background: var(--card-border);
+    margin-bottom: 12px;
+  }
+
+  /* Account rows */
+  .account-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 6px;
+    border-radius: 8px;
+    transition: background 0.12s ease;
+    opacity: 0;
+    animation: rowSlide 0.4s ease forwards;
+  }
+  .account-row:nth-child(2) { animation-delay: 0.6s; }
+  .account-row:nth-child(3) { animation-delay: 0.7s; }
+  .account-row:nth-child(4) { animation-delay: 0.8s; }
+  .account-row:nth-child(5) { animation-delay: 0.9s; }
+  .account-row:hover {
+    background: var(--hover-overlay);
+  }
+  .row-order {
+    font-size: 8px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    width: 12px;
+    text-align: center;
+    flex-shrink: 0;
+    cursor: grab;
+    user-select: none;
+  }
+  .row-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+  }
+  .row-avatar.purple { background: rgba(140,82,218,0.25); color: rgb(180,140,240); }
+  .row-avatar.pink { background: rgba(218,90,166,0.25); color: rgb(240,140,190); }
+  .row-avatar.teal { background: rgba(90,235,174,0.2); color: rgb(90,235,174); }
+  .row-avatar.gray { background: rgba(120,120,135,0.2); color: var(--status-unreachable); }
+
+  .row-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .row-name {
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .row-email {
+    font-size: 9px;
+    font-weight: 500;
+    color: var(--text-tertiary);
+    margin-top: 1px;
+  }
+  .row-status {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .row-status.healthy { background: var(--status-healthy); box-shadow: 0 0 6px rgba(90,235,174,0.4); }
+  .row-status.warning { background: var(--status-warning); box-shadow: 0 0 6px rgba(250,184,90,0.4); }
+  .row-status.unreachable {
+    background: var(--status-unreachable);
+    box-shadow: none;
+  }
+  .row-action {
+    flex-shrink: 0;
+  }
+  .row-primary-badge {
+    font-size: 8px;
+    font-weight: 600;
+    color: var(--status-healthy);
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(90,235,174,0.12);
+    letter-spacing: 0.3px;
+  }
+  .row-error-tag {
+    font-size: 8px;
+    font-weight: 500;
+    color: var(--status-unreachable);
+    padding: 2px 6px;
+    border-radius: 4px;
+    background: rgba(120,120,135,0.15);
+    cursor: pointer;
+  }
+  .row-error-tag:hover {
+    color: var(--text-primary);
+    background: rgba(120,120,135,0.25);
+  }
+  .row-set-primary-btn {
+    font-size: 8px;
+    font-weight: 500;
+    color: var(--text-tertiary);
+    padding: 2px 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .row-set-primary-btn:hover {
+    color: var(--accent-purple);
+    border-color: rgba(140,82,218,0.4);
+  }
+
+  /* Add account button */
+  .add-account-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px;
+    border-radius: 8px;
+    border: 1px dashed rgba(140,82,218,0.3);
+    background: transparent;
+    color: var(--accent-purple);
+    font-size: 11px;
+    font-weight: 500;
+    font-family: var(--font-body);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    margin-top: 4px;
+    width: 100%;
+    opacity: 0;
+    animation: rowSlide 0.4s ease 1.0s forwards;
+  }
+  .add-account-btn:hover {
+    border-color: rgba(140,82,218,0.6);
+    background: rgba(140,82,218,0.06);
+  }
+  .add-icon { font-size: 12px; font-weight: 600; }
+
+  /* ── Callout annotations ── */
+  .annotation {
+    position: relative;
+    margin-top: 16px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: rgba(140,82,218,0.08);
+    border: 1px solid rgba(140,82,218,0.2);
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    opacity: 0;
+    animation: cardIn 0.5s ease 0.8s forwards;
+  }
+  .annotation strong {
+    color: var(--accent-pink);
+    font-weight: 600;
+  }
+  .annotation::before {
+    content: '↑';
+    position: absolute;
+    top: -14px;
+    left: 20px;
+    font-size: 14px;
+    color: rgba(140,82,218,0.4);
+  }
+
+  /* ── Flow arrows between panels ── */
+  .flow-connector {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    align-self: center;
+    opacity: 0;
+    animation: cardIn 0.5s ease 0.6s forwards;
+  }
+  .flow-arrow {
+    font-size: 20px;
+    color: var(--text-tertiary);
+    animation: arrowPulse 2s ease-in-out infinite;
+  }
+  .flow-label {
+    font-family: var(--font-mono);
+    font-size: 8px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+  }
+
+  /* ── Page title ── */
+  .page-title-block {
+    text-align: center;
+    margin-bottom: 40px;
+    width: 100%;
+    opacity: 0;
+    animation: labelIn 0.8s ease 0.05s forwards;
+  }
+  .page-title {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.8px;
+    background: var(--accent-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 6px;
+  }
+  .page-subtitle {
+    font-size: 12px;
+    font-family: var(--font-mono);
+    color: var(--text-tertiary);
+    letter-spacing: 1px;
+  }
+
+  /* ── Animations ── */
+  @keyframes popoverIn {
+    from { opacity: 0; transform: translateY(16px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes rowSlide {
+    from { opacity: 0; transform: translateX(-8px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes labelIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes orbFloat {
+    0%, 100% { transform: translate(0, 0); }
+    50% { transform: translate(12px, -8px); }
+  }
+  @keyframes arrowPulse {
+    0%, 100% { opacity: 0.3; transform: translateX(0); }
+    50% { opacity: 0.7; transform: translateX(4px); }
+  }
+
+  /* ── ADD ACCOUNT JOURNEY ── */
+
+  .journey-section {
+    width: 100%;
+    margin-top: 20px;
+    opacity: 0;
+    animation: labelIn 0.8s ease 0.3s forwards;
+  }
+  .journey-title {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: var(--accent-pink);
+    margin-bottom: 24px;
+    text-align: center;
+  }
+  .journey-title::before {
+    content: '◆ ';
+    color: var(--accent-purple);
+  }
+
+  .journey-flow {
+    display: flex;
+    align-items: flex-start;
+    gap: 20px;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .journey-step {
+    width: 280px;
+    flex-shrink: 0;
+    opacity: 0;
+    animation: popoverIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  .journey-step:nth-child(1) { animation-delay: 0.4s; }
+  .journey-step:nth-child(2) { animation-delay: 0.55s; }
+  .journey-step:nth-child(3) { animation-delay: 0.7s; }
+  .journey-step:nth-child(4) { animation-delay: 0.85s; }
+  .journey-step:nth-child(5) { animation-delay: 1.0s; }
+
+  .step-number {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+  }
+  .step-badge {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--accent-gradient);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    color: white;
+    flex-shrink: 0;
+  }
+  .step-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+
+  .step-card {
+    border-radius: var(--card-radius);
+    background: linear-gradient(165deg, var(--bg-deep) 0%, var(--bg-mid) 100%);
+    border: 1px solid rgba(255,255,255,0.12);
+    overflow: hidden;
+    box-shadow:
+      0 12px 30px rgba(0,0,0,0.4),
+      inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .step-content {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* Journey arrow between steps */
+  .journey-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    align-self: center;
+    font-size: 18px;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+    opacity: 0;
+    animation: cardIn 0.5s ease 0.6s forwards;
+    padding-top: 30px;
+  }
+
+  /* Form elements */
+  .form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .form-label {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+  }
+  .form-input {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.05);
+    color: var(--text-primary);
+    font-family: var(--font-body);
+    font-size: 12px;
+    font-weight: 500;
+    outline: none;
+    transition: all 0.15s ease;
+  }
+  .form-input:focus {
+    border-color: rgba(140,82,218,0.6);
+    background: rgba(140,82,218,0.06);
+    box-shadow: 0 0 0 2px rgba(140,82,218,0.15);
+  }
+  .form-input::placeholder {
+    color: var(--text-tertiary);
+    font-weight: 400;
+  }
+  .form-input.filled {
+    border-color: rgba(90,235,174,0.3);
+    background: rgba(90,235,174,0.04);
+  }
+  .form-hint {
+    font-size: 8px;
+    color: var(--text-tertiary);
+    font-style: italic;
+  }
+
+  /* Probe type selector */
+  .probe-options {
+    display: flex;
+    gap: 6px;
+  }
+  .probe-option {
+    flex: 1;
+    padding: 8px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.12);
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: var(--font-body);
+    font-size: 10px;
+    font-weight: 500;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s ease;
+  }
+  .probe-option:hover {
+    border-color: rgba(255,255,255,0.25);
+    background: var(--hover-overlay);
+  }
+  .probe-option.selected {
+    border-color: rgba(140,82,218,0.5);
+    background: rgba(140,82,218,0.12);
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+  .probe-option-icon {
+    display: block;
+    font-size: 16px;
+    margin-bottom: 4px;
+  }
+
+  /* Verification status */
+  .verify-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.1);
+    background: rgba(255,255,255,0.03);
+  }
+  .verify-spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(140,82,218,0.2);
+    border-top-color: var(--accent-purple);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+  }
+  .verify-check {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--status-healthy);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    color: white;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .verify-fail {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--status-critical);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    color: white;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .verify-text {
+    font-size: 10px;
+    color: var(--text-secondary);
+  }
+  .verify-text strong {
+    color: var(--status-healthy);
+  }
+  .verify-text .fail {
+    color: var(--status-critical);
+  }
+
+  /* Action buttons */
+  .step-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  .btn-primary {
+    flex: 1;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: none;
+    background: var(--accent-gradient);
+    color: white;
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    text-align: center;
+  }
+  .btn-primary:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(140,82,218,0.4);
+  }
+  .btn-primary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+  }
+  .btn-secondary {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: transparent;
+    color: var(--text-secondary);
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .btn-secondary:hover {
+    border-color: rgba(255,255,255,0.3);
+    color: var(--text-primary);
+  }
+
+  /* Success state card */
+  .success-card {
+    text-align: center;
+    padding: 20px 16px;
+  }
+  .success-icon {
+    font-size: 32px;
+    margin-bottom: 8px;
+  }
+  .success-title {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .success-sub {
+    font-size: 10px;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+  }
+  .success-account-preview {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 10px;
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(90,235,174,0.2);
+    margin-bottom: 12px;
+  }
+  .success-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: rgba(90,235,174,0.2);
+    color: var(--status-healthy);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+  }
+  .success-info {
+    text-align: left;
+    flex: 1;
+  }
+  .success-name {
+    font-size: 12px;
+    font-weight: 600;
+  }
+  .success-email {
+    font-size: 9px;
+    color: var(--text-tertiary);
+    margin-top: 1px;
+  }
+  .success-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--status-healthy);
+    box-shadow: 0 0 8px rgba(90,235,174,0.5);
+  }
+
+  /* Color picker for avatar */
+  .color-picker {
+    display: flex;
+    gap: 6px;
+    padding: 2px 0;
+  }
+  .color-swatch {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.15s ease;
+  }
+  .color-swatch:hover {
+    transform: scale(1.15);
+  }
+  .color-swatch.selected {
+    border-color: white;
+    box-shadow: 0 0 8px rgba(255,255,255,0.3);
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* Responsive */
+  @media (max-width: 920px) {
+    .flow-connector { display: none; }
+    .journey-arrow { display: none; }
+    .design-canvas { flex-direction: column; align-items: center; }
+  }
+</style>
+</head>
+<body>
+
+<div class="design-canvas">
+
+  <!-- Page Title -->
+  <div class="page-title-block">
+    <div class="page-title">Multi-Account UI — Phase 3</div>
+    <div class="page-subtitle">PARALLEL MONITORING &bull; ALL ACCOUNTS AT A GLANCE</div>
+  </div>
+
+  <!-- ═══ LEFT: Menu Popover ═══ -->
+  <div class="popover-frame">
+    <div class="section-label">Menu Bar Popover</div>
+    <div class="popover">
+      <div class="popover-content">
+
+        <!-- Header -->
+        <div class="popover-header">
+          <div class="logo-group">
+            <div class="logo-icon">C</div>
+            <div class="logo-text">ClaudeBar</div>
+          </div>
+          <div class="header-actions">
+            <button class="header-btn" title="Refresh">↻</button>
+            <button class="header-btn" title="Settings">⚙</button>
+          </div>
+        </div>
+
+        <!-- Provider pills -->
+        <div class="provider-pills">
+          <div class="provider-pill active"><span class="pill-icon">◎</span> Claude</div>
+          <div class="provider-pill"><span class="pill-icon">◈</span> Codex</div>
+          <div class="provider-pill"><span class="pill-icon">✦</span> Gemini</div>
+          <div class="provider-pill"><span class="pill-icon">⬡</span> Copilot</div>
+          <div class="provider-pill"><span class="pill-icon">◇</span> Amp</div>
+        </div>
+
+        <!-- Account filter toggles (not radio buttons) -->
+        <div class="account-section-header">
+          <span class="account-section-label">Accounts</span>
+          <div class="account-filter-pills">
+            <div class="account-filter on" onclick="toggleFilter(this)">
+              <div class="filter-avatar">P</div>
+              <span class="filter-name">Personal</span>
+              <div class="filter-status" style="background:var(--status-healthy)"></div>
+            </div>
+            <div class="account-filter on" onclick="toggleFilter(this)">
+              <div class="filter-avatar">W</div>
+              <span class="filter-name">Work</span>
+              <div class="filter-status" style="background:var(--status-warning)"></div>
+            </div>
+            <div class="account-filter on" onclick="toggleFilter(this)">
+              <div class="filter-avatar">S</div>
+              <span class="filter-name">Side</span>
+              <div class="filter-status" style="background:var(--status-unreachable)"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ★ All accounts shown simultaneously -->
+
+        <!-- Account 1: Personal — healthy -->
+        <div class="account-group" data-account="Personal">
+          <div class="account-group-header">
+            <div class="group-avatar" style="background:rgba(140,82,218,0.25);color:rgb(180,140,240)">P</div>
+            <span class="group-name">Personal</span>
+            <span class="group-status-badge healthy">Healthy</span>
+          </div>
+          <div class="compact-stats">
+            <div class="compact-card">
+              <div class="compact-label">
+                <div class="compact-label-left">
+                  <span class="compact-label-icon">⚡</span>
+                  <span class="compact-label-text">Opus</span>
+                </div>
+              </div>
+              <div class="compact-value">72<span class="unit">%</span></div>
+              <div class="compact-progress"><div class="compact-progress-fill" style="width:72%"></div></div>
+            </div>
+            <div class="compact-card">
+              <div class="compact-label">
+                <div class="compact-label-left">
+                  <span class="compact-label-icon">✧</span>
+                  <span class="compact-label-text">Sonnet</span>
+                </div>
+              </div>
+              <div class="compact-value">88<span class="unit">%</span></div>
+              <div class="compact-progress"><div class="compact-progress-fill" style="width:88%"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Account 2: Work — warning -->
+        <div class="account-group" data-account="Work">
+          <div class="account-group-header">
+            <div class="group-avatar" style="background:rgba(218,90,166,0.25);color:rgb(240,140,190)">W</div>
+            <span class="group-name">Work — Acme</span>
+            <span class="group-status-badge warning">Warning</span>
+          </div>
+          <div class="compact-stats">
+            <div class="compact-card">
+              <div class="compact-label">
+                <div class="compact-label-left">
+                  <span class="compact-label-icon">⚡</span>
+                  <span class="compact-label-text">Opus</span>
+                </div>
+              </div>
+              <div class="compact-value">18<span class="unit">%</span></div>
+              <div class="compact-progress"><div class="compact-progress-fill warning" style="width:18%"></div></div>
+            </div>
+            <div class="compact-card">
+              <div class="compact-label">
+                <div class="compact-label-left">
+                  <span class="compact-label-icon">✧</span>
+                  <span class="compact-label-text">Sonnet</span>
+                </div>
+              </div>
+              <div class="compact-value">41<span class="unit">%</span></div>
+              <div class="compact-progress"><div class="compact-progress-fill warning" style="width:41%"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Account 3: Side Project — unreachable -->
+        <div class="account-group" data-account="Side">
+          <div class="account-group-header">
+            <div class="group-avatar" style="background:rgba(120,120,135,0.2);color:var(--status-unreachable)">S</div>
+            <span class="group-name">Side Project</span>
+            <span class="group-status-badge unreachable">Unreachable</span>
+          </div>
+          <div class="compact-stats">
+            <div class="compact-card unreachable">
+              <div class="compact-label">
+                <div class="compact-label-left">
+                  <span class="compact-label-icon">⚡</span>
+                  <span class="compact-label-text">Opus</span>
+                </div>
+              </div>
+              <div class="compact-value">—<span class="unit"></span></div>
+              <div class="compact-progress"><div class="compact-progress-fill" style="width:0%"></div></div>
+            </div>
+            <div class="compact-card unreachable">
+              <div class="compact-label">
+                <div class="compact-label-left">
+                  <span class="compact-label-icon">✧</span>
+                  <span class="compact-label-text">Sonnet</span>
+                </div>
+              </div>
+              <div class="compact-value">—<span class="unit"></span></div>
+              <div class="compact-progress"><div class="compact-progress-fill" style="width:0%"></div></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Worst-status attribution callout -->
+        <div class="worst-status-callout">
+          <span class="callout-icon">⚠</span>
+          <span><strong>Work — Acme</strong> is at 18% Opus — causing aggregate Warning status</span>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="annotation">
+      <strong>Parallel monitoring</strong> — All accounts shown simultaneously, not single-select.
+      Filter toggles hide/show accounts. <strong>Worst-status callout</strong> attributes the aggregate badge to a specific account.
+      <strong>Unreachable</strong> state shown for expired credentials.
+    </div>
+  </div>
+
+  <!-- ═══ CENTER: Flow Arrow ═══ -->
+  <div class="flow-connector">
+    <span class="flow-label">Settings</span>
+    <span class="flow-arrow">→</span>
+  </div>
+
+  <!-- ═══ RIGHT: Settings Panel ═══ -->
+  <div class="settings-frame">
+    <div class="section-label">Settings — Account Management</div>
+    <div class="settings-panel">
+      <div class="settings-content">
+
+        <div class="settings-header">
+          <span class="settings-header-icon">⚙</span>
+          <span class="settings-title">Claude Settings</span>
+        </div>
+
+        <!-- Aggregate status with worst-account attribution -->
+        <div class="aggregate-row">
+          <span class="aggregate-label">All accounts</span>
+          <div class="aggregate-dots">
+            <div class="aggregate-dot-group">
+              <div class="agg-dot" style="background:var(--status-healthy)"></div>
+              <span class="agg-dot-label">Personal</span>
+            </div>
+            <div class="aggregate-dot-group">
+              <div class="agg-dot" style="background:var(--status-warning)"></div>
+              <span class="agg-dot-label">Work</span>
+            </div>
+            <div class="aggregate-dot-group">
+              <div class="agg-dot" style="background:var(--status-unreachable)"></div>
+              <span class="agg-dot-label">Side</span>
+            </div>
+          </div>
+          <span class="aggregate-worst">Warning</span>
+        </div>
+
+        <!-- Account Management Card -->
+        <div class="account-mgmt-card expanded" id="mgmtCard">
+          <div class="mgmt-header" onclick="toggleMgmt()">
+            <div class="mgmt-header-icon">👥</div>
+            <div class="mgmt-header-text">
+              <div class="mgmt-header-title">Accounts</div>
+              <div class="mgmt-header-sub">3 accounts configured</div>
+            </div>
+            <span class="stat-badge warning mgmt-header-badge">Warning</span>
+            <span class="mgmt-chevron">▸</span>
+          </div>
+
+          <div class="mgmt-body">
+            <div class="mgmt-body-inner">
+              <div class="mgmt-divider"></div>
+
+              <!-- Account 1: Primary -->
+              <div class="account-row">
+                <span class="row-order">⋮⋮</span>
+                <div class="row-avatar purple">P</div>
+                <div class="row-info">
+                  <div class="row-name">Personal</div>
+                  <div class="row-email">henry@personal.dev</div>
+                </div>
+                <div class="row-status healthy"></div>
+                <div class="row-action">
+                  <span class="row-primary-badge">Primary</span>
+                </div>
+              </div>
+
+              <!-- Account 2 -->
+              <div class="account-row">
+                <span class="row-order">⋮⋮</span>
+                <div class="row-avatar pink">W</div>
+                <div class="row-info">
+                  <div class="row-name">Work — Acme Corp</div>
+                  <div class="row-email">henry@acme.com</div>
+                </div>
+                <div class="row-status warning"></div>
+                <div class="row-action">
+                  <button class="row-set-primary-btn">Set primary</button>
+                </div>
+              </div>
+
+              <!-- Account 3: Unreachable -->
+              <div class="account-row">
+                <span class="row-order">⋮⋮</span>
+                <div class="row-avatar gray">S</div>
+                <div class="row-info">
+                  <div class="row-name">Side Project</div>
+                  <div class="row-email">dev@sideproject.io</div>
+                </div>
+                <div class="row-status unreachable"></div>
+                <div class="row-action">
+                  <span class="row-error-tag">Re-auth</span>
+                </div>
+              </div>
+
+              <!-- Add account -->
+              <button class="add-account-btn">
+                <span class="add-icon">⊕</span>
+                Add Account
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="annotation">
+      <strong>Key changes from Phase 2:</strong>
+      Drag handles (⋮⋮) for account ordering. <strong>Primary</strong> replaces "Active" — all accounts are monitored, primary is for menu bar icon.
+      Per-account <strong>color-coded avatars</strong>. <strong>Unreachable</strong> state with "Re-auth" action for expired credentials.
+    </div>
+  </div>
+
+  <!-- ═══ ADD ACCOUNT JOURNEY ═══ -->
+  <div class="journey-section">
+    <div class="journey-title">Add Account Journey — Step by Step</div>
+
+    <div class="journey-flow">
+
+      <!-- Step 1: Click Add Account -->
+      <div class="journey-step">
+        <div class="step-number">
+          <div class="step-badge">1</div>
+          <span class="step-label">Tap "Add Account"</span>
+        </div>
+        <div class="step-card">
+          <div class="step-content">
+            <div style="font-size:11px;color:var(--text-secondary);line-height:1.5">
+              User clicks the dashed <strong style="color:var(--accent-purple)">+ Add Account</strong> button in the Account Management card within Settings.
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;padding:10px;border-radius:8px;background:rgba(140,82,218,0.06);border:1px dashed rgba(140,82,218,0.3)">
+              <span style="font-size:14px;color:var(--accent-purple)">⊕</span>
+              <span style="font-size:11px;font-weight:500;color:var(--accent-purple)">Add Account</span>
+            </div>
+            <div class="annotation" style="margin-top:8px;opacity:1;animation:none;padding:8px 10px">
+              <strong>Trigger:</strong> Inline within SettingsContentView. Opens a sheet/popover with the add-account form.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="journey-arrow">→</div>
+
+      <!-- Step 2: Account Details Form -->
+      <div class="journey-step">
+        <div class="step-number">
+          <div class="step-badge">2</div>
+          <span class="step-label">Account Details</span>
+        </div>
+        <div class="step-card">
+          <div class="step-content">
+            <div class="form-group">
+              <span class="form-label">Account Label</span>
+              <input class="form-input filled" type="text" value="Freelance" readonly>
+            </div>
+            <div class="form-group">
+              <span class="form-label">Email (optional)</span>
+              <input class="form-input filled" type="text" value="henry@freelance.io" readonly>
+            </div>
+            <div class="form-group">
+              <span class="form-label">Organization (optional)</span>
+              <input class="form-input" type="text" placeholder="e.g., Acme Corp" readonly>
+            </div>
+            <div class="form-group">
+              <span class="form-label">Avatar Color</span>
+              <div class="color-picker">
+                <div class="color-swatch" style="background:rgba(140,82,218,0.7)"></div>
+                <div class="color-swatch" style="background:rgba(218,90,166,0.7)"></div>
+                <div class="color-swatch selected" style="background:rgba(90,235,174,0.6)"></div>
+                <div class="color-swatch" style="background:rgba(250,184,90,0.6)"></div>
+                <div class="color-swatch" style="background:rgba(100,160,255,0.6)"></div>
+              </div>
+            </div>
+            <div class="step-actions">
+              <button class="btn-secondary">Cancel</button>
+              <button class="btn-primary">Next</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="journey-arrow">→</div>
+
+      <!-- Step 3: Probe Configuration -->
+      <div class="journey-step">
+        <div class="step-number">
+          <div class="step-badge">3</div>
+          <span class="step-label">Probe Config</span>
+        </div>
+        <div class="step-card">
+          <div class="step-content">
+            <div style="font-size:10px;color:var(--text-tertiary);margin-bottom:2px">
+              How should ClaudeBar fetch quota for this account?
+            </div>
+            <div class="probe-options">
+              <div class="probe-option selected" onclick="selectProbe(this)">
+                <span class="probe-option-icon">⌨</span>
+                CLI Profile
+              </div>
+              <div class="probe-option" onclick="selectProbe(this)">
+                <span class="probe-option-icon">🔑</span>
+                API Token
+              </div>
+            </div>
+            <div id="probeConfigFields">
+              <div class="form-group">
+                <span class="form-label">CLI Profile Name</span>
+                <input class="form-input filled" type="text" value="freelance" readonly>
+                <span class="form-hint">Matches `claude --profile freelance`</span>
+              </div>
+            </div>
+            <div class="step-actions">
+              <button class="btn-secondary">Back</button>
+              <button class="btn-primary">Verify & Add</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="journey-arrow">→</div>
+
+      <!-- Step 4: Verification -->
+      <div class="journey-step">
+        <div class="step-number">
+          <div class="step-badge">4</div>
+          <span class="step-label">Verify</span>
+        </div>
+        <div class="step-card">
+          <div class="step-content">
+            <div style="font-size:10px;color:var(--text-tertiary);margin-bottom:4px">
+              Probing account to verify connectivity...
+            </div>
+
+            <div class="verify-row">
+              <div class="verify-check">✓</div>
+              <span class="verify-text"><strong>CLI found</strong> — claude binary at /usr/local/bin/claude</span>
+            </div>
+            <div class="verify-row">
+              <div class="verify-check">✓</div>
+              <span class="verify-text"><strong>Profile valid</strong> — "freelance" profile exists</span>
+            </div>
+            <div class="verify-row">
+              <div class="verify-check">✓</div>
+              <span class="verify-text"><strong>Authenticated</strong> — henry@freelance.io</span>
+            </div>
+            <div class="verify-row">
+              <div class="verify-spinner"></div>
+              <span class="verify-text">Fetching initial quota snapshot...</span>
+            </div>
+
+            <div class="step-actions">
+              <button class="btn-secondary">Back</button>
+              <button class="btn-primary" disabled>Adding...</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="journey-arrow">→</div>
+
+      <!-- Step 5: Success -->
+      <div class="journey-step">
+        <div class="step-number">
+          <div class="step-badge">5</div>
+          <span class="step-label">Done</span>
+        </div>
+        <div class="step-card">
+          <div class="step-content success-card">
+            <div class="success-icon">🎉</div>
+            <div class="success-title">Account Added</div>
+            <div class="success-sub">Now monitoring quota for this account</div>
+
+            <div class="success-account-preview">
+              <div class="success-avatar">F</div>
+              <div class="success-info">
+                <div class="success-name">Freelance</div>
+                <div class="success-email">henry@freelance.io</div>
+              </div>
+              <div class="success-status-dot"></div>
+            </div>
+
+            <button class="btn-primary" style="width:100%">Done</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Journey annotation -->
+    <div class="annotation" style="max-width:700px;margin:24px auto 0;opacity:1;animation:none">
+      <strong>Add Account flow:</strong>
+      1. User taps dashed button → 2. Enters label, email, avatar color → 3. Configures probe (CLI profile or API token from <strong>probeConfig</strong>) →
+      4. ClaudeBar verifies connectivity and fetches initial snapshot → 5. Account appears in parallel monitoring view.
+      <br><br>
+      <strong>Error path:</strong> If verification fails at step 4 (e.g., invalid profile, expired token), user sees a red ✗ with retry option.
+      Account is saved as <strong>Unreachable</strong> with "Re-auth" tag if user chooses to add anyway.
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Toggle management card
+  function toggleMgmt() {
+    document.getElementById('mgmtCard').classList.toggle('expanded');
+  }
+
+  // Toggle account filter (not radio — can show/hide individual accounts)
+  function toggleFilter(el) {
+    el.classList.toggle('on');
+    const name = el.querySelector('.filter-name').textContent;
+    document.querySelectorAll('.account-group').forEach(group => {
+      if (group.dataset.account === name) {
+        group.style.display = el.classList.contains('on') ? '' : 'none';
+      }
+    });
+  }
+
+  // Provider pill selection
+  document.querySelectorAll('.provider-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      document.querySelectorAll('.provider-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+    });
+  });
+
+  // Probe type selector
+  function selectProbe(el) {
+    el.parentElement.querySelectorAll('.probe-option').forEach(o => o.classList.remove('selected'));
+    el.classList.add('selected');
+    const isCliSelected = el.textContent.includes('CLI');
+    const fields = document.getElementById('probeConfigFields');
+    if (isCliSelected) {
+      fields.innerHTML = `
+        <div class="form-group">
+          <span class="form-label">CLI Profile Name</span>
+          <input class="form-input filled" type="text" value="freelance" readonly>
+          <span class="form-hint">Matches \`claude --profile freelance\`</span>
+        </div>
+      `;
+    } else {
+      fields.innerHTML = `
+        <div class="form-group">
+          <span class="form-label">API Token Env Var</span>
+          <input class="form-input" type="text" placeholder="e.g., CLAUDE_FREELANCE_TOKEN" readonly>
+          <span class="form-hint">Environment variable holding the API key</span>
+        </div>
+      `;
+    }
+  }
+
+  // Color swatch selection
+  document.querySelectorAll('.color-swatch').forEach(swatch => {
+    swatch.addEventListener('click', () => {
+      swatch.parentElement.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+      swatch.classList.add('selected');
+    });
+  });
+</script>
+
+</body>
+</html>

@@ -1,0 +1,143 @@
+name: Tests
+
+on:
+  # Manual by default: callers must name the exact commit under test.
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: 'Exact commit to test (required by gha-safe)'
+        required: true
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Unit Tests with Coverage
+    # Anti-fork guard (E2): see build.yml — same rationale.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: macos-14
+    timeout-minutes: 60
+
+    concurrency:
+      group: claudebar-tests-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify requested commit
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          RESOLVED_SHA="$(git rev-parse HEAD)"
+          if ! [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$RESOLVED_SHA" != "$EXPECTED_SHA" ]]; then
+            echo "::error::Checkout $RESOLVED_SHA does not match expected_sha $EXPECTED_SHA"
+            exit 1
+          fi
+
+      - name: Get Swift version
+        run: swift --version
+
+      - name: Install Tuist
+        run: command -v tuist >/dev/null || brew install tuist
+
+      - name: Cache Tuist
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/tuist
+            .tuist-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-tuist-${{ hashFiles('Project.swift', 'Tuist.swift', 'Package.swift', 'Tuist/Package.swift') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-tuist-
+
+      - name: Install Dependencies
+        run: tuist install
+
+      - name: Generate Project
+        run: |
+          tuist generate --no-open
+          ./scripts/fix-swiftterm-metal.sh
+
+      - name: Run Tests with Coverage
+        run: |
+          xcodebuild test \
+            -scheme ClaudeBar \
+            -workspace ClaudeBar.xcworkspace \
+            -destination 'platform=macOS,arch=arm64' \
+            -enableCodeCoverage YES \
+            -skipMacroValidation \
+            -resultBundlePath TestResults.xcresult
+
+      - name: Generate Coverage Report
+        run: |
+          # Convert xcresult to JSON
+          xcrun xccov view --report --json TestResults.xcresult > coverage_report.json
+
+          # Convert to lcov format
+          python3 << 'EOF'
+          import json
+
+          with open('coverage_report.json', 'r') as f:
+              data = json.load(f)
+
+          with open('coverage.lcov', 'w') as lcov:
+              for target in data.get('targets', []):
+                  target_name = target.get('name', '')
+                  # Skip test targets and external dependencies
+                  if 'Tests' in target_name or 'Mockable' in target_name:
+                      continue
+
+                  for file_info in target.get('files', []):
+                      file_path = file_info.get('path', '')
+
+                      # Skip App layer, Infrastructure/Adapters, Preview files and generated files
+                      if '/App/' in file_path or '/Infrastructure/Adapters/' in file_path or 'Preview' in file_path or '/Derived/' in file_path:
+                          continue
+
+                      lcov.write(f"SF:{file_path}\n")
+
+                      fn_found = 0
+                      fn_hit = 0
+                      lines_found = 0
+                      lines_hit = 0
+
+                      for function in file_info.get('functions', []):
+                          name = function.get('name', 'unknown')
+                          line = function.get('lineNumber', 0)
+                          count = function.get('executionCount', 0)
+                          exec_lines = function.get('executableLines', 0)
+                          covered_lines = function.get('coveredLines', 0)
+
+                          lcov.write(f"FN:{line},{name}\n")
+                          lcov.write(f"FNDA:{count},{name}\n")
+                          fn_found += 1
+                          if count > 0:
+                              fn_hit += 1
+
+                          lines_found += exec_lines
+                          lines_hit += covered_lines
+
+                      lcov.write(f"FNF:{fn_found}\n")
+                      lcov.write(f"FNH:{fn_hit}\n")
+                      lcov.write(f"LF:{lines_found}\n")
+                      lcov.write(f"LH:{lines_hit}\n")
+                      lcov.write("end_of_record\n")
+
+          print("Generated coverage.lcov")
+          EOF
+
+      - name: Upload Coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          files: coverage.lcov
+          fail_ci_if_error: false
+          verbose: true
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}

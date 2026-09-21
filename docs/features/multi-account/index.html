@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClaudeBar — Multi-Account Design System</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="components/theme.css">
+<style>
+  body { align-items: center; }
+
+  .index-wrapper {
+    max-width: 800px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 40px;
+  }
+
+  /* ── Component cards ── */
+  .component-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .component-card {
+    border-radius: var(--card-radius);
+    background: linear-gradient(135deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04));
+    border: 1px solid var(--card-border);
+    padding: 24px;
+    text-decoration: none;
+    color: inherit;
+    transition: all 0.2s ease;
+    opacity: 0;
+    animation: cardIn 0.5s ease forwards;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    position: relative;
+    overflow: hidden;
+  }
+  .component-card:nth-child(1) { animation-delay: 0.2s; }
+  .component-card:nth-child(2) { animation-delay: 0.3s; }
+  .component-card:nth-child(3) { animation-delay: 0.4s; }
+
+  .component-card:hover {
+    transform: translateY(-4px);
+    background: linear-gradient(135deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06));
+    border-color: rgba(140,82,218,0.4);
+    box-shadow: 0 12px 30px rgba(140,82,218,0.15);
+  }
+
+  .card-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: var(--accent-gradient);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    color: white;
+    box-shadow: 0 4px 12px rgba(140,82,218,0.3);
+  }
+
+  .card-title {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+
+  .card-desc {
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+
+  .card-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 8px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--accent-purple);
+    background: rgba(140,82,218,0.1);
+    padding: 3px 8px;
+    border-radius: 4px;
+    align-self: flex-start;
+  }
+
+  .card-arrow {
+    position: absolute;
+    bottom: 16px;
+    right: 16px;
+    font-size: 14px;
+    color: var(--text-tertiary);
+    transition: all 0.2s ease;
+  }
+  .component-card:hover .card-arrow {
+    color: var(--accent-purple);
+    transform: translateX(3px);
+  }
+
+  /* ── Full width card ── */
+  .component-card.full {
+    grid-column: 1 / -1;
+  }
+
+  /* ── File structure ── */
+  .file-tree {
+    opacity: 0;
+    animation: cardIn 0.5s ease 0.6s forwards;
+  }
+  .file-tree-title {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    margin-bottom: 12px;
+  }
+  .tree {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.8;
+    padding: 16px;
+    border-radius: var(--card-radius);
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+  }
+  .tree .dir { color: var(--accent-purple); font-weight: 600; }
+  .tree .file { color: var(--text-secondary); }
+  .tree .shared { color: var(--status-healthy); }
+  .tree .new { color: var(--accent-pink); }
+</style>
+</head>
+<body>
+
+<div class="index-wrapper">
+
+  <div class="page-title-block">
+    <div class="page-title">Multi-Account Design System</div>
+    <div class="page-subtitle">PR #160 &bull; COMPOSABLE UI COMPONENTS &bull; PHASE 3</div>
+  </div>
+
+  <div class="component-grid">
+
+    <a href="components/popover.html" class="component-card">
+      <div class="card-icon">📊</div>
+      <div class="card-title">Menu Bar Popover</div>
+      <div class="card-desc">
+        Parallel monitoring view showing all accounts' quotas simultaneously with filter toggles and worst-status attribution.
+      </div>
+      <span class="card-tag">AccountPickerView</span>
+      <span class="card-arrow">→</span>
+    </a>
+
+    <a href="components/settings.html" class="component-card">
+      <div class="card-icon">⚙</div>
+      <div class="card-title">Account Settings</div>
+      <div class="card-desc">
+        Management card with drag ordering, primary account, color-coded avatars, and unreachable state handling.
+      </div>
+      <span class="card-tag">AccountManagementCard</span>
+      <span class="card-arrow">→</span>
+    </a>
+
+    <a href="components/add-account.html" class="component-card full">
+      <div class="card-icon">➕</div>
+      <div class="card-title">Add Account Journey</div>
+      <div class="card-desc">
+        5-step flow: Trigger → Details (label, email, color) → Probe Config (CLI profile or API token) → Verify connectivity → Success.
+        Includes error path for failed verification with "Add as Unreachable" fallback.
+      </div>
+      <span class="card-tag">Happy Path + Error Path</span>
+      <span class="card-arrow">→</span>
+    </a>
+
+  </div>
+
+  <!-- File structure -->
+  <div class="file-tree">
+    <div class="file-tree-title">File Structure</div>
+    <div class="tree">
+<span class="dir">docs/features/multi-account/</span>
+├── <span class="file">index.html</span>              ← You are here
+├── <span class="dir">components/</span>
+│   ├── <span class="shared">theme.css</span>           ← Shared design tokens &amp; animations
+│   ├── <span class="new">popover.html</span>        ← Menu bar popover (parallel monitoring)
+│   ├── <span class="new">settings.html</span>       ← Account management card
+│   └── <span class="new">add-account.html</span>    ← Add account journey (happy + error)
+├── <span class="file">multi-account-ui-design.html</span>      ← Original combined v0
+└── <span class="file">multi-account-ui-design-v1.html</span>   ← Combined v1
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

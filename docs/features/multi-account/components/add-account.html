@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClaudeBar — Add Account Journey</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="theme.css">
+<style>
+  body { align-items: flex-start; }
+
+  .journey-wrapper {
+    max-width: 1400px;
+    width: 100%;
+  }
+
+  .back-link {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 10px; color: var(--text-tertiary); text-decoration: none;
+    font-family: var(--font-mono); letter-spacing: 0.5px;
+    margin-bottom: 8px; transition: color 0.15s ease;
+  }
+  .back-link:hover { color: var(--accent-purple); }
+
+  .journey-flow {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    justify-content: center;
+    flex-wrap: wrap;
+    margin-top: 24px;
+  }
+
+  .journey-step {
+    width: 260px;
+    flex-shrink: 0;
+    opacity: 0;
+    animation: popoverIn 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  .journey-step:nth-child(1) { animation-delay: 0.2s; }
+  .journey-step:nth-child(2) { animation-delay: 0.35s; }
+  .journey-step:nth-child(3) { animation-delay: 0.5s; }
+  .journey-step:nth-child(4) { animation-delay: 0.65s; }
+  .journey-step:nth-child(5) { animation-delay: 0.8s; }
+  .journey-step:nth-child(6) { animation-delay: 0.95s; }
+  .journey-step:nth-child(7) { animation-delay: 1.1s; }
+  .journey-step:nth-child(8) { animation-delay: 1.25s; }
+  .journey-step:nth-child(9) { animation-delay: 1.4s; }
+
+  .step-number {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+  }
+  .step-badge {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--accent-gradient);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; color: white; flex-shrink: 0;
+  }
+  .step-label {
+    font-size: 10px; font-weight: 600; letter-spacing: 0.5px;
+    text-transform: uppercase; color: var(--text-secondary);
+  }
+
+  .step-card {
+    border-radius: var(--card-radius);
+    background: linear-gradient(165deg, var(--bg-deep) 0%, var(--bg-mid) 100%);
+    border: 1px solid rgba(255,255,255,0.12);
+    overflow: hidden;
+    box-shadow: 0 12px 30px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06);
+  }
+  .step-content {
+    padding: 16px;
+    display: flex; flex-direction: column; gap: 12px;
+    position: relative; z-index: 1;
+  }
+
+  /* Journey arrow */
+  .journey-arrow {
+    display: flex; align-items: center; justify-content: center;
+    align-self: center; font-size: 18px; color: var(--text-tertiary);
+    flex-shrink: 0; padding-top: 34px;
+    opacity: 0; animation: cardIn 0.5s ease 0.4s forwards;
+  }
+
+  /* ── Form elements ── */
+  .form-group { display: flex; flex-direction: column; gap: 4px; }
+  .form-label {
+    font-size: 9px; font-weight: 600; letter-spacing: 0.8px;
+    text-transform: uppercase; color: var(--text-tertiary);
+  }
+  .form-input {
+    width: 100%; padding: 8px 10px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.05);
+    color: var(--text-primary); font-family: var(--font-body);
+    font-size: 12px; font-weight: 500; outline: none; transition: all 0.15s ease;
+  }
+  .form-input:focus {
+    border-color: rgba(140,82,218,0.6); background: rgba(140,82,218,0.06);
+    box-shadow: 0 0 0 2px rgba(140,82,218,0.15);
+  }
+  .form-input::placeholder { color: var(--text-tertiary); font-weight: 400; }
+  .form-input.filled { border-color: rgba(90,235,174,0.3); background: rgba(90,235,174,0.04); }
+  .form-hint { font-size: 8px; color: var(--text-tertiary); font-style: italic; }
+
+  /* ── Probe type selector ── */
+  .probe-options { display: flex; gap: 6px; }
+  .probe-option {
+    flex: 1; padding: 8px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.12); background: transparent;
+    color: var(--text-secondary); font-family: var(--font-body);
+    font-size: 10px; font-weight: 500; cursor: pointer;
+    text-align: center; transition: all 0.15s ease;
+  }
+  .probe-option:hover { border-color: rgba(255,255,255,0.25); background: var(--hover-overlay); }
+  .probe-option.selected {
+    border-color: rgba(140,82,218,0.5); background: rgba(140,82,218,0.12);
+    color: var(--text-primary); font-weight: 600;
+  }
+  .probe-option-icon { display: block; font-size: 16px; margin-bottom: 4px; }
+
+  /* ── Color picker ── */
+  .color-picker { display: flex; gap: 6px; padding: 2px 0; }
+  .color-swatch {
+    width: 20px; height: 20px; border-radius: 50%;
+    cursor: pointer; border: 2px solid transparent; transition: all 0.15s ease;
+  }
+  .color-swatch:hover { transform: scale(1.15); }
+  .color-swatch.selected { border-color: white; box-shadow: 0 0 8px rgba(255,255,255,0.3); }
+
+  /* ── Verification rows ── */
+  .verify-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 10px; border-radius: 8px;
+    border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.03);
+  }
+  .verify-spinner {
+    width: 14px; height: 14px;
+    border: 2px solid rgba(140,82,218,0.2); border-top-color: var(--accent-purple);
+    border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0;
+  }
+  .verify-check {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--status-healthy);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 8px; color: white; font-weight: 700; flex-shrink: 0;
+  }
+  .verify-fail {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--status-critical);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 8px; color: white; font-weight: 700; flex-shrink: 0;
+  }
+  .verify-text { font-size: 10px; color: var(--text-secondary); }
+  .verify-text strong { color: var(--status-healthy); }
+  .verify-text .fail { color: var(--status-critical); }
+
+  /* ── Action buttons ── */
+  .step-actions { display: flex; gap: 8px; margin-top: 4px; }
+  .step-actions .btn-primary { flex: 1; }
+
+  /* ── Success state ── */
+  .success-card { text-align: center; padding: 20px 16px; }
+  .success-icon { font-size: 32px; margin-bottom: 8px; }
+  .success-title { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+  .success-sub { font-size: 10px; color: var(--text-secondary); margin-bottom: 12px; }
+  .success-account-preview {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px; border-radius: 10px;
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(90,235,174,0.2);
+    margin-bottom: 12px;
+  }
+  .success-avatar {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: rgba(90,235,174,0.2); color: var(--status-healthy);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+  }
+  .success-info { text-align: left; flex: 1; }
+  .success-name { font-size: 12px; font-weight: 600; }
+  .success-email { font-size: 9px; color: var(--text-tertiary); margin-top: 1px; }
+  .success-status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--status-healthy); box-shadow: 0 0 8px rgba(90,235,174,0.5);
+  }
+
+  /* ── Error state ── */
+  .error-card { padding: 16px; }
+  .error-banner {
+    display: flex; align-items: center; gap: 8px;
+    padding: 10px; border-radius: 8px;
+    background: rgba(250,107,133,0.08); border: 1px solid rgba(250,107,133,0.2);
+    margin-bottom: 12px;
+  }
+  .error-banner-icon { font-size: 14px; flex-shrink: 0; }
+  .error-banner-text { font-size: 10px; color: var(--text-secondary); line-height: 1.4; }
+  .error-banner-text strong { color: var(--status-critical); }
+
+  .step-desc {
+    font-size: 11px; color: var(--text-secondary); line-height: 1.5;
+  }
+  .step-desc strong { color: var(--accent-purple); }
+
+  /* Responsive */
+  @media (max-width: 920px) {
+    .journey-arrow { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="journey-wrapper">
+  <a href="../index.html" class="back-link">← All Views</a>
+  <div class="section-label">Add Account Journey — Happy Path + Error Path</div>
+
+  <div class="journey-flow">
+
+    <!-- Step 1: Trigger -->
+    <div class="journey-step">
+      <div class="step-number">
+        <div class="step-badge">1</div>
+        <span class="step-label">Trigger</span>
+      </div>
+      <div class="step-card">
+        <div class="step-content">
+          <div class="step-desc">
+            User clicks <strong>+ Add Account</strong> in the Account Management card (Settings).
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;padding:10px;border-radius:8px;background:rgba(140,82,218,0.06);border:1px dashed rgba(140,82,218,0.3)">
+            <span style="font-size:14px;color:var(--accent-purple)">⊕</span>
+            <span style="font-size:11px;font-weight:500;color:var(--accent-purple)">Add Account</span>
+          </div>
+          <div class="step-desc" style="font-size:9px;color:var(--text-tertiary)">
+            Opens an inline sheet within the settings panel.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="journey-arrow">→</div>
+
+    <!-- Step 2: Account Details -->
+    <div class="journey-step">
+      <div class="step-number">
+        <div class="step-badge">2</div>
+        <span class="step-label">Details</span>
+      </div>
+      <div class="step-card">
+        <div class="step-content">
+          <div class="form-group">
+            <span class="form-label">Account Label *</span>
+            <input class="form-input filled" type="text" value="Freelance" readonly>
+          </div>
+          <div class="form-group">
+            <span class="form-label">Email (optional)</span>
+            <input class="form-input filled" type="text" value="henry@freelance.io" readonly>
+          </div>
+          <div class="form-group">
+            <span class="form-label">Organization (optional)</span>
+            <input class="form-input" type="text" placeholder="e.g., Acme Corp" readonly>
+          </div>
+          <div class="form-group">
+            <span class="form-label">Avatar Color</span>
+            <div class="color-picker">
+              <div class="color-swatch" style="background:rgba(140,82,218,0.7)" onclick="pickColor(this)"></div>
+              <div class="color-swatch" style="background:rgba(218,90,166,0.7)" onclick="pickColor(this)"></div>
+              <div class="color-swatch selected" style="background:rgba(90,235,174,0.6)" onclick="pickColor(this)"></div>
+              <div class="color-swatch" style="background:rgba(250,184,90,0.6)" onclick="pickColor(this)"></div>
+              <div class="color-swatch" style="background:rgba(100,160,255,0.6)" onclick="pickColor(this)"></div>
+            </div>
+          </div>
+          <div class="step-actions">
+            <button class="btn-secondary">Cancel</button>
+            <button class="btn-primary">Next</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="journey-arrow">→</div>
+
+    <!-- Step 3: Probe Config -->
+    <div class="journey-step">
+      <div class="step-number">
+        <div class="step-badge">3</div>
+        <span class="step-label">Probe Config</span>
+      </div>
+      <div class="step-card">
+        <div class="step-content">
+          <div style="font-size:10px;color:var(--text-tertiary);margin-bottom:2px">
+            How should ClaudeBar fetch quota for this account?
+          </div>
+          <div class="probe-options">
+            <div class="probe-option selected" onclick="selectProbe(this,'cli')">
+              <span class="probe-option-icon">⌨</span>
+              CLI Profile
+            </div>
+            <div class="probe-option" onclick="selectProbe(this,'api')">
+              <span class="probe-option-icon">🔑</span>
+              API Token
+            </div>
+          </div>
+          <div id="probeFields">
+            <div class="form-group">
+              <span class="form-label">CLI Profile Name</span>
+              <input class="form-input filled" type="text" value="freelance" readonly>
+              <span class="form-hint">Matches `claude --profile freelance`</span>
+            </div>
+          </div>
+          <div class="step-actions">
+            <button class="btn-secondary">Back</button>
+            <button class="btn-primary">Verify & Add</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="journey-arrow">→</div>
+
+    <!-- Step 4: Verification (Happy) -->
+    <div class="journey-step">
+      <div class="step-number">
+        <div class="step-badge">4</div>
+        <span class="step-label">Verify</span>
+      </div>
+      <div class="step-card">
+        <div class="step-content">
+          <div style="font-size:10px;color:var(--text-tertiary);margin-bottom:4px">
+            Probing account connectivity...
+          </div>
+          <div class="verify-row">
+            <div class="verify-check">✓</div>
+            <span class="verify-text"><strong>CLI found</strong> — claude at /usr/local/bin</span>
+          </div>
+          <div class="verify-row">
+            <div class="verify-check">✓</div>
+            <span class="verify-text"><strong>Profile valid</strong> — "freelance" exists</span>
+          </div>
+          <div class="verify-row">
+            <div class="verify-check">✓</div>
+            <span class="verify-text"><strong>Authenticated</strong> — henry@freelance.io</span>
+          </div>
+          <div class="verify-row">
+            <div class="verify-spinner"></div>
+            <span class="verify-text">Fetching initial quota snapshot...</span>
+          </div>
+          <div class="step-actions">
+            <button class="btn-secondary">Back</button>
+            <button class="btn-primary" disabled>Adding...</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="journey-arrow">→</div>
+
+    <!-- Step 5: Success -->
+    <div class="journey-step">
+      <div class="step-number">
+        <div class="step-badge">5</div>
+        <span class="step-label">Done</span>
+      </div>
+      <div class="step-card">
+        <div class="step-content success-card">
+          <div class="success-icon">🎉</div>
+          <div class="success-title">Account Added</div>
+          <div class="success-sub">Now monitoring quota for this account</div>
+          <div class="success-account-preview">
+            <div class="success-avatar">F</div>
+            <div class="success-info">
+              <div class="success-name">Freelance</div>
+              <div class="success-email">henry@freelance.io</div>
+            </div>
+            <div class="success-status-dot"></div>
+          </div>
+          <button class="btn-primary" style="width:100%">Done</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Error Path ── -->
+  <div style="margin-top:40px">
+    <div class="section-label">Error Path — Verification Fails</div>
+
+    <div class="journey-flow">
+
+      <!-- Error Step 4: Verification fails -->
+      <div class="journey-step">
+        <div class="step-number">
+          <div class="step-badge" style="background:linear-gradient(135deg, var(--status-critical), #ef4444)">4</div>
+          <span class="step-label">Verify — Failed</span>
+        </div>
+        <div class="step-card">
+          <div class="step-content">
+            <div style="font-size:10px;color:var(--text-tertiary);margin-bottom:4px">
+              Probing account connectivity...
+            </div>
+            <div class="verify-row">
+              <div class="verify-check">✓</div>
+              <span class="verify-text"><strong>CLI found</strong> — claude at /usr/local/bin</span>
+            </div>
+            <div class="verify-row">
+              <div class="verify-check">✓</div>
+              <span class="verify-text"><strong>Profile valid</strong> — "freelance" exists</span>
+            </div>
+            <div class="verify-row" style="border-color:rgba(250,107,133,0.2)">
+              <div class="verify-fail">✗</div>
+              <span class="verify-text"><span class="fail">Auth expired</span> — token needs refresh</span>
+            </div>
+            <div class="step-actions">
+              <button class="btn-secondary">Back</button>
+              <button class="btn-primary" style="background:linear-gradient(135deg, var(--status-warning), #f59e0b)">Add as Unreachable</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="journey-arrow">→</div>
+
+      <!-- Error Step 5: Added as unreachable -->
+      <div class="journey-step">
+        <div class="step-number">
+          <div class="step-badge" style="background:linear-gradient(135deg, var(--status-unreachable), #6b7280)">5</div>
+          <span class="step-label">Added — Unreachable</span>
+        </div>
+        <div class="step-card">
+          <div class="step-content error-card">
+            <div class="error-banner">
+              <span class="error-banner-icon">⚠️</span>
+              <div class="error-banner-text">
+                Account saved as <strong>Unreachable</strong>. Re-authenticate to start monitoring.
+              </div>
+            </div>
+            <div class="success-account-preview" style="border-color:rgba(120,120,135,0.3)">
+              <div class="success-avatar" style="background:rgba(120,120,135,0.2);color:var(--status-unreachable)">F</div>
+              <div class="success-info">
+                <div class="success-name">Freelance</div>
+                <div class="success-email">henry@freelance.io</div>
+              </div>
+              <span style="font-size:8px;font-weight:500;color:var(--status-unreachable);padding:2px 6px;border-radius:4px;background:rgba(120,120,135,0.15)">Re-auth</span>
+            </div>
+            <div class="step-actions">
+              <button class="btn-secondary" style="flex:1">Done</button>
+              <button class="btn-primary" style="flex:1">Re-authenticate</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Annotation -->
+  <div class="annotation no-arrow" style="max-width:700px;margin:32px auto 0;opacity:1;animation:none">
+    <strong>Journey maps to domain model:</strong>
+    Step 2 creates <strong>ProviderAccountConfig</strong> (label, email, org, avatar color).
+    Step 3 sets <strong>probeConfig</strong> (CLI profile or API token env var).
+    Step 4 calls <strong>refreshAccount()</strong> to verify connectivity.
+    Step 5 adds to <strong>MultiAccountSettingsRepository</strong> and appears in parallel monitoring.
+    <br><br>
+    <strong>Error path:</strong> If verification fails, user can still save as Unreachable.
+    Account shows gray status in settings with "Re-auth" action. No quota cards rendered until resolved.
+  </div>
+</div>
+
+<script>
+  function selectProbe(el, type) {
+    el.parentElement.querySelectorAll('.probe-option').forEach(o => o.classList.remove('selected'));
+    el.classList.add('selected');
+    const fields = document.getElementById('probeFields');
+    if (type === 'cli') {
+      fields.innerHTML = `
+        <div class="form-group">
+          <span class="form-label">CLI Profile Name</span>
+          <input class="form-input filled" type="text" value="freelance" readonly>
+          <span class="form-hint">Matches \`claude --profile freelance\`</span>
+        </div>`;
+    } else {
+      fields.innerHTML = `
+        <div class="form-group">
+          <span class="form-label">API Token Env Var</span>
+          <input class="form-input" type="text" placeholder="e.g., CLAUDE_FREELANCE_TOKEN" readonly>
+          <span class="form-hint">Environment variable holding the API key</span>
+        </div>`;
+    }
+  }
+
+  function pickColor(el) {
+    el.parentElement.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('selected'));
+    el.classList.add('selected');
+  }
+</script>
+</body>
+</html>

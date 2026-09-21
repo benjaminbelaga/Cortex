@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleExecutable</key>
+    <string>Cortex</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
+    <key>CFBundleIdentifier</key>
+    <string>fr.yoyaku.cortex</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>Cortex</string>
+    <key>CFBundleDisplayName</key>
+    <string>Cortex</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>2.1.0</string>
+    <key>CFBundleVersion</key>
+    <string>20100</string>
+    <key>ClaudeBarGitSHA</key>
+    <string>$(CORTEX_GIT_SHA)</string>
+    <key>ClaudeBarBuildUTC</key>
+    <string>$(CORTEX_BUILD_UTC)</string>
+    <key>ClaudeBarGitDirty</key>
+    <string>$(CORTEX_GIT_DIRTY)</string>
+    <key>LSApplicationCategoryType</key>
+    <string>public.app-category.utilities</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>15.0</string>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSHumanReadableCopyright</key>
+    <string>Copyright 2025 TDDWorks, 2026 Benjamin Belaga. All rights reserved.</string>
+    <key>NSPrincipalClass</key>
+    <string>NSApplication</string>
+    <key>SUFeedURL</key>
+    <string>https://benjaminbelaga.github.io/Cortex/appcast.xml</string>
+    <!-- A Cortex-specific Sparkle key is provisioned at first signed release;
+         never reuse the upstream ClaudeBar signing key. Automatic checks stay
+         disabled until that key is configured. -->
+    <key>SUEnableAutomaticChecks</key>
+    <false/>
+    <key>SUAutomaticallyUpdate</key>
+    <false/>
+    <key>NSSupportsLiveActivities</key>
+    <true/>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>CFBundleURLName</key>
+            <string>fr.yoyaku.cortex</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>cortex</string>
+                <string>claudebar</string>
+            </array>
+        </dict>
+    </array>
+    <key>ATSApplicationFontsPath</key>
+    <string>Fonts</string>
+    <key>NSAppleEventsUsageDescription</key>
+    <string>Cortex ouvre les missions et les séquences de connexion dans votre terminal.</string>
+</dict>
+</plist>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Required for Mac App Store -->
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+    <!-- Network access for probing AI provider APIs/CLIs -->
+    <key>com.apple.security.network.client</key>
+    <true/>
+    <!-- Apple Events for inter-process communication with CLI tools -->
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
+</dict>
+</plist>

@@ -1,0 +1,83 @@
+{
+    "id": "example-provider",
+    "name": "Example Provider",
+    "version": "1.1.0",
+    "description": "A sample extension showing config fields, sections, and probe scripts",
+    "icon": "cpu.fill",
+    "colors": {
+        "primary": "#FF6B35",
+        "gradient": ["#FF6B35", "#F7C948"]
+    },
+    "dashboardURL": "https://example.com/usage",
+    "config": [
+        {
+            "id": "apiKey",
+            "label": "API Key",
+            "type": "secret",
+            "required": true,
+            "placeholder": "sk-example-...",
+            "helpText": "Your API key from example.com/settings"
+        },
+        {
+            "id": "baseUrl",
+            "label": "Base URL",
+            "type": "string",
+            "default": "https://api.example.com",
+            "placeholder": "https://api.example.com",
+            "helpText": "Override for self-hosted instances"
+        },
+        {
+            "id": "monthlyBudget",
+            "label": "Monthly Budget",
+            "type": "number",
+            "default": "100",
+            "placeholder": "100.00",
+            "helpText": "USD spending limit for cost tracking"
+        },
+        {
+            "id": "verboseLogging",
+            "label": "Verbose Logging",
+            "type": "toggle",
+            "default": "false"
+        }
+    ],
+    "sections": [
+        {
+            "id": "health",
+            "type": "healthCheck",
+            "probe": {
+                "builtIn": "healthCheck",
+                "url": "https://api.example.com/health",
+                "interval": 30,
+                "timeout": 5
+            }
+        },
+        {
+            "id": "quotas",
+            "type": "quotaGrid",
+            "probe": {
+                "command": "./probe-quota.sh",
+                "interval": 60,
+                "timeout": 10
+            }
+        },
+        {
+            "id": "metrics",
+            "type": "metricsRow",
+            "probe": {
+                "command": "./probe-metrics.sh",
+                "interval": 300,
+                "timeout": 15
+            }
+        },
+        {
+            "id": "daily",
+            "type": "dailyUsage",
+            "probe": {
+                "command": "./probe-daily.sh",
+                "interval": 300,
+                "timeout": 15
+            }
+        }
+    ]
+}

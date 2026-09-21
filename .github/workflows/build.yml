@@ -1,0 +1,78 @@
+name: Build
+
+on:
+  # Manual by default: release builds require a maintainer-selected commit.
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: 'Exact commit to build (required by gha-safe)'
+        required: true
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+
+jobs:
+  build:
+    name: Build and Verify
+    # Anti-fork guard (E2): the self-hosted macOS runner must never execute
+    # code from a fork PR. Workflows are dispatch-only today; this stays as
+    # defense-in-depth if pull_request triggers are ever re-enabled.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: macos-14
+    timeout-minutes: 45
+
+    concurrency:
+      group: claudebar-build-${{ github.event.pull_request.number || github.ref }}
+      cancel-in-progress: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify requested commit
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          RESOLVED_SHA="$(git rev-parse HEAD)"
+          if ! [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]] || [[ "$RESOLVED_SHA" != "$EXPECTED_SHA" ]]; then
+            echo "::error::Checkout $RESOLVED_SHA does not match expected_sha $EXPECTED_SHA"
+            exit 1
+          fi
+
+      # No explicit Swift toolchain setup: use the runner's bundled Xcode, the
+      # same toolchain Tuist builds its macro prebuilts (SwiftSyntax) against.
+      # Installing a separate toolchain via SwiftyLab/setup-swift drifted out of
+      # sync with those prebuilts and broke the Release build ("SwiftSyntax was
+      # created for incompatible target"). Mirrors the passing tests.yml.
+
+      - name: Install Tuist
+        run: command -v tuist >/dev/null || brew install tuist
+
+      - name: Cache Tuist
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/Library/Caches/tuist
+            .tuist-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-tuist-${{ hashFiles('Project.swift', 'Tuist.swift', 'Package.swift', 'Tuist/Package.swift') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-tuist-
+
+      - name: Install Dependencies
+        run: tuist install
+
+      - name: Generate Project
+        run: |
+          tuist generate --no-open
+          ./scripts/fix-swiftterm-metal.sh
+
+      - name: Build Debug
+        run: xcodebuild build -scheme ClaudeBar -workspace ClaudeBar.xcworkspace -destination 'platform=macOS,arch=arm64'
+
+      - name: Build Release
+        run: xcodebuild build -scheme ClaudeBar -workspace ClaudeBar.xcworkspace -destination 'platform=macOS,arch=arm64' -configuration Release

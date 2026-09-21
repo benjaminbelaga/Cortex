@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClaudeBar — Multi-Account UI Design</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-deep: rgb(30, 20, 56);
+    --bg-mid: rgb(46, 26, 72);
+    --bg-surface: rgb(56, 30, 82);
+    --card-bg: rgba(255,255,255,0.10);
+    --card-bg-hover: rgba(255,255,255,0.14);
+    --card-border: rgba(255,255,255,0.18);
+    --card-border-highlight: rgba(255,255,255,0.28);
+    --glass-bg: rgba(255,255,255,0.08);
+    --text-primary: rgba(255,255,255,0.93);
+    --text-secondary: rgba(255,255,255,0.65);
+    --text-tertiary: rgba(255,255,255,0.42);
+    --accent-purple: rgb(140, 82, 218);
+    --accent-pink: rgb(218, 90, 166);
+    --accent-gradient: linear-gradient(135deg, rgb(140,82,218), rgb(218,90,166));
+    --status-healthy: rgb(90, 235, 174);
+    --status-warning: rgb(250, 184, 90);
+    --status-critical: rgb(250, 107, 133);
+    --status-depleted: rgb(217, 64, 90);
+    --hover-overlay: rgba(255,255,255,0.06);
+    --pill-radius: 20px;
+    --card-radius: 14px;
+    --font-body: 'DM Sans', -apple-system, sans-serif;
+    --font-mono: 'Space Mono', monospace;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0612;
+    font-family: var(--font-body);
+    color: var(--text-primary);
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    min-height: 100vh;
+    padding: 40px 20px;
+    overflow-x: hidden;
+  }
+
+  .design-canvas {
+    display: flex;
+    gap: 60px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    justify-content: center;
+    max-width: 1200px;
+  }
+
+  /* ── Annotation labels ── */
+  .section-label {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: var(--accent-pink);
+    margin-bottom: 16px;
+    opacity: 0;
+    animation: labelIn 0.6s ease forwards;
+  }
+  .section-label::before {
+    content: '◆ ';
+    color: var(--accent-purple);
+  }
+
+  /* ── Popover frame ── */
+  .popover-frame {
+    width: 400px;
+    flex-shrink: 0;
+    opacity: 0;
+    animation: popoverIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.1s forwards;
+  }
+
+  .popover {
+    width: 400px;
+    border-radius: 16px;
+    background: linear-gradient(165deg, var(--bg-deep) 0%, var(--bg-mid) 50%, var(--bg-surface) 100%);
+    border: 1px solid rgba(255,255,255,0.12);
+    overflow: hidden;
+    position: relative;
+    box-shadow:
+      0 25px 60px rgba(0,0,0,0.5),
+      0 8px 20px rgba(0,0,0,0.3),
+      inset 0 1px 0 rgba(255,255,255,0.08);
+  }
+
+  /* Orb effects */
+  .popover::before {
+    content: '';
+    position: absolute;
+    width: 240px;
+    height: 240px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(140,82,218,0.25), transparent 70%);
+    top: -80px;
+    left: -60px;
+    filter: blur(40px);
+    pointer-events: none;
+    animation: orbFloat 8s ease-in-out infinite;
+  }
+  .popover::after {
+    content: '';
+    position: absolute;
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(218,90,166,0.2), transparent 70%);
+    bottom: -40px;
+    right: -40px;
+    filter: blur(30px);
+    pointer-events: none;
+    animation: orbFloat 8s ease-in-out 4s infinite;
+  }
+
+  .popover-content {
+    position: relative;
+    z-index: 1;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  /* ── Header ── */
+  .popover-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-bottom: 4px;
+  }
+  .logo-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .logo-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: var(--accent-gradient);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 13px;
+    color: white;
+    box-shadow: 0 2px 10px rgba(140,82,218,0.4);
+  }
+  .logo-text {
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: -0.3px;
+  }
+  .header-actions {
+    display: flex;
+    gap: 6px;
+  }
+  .header-btn {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    border: none;
+    background: var(--glass-bg);
+    color: var(--text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    transition: all 0.15s ease;
+  }
+  .header-btn:hover {
+    background: var(--hover-overlay);
+    color: var(--text-primary);
+    transform: scale(1.05);
+  }
+
+  /* ── Provider pills row ── */
+  .provider-pills {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding: 2px 0;
+  }
+  .provider-pills::-webkit-scrollbar { display: none; }
+  .provider-pill {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 10px;
+    border-radius: var(--pill-radius);
+    border: 1px solid var(--card-border);
+    background: var(--glass-bg);
+    cursor: pointer;
+    white-space: nowrap;
+    font-size: 11px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+  }
+  .provider-pill:hover {
+    background: var(--hover-overlay);
+    border-color: var(--card-border-highlight);
+    color: var(--text-primary);
+  }
+  .provider-pill.active {
+    background: var(--accent-gradient);
+    border-color: rgba(140,82,218,0.5);
+    color: white;
+    font-weight: 600;
+    box-shadow: 0 2px 8px rgba(140,82,218,0.35);
+  }
+  .pill-icon {
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  /* ── ACCOUNT PICKER (NEW) ── */
+  .account-picker-section {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 2px;
+  }
+  .account-picker-label {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    flex-shrink: 0;
+  }
+  .account-pills {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .account-pills::-webkit-scrollbar { display: none; }
+  .account-pill {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    border-radius: 12px;
+    border: 1px solid rgba(255,255,255,0.15);
+    background: transparent;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+  }
+  .account-pill:hover {
+    background: var(--hover-overlay);
+    border-color: rgba(255,255,255,0.25);
+  }
+  .account-pill.active {
+    background: rgba(140,82,218,0.15);
+    border-color: rgba(140,82,218,0.5);
+  }
+  .account-avatar {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 8px;
+    font-weight: 700;
+    background: var(--glass-bg);
+    color: var(--text-secondary);
+    flex-shrink: 0;
+  }
+  .account-pill.active .account-avatar {
+    background: var(--accent-gradient);
+    color: white;
+  }
+  .account-pill-name {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    line-height: 1;
+  }
+  .account-pill.active .account-pill-name {
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+
+  /* ── Stat cards grid ── */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .stat-card {
+    padding: 12px;
+    border-radius: var(--card-radius);
+    background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.05));
+    border: 1px solid var(--card-border);
+    position: relative;
+    overflow: hidden;
+    transition: all 0.15s ease;
+    cursor: default;
+    opacity: 0;
+    animation: cardIn 0.5s ease forwards;
+  }
+  .stat-card:nth-child(1) { animation-delay: 0.3s; }
+  .stat-card:nth-child(2) { animation-delay: 0.4s; }
+  .stat-card:nth-child(3) { animation-delay: 0.5s; }
+  .stat-card:nth-child(4) { animation-delay: 0.6s; }
+  .stat-card:hover {
+    transform: scale(1.015);
+    background: linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.07));
+  }
+
+  .stat-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+  }
+  .stat-label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .stat-label-icon {
+    font-size: 9px;
+    font-weight: 700;
+  }
+  .stat-label-text {
+    font-size: 8px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-secondary);
+  }
+  .stat-badge {
+    font-size: 8px;
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: 6px;
+    letter-spacing: 0.3px;
+  }
+  .stat-badge.healthy { background: rgba(90,235,174,0.15); color: var(--status-healthy); }
+  .stat-badge.warning { background: rgba(250,184,90,0.15); color: var(--status-warning); }
+  .stat-badge.critical { background: rgba(250,107,133,0.15); color: var(--status-critical); }
+
+  .stat-value {
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -1.5px;
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+  .stat-value .unit {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    letter-spacing: 0;
+  }
+
+  .progress-track {
+    height: 5px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.08);
+    overflow: hidden;
+    margin-bottom: 6px;
+  }
+  .progress-fill {
+    height: 100%;
+    border-radius: 3px;
+    background: var(--accent-gradient);
+    transition: width 0.8s cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+  .progress-fill.warning { background: linear-gradient(90deg, var(--status-warning), #f59e0b); }
+  .progress-fill.critical { background: linear-gradient(90deg, var(--status-critical), #ef4444); }
+
+  .stat-reset {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 9px;
+    color: var(--text-tertiary);
+  }
+
+  /* Account indicator on card */
+  .stat-card .account-tag {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 7px;
+    font-weight: 600;
+    letter-spacing: 0.8px;
+    text-transform: uppercase;
+    color: var(--accent-purple);
+    background: rgba(140,82,218,0.12);
+    padding: 2px 5px;
+    border-radius: 4px;
+    opacity: 0.7;
+  }
+
+  /* ── Settings panel frame ── */
+  .settings-frame {
+    width: 420px;
+    flex-shrink: 0;
+    opacity: 0;
+    animation: popoverIn 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.25s forwards;
+  }
+
+  .settings-panel {
+    width: 420px;
+    border-radius: 16px;
+    background: linear-gradient(165deg, var(--bg-deep) 0%, var(--bg-mid) 50%, var(--bg-surface) 100%);
+    border: 1px solid rgba(255,255,255,0.12);
+    overflow: hidden;
+    position: relative;
+    box-shadow:
+      0 25px 60px rgba(0,0,0,0.5),
+      0 8px 20px rgba(0,0,0,0.3),
+      inset 0 1px 0 rgba(255,255,255,0.08);
+  }
+  .settings-panel::before {
+    content: '';
+    position: absolute;
+    width: 200px;
+    height: 200px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(218,90,166,0.18), transparent 70%);
+    top: -60px;
+    right: -40px;
+    filter: blur(40px);
+    pointer-events: none;
+  }
+
+  .settings-content {
+    position: relative;
+    z-index: 1;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .settings-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-bottom: 4px;
+  }
+  .settings-header-icon {
+    font-size: 16px;
+  }
+  .settings-title {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+  }
+
+  /* ── Account Management Card (NEW) ── */
+  .account-mgmt-card {
+    border-radius: var(--card-radius);
+    background: linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.05));
+    border: 1px solid var(--card-border);
+    overflow: hidden;
+    opacity: 0;
+    animation: cardIn 0.5s ease 0.5s forwards;
+  }
+
+  .mgmt-header {
+    padding: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .mgmt-header:hover {
+    background: var(--hover-overlay);
+  }
+  .mgmt-header-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--accent-gradient);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    color: white;
+    flex-shrink: 0;
+  }
+  .mgmt-header-text {
+    flex: 1;
+  }
+  .mgmt-header-title {
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .mgmt-header-sub {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--text-tertiary);
+    margin-top: 2px;
+  }
+  .mgmt-header-badge {
+    font-size: 9px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 6px;
+  }
+  .mgmt-chevron {
+    color: var(--text-tertiary);
+    font-size: 11px;
+    transition: transform 0.2s ease;
+  }
+  .account-mgmt-card.expanded .mgmt-chevron {
+    transform: rotate(90deg);
+  }
+
+  .mgmt-body {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .account-mgmt-card.expanded .mgmt-body {
+    max-height: 500px;
+  }
+  .mgmt-body-inner {
+    padding: 0 14px 14px;
+  }
+  .mgmt-divider {
+    height: 1px;
+    background: var(--card-border);
+    margin-bottom: 12px;
+  }
+
+  /* Account rows */
+  .account-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 4px;
+    border-radius: 8px;
+    transition: background 0.12s ease;
+    opacity: 0;
+    animation: rowSlide 0.4s ease forwards;
+  }
+  .account-row:nth-child(2) { animation-delay: 0.6s; }
+  .account-row:nth-child(3) { animation-delay: 0.7s; }
+  .account-row:nth-child(4) { animation-delay: 0.8s; }
+  .account-row:hover {
+    background: var(--hover-overlay);
+  }
+  .row-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    background: var(--glass-bg);
+    color: var(--text-secondary);
+    flex-shrink: 0;
+    transition: all 0.2s ease;
+  }
+  .account-row.is-active .row-avatar {
+    background: var(--accent-gradient);
+    color: white;
+    box-shadow: 0 2px 8px rgba(140,82,218,0.3);
+  }
+  .row-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .row-name {
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .row-email {
+    font-size: 9px;
+    font-weight: 500;
+    color: var(--text-tertiary);
+    margin-top: 1px;
+  }
+  .row-status {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .row-status.healthy { background: var(--status-healthy); box-shadow: 0 0 6px rgba(90,235,174,0.4); }
+  .row-status.warning { background: var(--status-warning); box-shadow: 0 0 6px rgba(250,184,90,0.4); }
+  .row-status.critical { background: var(--status-critical); box-shadow: 0 0 6px rgba(250,107,133,0.4); }
+  .row-action {
+    flex-shrink: 0;
+  }
+  .row-active-check {
+    font-size: 14px;
+    color: var(--status-healthy);
+    filter: drop-shadow(0 0 4px rgba(90,235,174,0.4));
+  }
+  .row-switch-btn {
+    font-size: 9px;
+    font-weight: 500;
+    color: var(--accent-purple);
+    padding: 3px 8px;
+    border-radius: 12px;
+    border: 1px solid rgba(140,82,218,0.4);
+    background: transparent;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .row-switch-btn:hover {
+    background: rgba(140,82,218,0.12);
+    border-color: rgba(140,82,218,0.7);
+    color: rgba(140,82,218,1);
+  }
+
+  /* Add account button */
+  .add-account-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 8px;
+    border-radius: 8px;
+    border: 1px dashed rgba(140,82,218,0.3);
+    background: transparent;
+    color: var(--accent-purple);
+    font-size: 11px;
+    font-weight: 500;
+    font-family: var(--font-body);
+    cursor: pointer;
+    transition: all 0.15s ease;
+    margin-top: 4px;
+    width: 100%;
+    opacity: 0;
+    animation: rowSlide 0.4s ease 0.9s forwards;
+  }
+  .add-account-btn:hover {
+    border-color: rgba(140,82,218,0.6);
+    background: rgba(140,82,218,0.06);
+  }
+  .add-icon { font-size: 12px; font-weight: 600; }
+
+  /* ── Callout annotations ── */
+  .annotation {
+    position: relative;
+    margin-top: 16px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: rgba(140,82,218,0.08);
+    border: 1px solid rgba(140,82,218,0.2);
+    font-size: 11px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    opacity: 0;
+    animation: cardIn 0.5s ease 0.8s forwards;
+  }
+  .annotation strong {
+    color: var(--accent-pink);
+    font-weight: 600;
+  }
+  .annotation::before {
+    content: '↑';
+    position: absolute;
+    top: -14px;
+    left: 20px;
+    font-size: 14px;
+    color: rgba(140,82,218,0.4);
+  }
+
+  .annotation-right::before {
+    content: '←';
+    top: 12px;
+    left: -14px;
+  }
+
+  /* ── Flow arrows between panels ── */
+  .flow-connector {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    align-self: center;
+    opacity: 0;
+    animation: cardIn 0.5s ease 0.6s forwards;
+  }
+  .flow-arrow {
+    font-size: 20px;
+    color: var(--text-tertiary);
+    animation: arrowPulse 2s ease-in-out infinite;
+  }
+  .flow-label {
+    font-family: var(--font-mono);
+    font-size: 8px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-tertiary);
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+  }
+
+  /* ── Page title ── */
+  .page-title-block {
+    text-align: center;
+    margin-bottom: 40px;
+    width: 100%;
+    opacity: 0;
+    animation: labelIn 0.8s ease 0.05s forwards;
+  }
+  .page-title {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.8px;
+    background: var(--accent-gradient);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 6px;
+  }
+  .page-subtitle {
+    font-size: 12px;
+    font-family: var(--font-mono);
+    color: var(--text-tertiary);
+    letter-spacing: 1px;
+  }
+
+  /* ── Best Account suggestion banner ── */
+  .best-account-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, rgba(90,235,174,0.08), rgba(140,82,218,0.06));
+    border: 1px solid rgba(90,235,174,0.2);
+    font-size: 10px;
+    color: var(--text-secondary);
+    opacity: 0;
+    animation: cardIn 0.5s ease 0.75s forwards;
+  }
+  .best-account-banner .spark {
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+  .best-account-banner strong {
+    color: var(--status-healthy);
+  }
+
+  /* ── Aggregate status row ── */
+  .aggregate-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: var(--card-radius);
+    background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
+    border: 1px solid var(--card-border);
+    opacity: 0;
+    animation: cardIn 0.5s ease 0.45s forwards;
+  }
+  .aggregate-label {
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    flex: 1;
+  }
+  .aggregate-dots {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+  .aggregate-dot-group {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+  }
+  .agg-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+  }
+  .agg-dot-label {
+    font-size: 8px;
+    color: var(--text-tertiary);
+    font-weight: 500;
+  }
+
+  /* ── Animations ── */
+  @keyframes popoverIn {
+    from { opacity: 0; transform: translateY(16px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes cardIn {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes rowSlide {
+    from { opacity: 0; transform: translateX(-8px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes labelIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes orbFloat {
+    0%, 100% { transform: translate(0, 0); }
+    50% { transform: translate(12px, -8px); }
+  }
+  @keyframes arrowPulse {
+    0%, 100% { opacity: 0.3; transform: translateX(0); }
+    50% { opacity: 0.7; transform: translateX(4px); }
+  }
+  @keyframes statusPulse {
+    0%, 100% { box-shadow: 0 0 4px rgba(90,235,174,0.3); }
+    50% { box-shadow: 0 0 10px rgba(90,235,174,0.6); }
+  }
+
+  /* Interactive states for account pills */
+  .account-pill.active .account-avatar {
+    animation: statusPulse 3s ease-in-out infinite;
+  }
+
+  /* Responsive */
+  @media (max-width: 920px) {
+    .flow-connector { display: none; }
+    .design-canvas { flex-direction: column; align-items: center; }
+  }
+</style>
+</head>
+<body>
+
+<div class="design-canvas">
+
+  <!-- Page Title -->
+  <div class="page-title-block">
+    <div class="page-title">Multi-Account UI — PR #160</div>
+    <div class="page-subtitle">DOMAIN MODEL + UI COMPONENTS &bull; PHASE 1 &amp; 2</div>
+  </div>
+
+  <!-- ═══ LEFT: Menu Popover ═══ -->
+  <div class="popover-frame">
+    <div class="section-label">Menu Bar Popover</div>
+    <div class="popover">
+      <div class="popover-content">
+
+        <!-- Header -->
+        <div class="popover-header">
+          <div class="logo-group">
+            <div class="logo-icon">C</div>
+            <div class="logo-text">ClaudeBar</div>
+          </div>
+          <div class="header-actions">
+            <button class="header-btn" title="Refresh">↻</button>
+            <button class="header-btn" title="Settings">⚙</button>
+          </div>
+        </div>
+
+        <!-- Provider pills -->
+        <div class="provider-pills">
+          <div class="provider-pill active"><span class="pill-icon">◎</span> Claude</div>
+          <div class="provider-pill"><span class="pill-icon">◈</span> Codex</div>
+          <div class="provider-pill"><span class="pill-icon">✦</span> Gemini</div>
+          <div class="provider-pill"><span class="pill-icon">⬡</span> Copilot</div>
+          <div class="provider-pill"><span class="pill-icon">◇</span> Amp</div>
+        </div>
+
+        <!-- ★ NEW: Account picker pills -->
+        <div class="account-picker-section">
+          <span class="account-picker-label">Account</span>
+          <div class="account-pills">
+            <div class="account-pill active" onclick="switchAccount(this)">
+              <div class="account-avatar">P</div>
+              <span class="account-pill-name">Personal</span>
+            </div>
+            <div class="account-pill" onclick="switchAccount(this)">
+              <div class="account-avatar">W</div>
+              <span class="account-pill-name">Work — Acme</span>
+            </div>
+            <div class="account-pill" onclick="switchAccount(this)">
+              <div class="account-avatar">S</div>
+              <span class="account-pill-name">Side Project</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Stat cards -->
+        <div class="stat-grid">
+          <div class="stat-card">
+            <span class="account-tag">Personal</span>
+            <div class="stat-label-row">
+              <div class="stat-label">
+                <span class="stat-label-icon">⚡</span>
+                <span class="stat-label-text">Opus</span>
+              </div>
+              <span class="stat-badge healthy">Healthy</span>
+            </div>
+            <div class="stat-value">72<span class="unit">%</span></div>
+            <div class="progress-track"><div class="progress-fill" style="width:72%"></div></div>
+            <div class="stat-reset">🕐 Resets in 4h 22m</div>
+          </div>
+
+          <div class="stat-card">
+            <span class="account-tag">Personal</span>
+            <div class="stat-label-row">
+              <div class="stat-label">
+                <span class="stat-label-icon">✧</span>
+                <span class="stat-label-text">Sonnet</span>
+              </div>
+              <span class="stat-badge healthy">Healthy</span>
+            </div>
+            <div class="stat-value">88<span class="unit">%</span></div>
+            <div class="progress-track"><div class="progress-fill" style="width:88%"></div></div>
+            <div class="stat-reset">🕐 Resets in 4h 22m</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label-row">
+              <div class="stat-label">
+                <span class="stat-label-icon">💬</span>
+                <span class="stat-label-text">Messages</span>
+              </div>
+              <span class="stat-badge warning">Warning</span>
+            </div>
+            <div class="stat-value">34<span class="unit">%</span></div>
+            <div class="progress-track"><div class="progress-fill warning" style="width:34%"></div></div>
+            <div class="stat-reset">🕐 Resets in 4h 22m</div>
+          </div>
+
+          <div class="stat-card">
+            <div class="stat-label-row">
+              <div class="stat-label">
+                <span class="stat-label-icon">🪙</span>
+                <span class="stat-label-text">Cost</span>
+              </div>
+              <span class="stat-badge healthy">OK</span>
+            </div>
+            <div class="stat-value">$4<span class="unit">.28</span></div>
+            <div class="progress-track"><div class="progress-fill" style="width:21%"></div></div>
+            <div class="stat-reset">🕐 $20.00 monthly cap</div>
+          </div>
+        </div>
+
+        <!-- Best account suggestion -->
+        <div class="best-account-banner">
+          <span class="spark">✨</span>
+          <span><strong>Personal</strong> has the most remaining quota — best account for new sessions</span>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="annotation">
+      <strong>AccountPickerView</strong> — Compact horizontal pills below provider selector.
+      Only visible when provider conforms to <strong>MultiAccountProvider</strong> with &gt;1 account. Single-account providers see no change.
+    </div>
+  </div>
+
+  <!-- ═══ CENTER: Flow Arrow ═══ -->
+  <div class="flow-connector">
+    <span class="flow-label">Settings</span>
+    <span class="flow-arrow">→</span>
+  </div>
+
+  <!-- ═══ RIGHT: Settings Panel ═══ -->
+  <div class="settings-frame">
+    <div class="section-label">Settings — Account Management</div>
+    <div class="settings-panel">
+      <div class="settings-content">
+
+        <div class="settings-header">
+          <span class="settings-header-icon">⚙</span>
+          <span class="settings-title">Claude Settings</span>
+        </div>
+
+        <!-- Aggregate status -->
+        <div class="aggregate-row">
+          <span class="aggregate-label">All accounts status</span>
+          <div class="aggregate-dots">
+            <div class="aggregate-dot-group">
+              <div class="agg-dot" style="background:var(--status-healthy)"></div>
+              <span class="agg-dot-label">Personal</span>
+            </div>
+            <div class="aggregate-dot-group">
+              <div class="agg-dot" style="background:var(--status-warning)"></div>
+              <span class="agg-dot-label">Work</span>
+            </div>
+            <div class="aggregate-dot-group">
+              <div class="agg-dot" style="background:var(--status-healthy)"></div>
+              <span class="agg-dot-label">Side</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- ★ NEW: Account Management Card -->
+        <div class="account-mgmt-card expanded" id="mgmtCard">
+          <div class="mgmt-header" onclick="toggleMgmt()">
+            <div class="mgmt-header-icon">👥</div>
+            <div class="mgmt-header-text">
+              <div class="mgmt-header-title">Accounts</div>
+              <div class="mgmt-header-sub">3 accounts configured</div>
+            </div>
+            <span class="stat-badge warning mgmt-header-badge">Warning</span>
+            <span class="mgmt-chevron">▸</span>
+          </div>
+
+          <div class="mgmt-body">
+            <div class="mgmt-body-inner">
+              <div class="mgmt-divider"></div>
+
+              <!-- Account 1: Active -->
+              <div class="account-row is-active">
+                <div class="row-avatar">P</div>
+                <div class="row-info">
+                  <div class="row-name">Personal</div>
+                  <div class="row-email">henry@personal.dev</div>
+                </div>
+                <div class="row-status healthy"></div>
+                <div class="row-action">
+                  <span class="row-active-check">✓</span>
+                </div>
+              </div>
+
+              <!-- Account 2 -->
+              <div class="account-row">
+                <div class="row-avatar">W</div>
+                <div class="row-info">
+                  <div class="row-name">Work — Acme Corp</div>
+                  <div class="row-email">henry@acme.com</div>
+                </div>
+                <div class="row-status warning"></div>
+                <div class="row-action">
+                  <button class="row-switch-btn" onclick="event.stopPropagation()">Switch</button>
+                </div>
+              </div>
+
+              <!-- Account 3 -->
+              <div class="account-row">
+                <div class="row-avatar">S</div>
+                <div class="row-info">
+                  <div class="row-name">Side Project</div>
+                  <div class="row-email">dev@sideproject.io</div>
+                </div>
+                <div class="row-status healthy"></div>
+                <div class="row-action">
+                  <button class="row-switch-btn" onclick="event.stopPropagation()">Switch</button>
+                </div>
+              </div>
+
+              <!-- Add account -->
+              <button class="add-account-btn">
+                <span class="add-icon">⊕</span>
+                Add Account
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="annotation">
+      <strong>AccountManagementCard</strong> — DisclosureGroup in settings. Shows avatar, name, email, per-account status dot, and active checkmark. <strong>Aggregate status</strong> (worst-wins) shown as badge. Dashed "Add Account" button at bottom.
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // Toggle management card
+  function toggleMgmt() {
+    document.getElementById('mgmtCard').classList.toggle('expanded');
+  }
+
+  // Switch active account pill
+  function switchAccount(el) {
+    document.querySelectorAll('.account-pill').forEach(p => p.classList.remove('active'));
+    el.classList.add('active');
+  }
+
+  // Provider pill selection
+  document.querySelectorAll('.provider-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      document.querySelectorAll('.provider-pill').forEach(p => p.classList.remove('active'));
+      pill.classList.add('active');
+    });
+  });
+</script>
+
+</body>
+</html>

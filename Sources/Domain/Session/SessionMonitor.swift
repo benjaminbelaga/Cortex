@@ -1,0 +1,141 @@
+import Foundation
+import Observation
+
+/// Monitors Claude Code sessions by processing hook events.
+/// Single source of truth for session state, similar to QuotaMonitor for providers.
+/// Isolated to @MainActor since it's consumed by SwiftUI views.
+@MainActor
+@Observable
+public final class SessionMonitor {
+    /// The currently active session (nil if no session is running)
+    public private(set) var activeSession: ClaudeSession?
+
+    /// Recently completed sessions (most recent first)
+    public private(set) var recentSessions: [ClaudeSession] = []
+
+    /// Notable lifecycle events for the panel timeline (forks, compactions),
+    /// newest first, capped — Ben's "Session forked" / "Compaction complete"
+    /// ask (2026-08-18). Probe-origin events are filtered at ingestion.
+    public private(set) var recentNotableEvents: [SessionEvent] = []
+
+    /// Maximum number of recent sessions to keep
+    private let maxRecentSessions: Int
+
+    public init(maxRecentSessions: Int = 10) {
+        self.maxRecentSessions = maxRecentSessions
+    }
+
+    // MARK: - Event Processing
+
+    /// Processes a session event and updates state accordingly.
+    public func processEvent(_ event: SessionEvent) {
+        recordIfNotable(event)
+        switch event.eventName {
+        case .sessionStart:
+            handleSessionStart(event)
+        case .sessionEnd:
+            handleSessionEnd(event)
+        case .taskCompleted:
+            handleTaskCompleted(event)
+        case .subagentStart:
+            handleSubagentStart(event)
+        case .subagentStop:
+            handleSubagentStop(event)
+        case .stop:
+            handleStop(event)
+        case .userPromptSubmit:
+            handleUserPromptSubmit(event)
+        case .notification:
+            handleNotification(event)
+        case .preCompact, .postCompact:
+            // Timeline-only events — no session-state transition.
+            break
+        }
+    }
+
+    /// Keeps fork and compaction events for the timeline. Probe-origin
+    /// events never qualify (issue #172).
+    private func recordIfNotable(_ event: SessionEvent) {
+        guard !event.isClaudeBarProbe else { return }
+        let notable: Bool
+        switch event.eventName {
+        case .preCompact, .postCompact:
+            notable = true
+        case .sessionStart where event.source == "fork":
+            notable = true
+        default:
+            notable = false
+        }
+        guard notable else { return }
+        recentNotableEvents.insert(event, at: 0)
+        if recentNotableEvents.count > 20 {
+            recentNotableEvents.removeLast(recentNotableEvents.count - 20)
+        }
+    }
+
+    // MARK: - Queries
+
+    /// Whether there's an active Claude Code session
+    public var hasActiveSession: Bool {
+        activeSession != nil
+    }
+
+    // MARK: - Private Handlers
+
+    private func handleSessionStart(_ event: SessionEvent) {
+        // End any existing session before starting a new one
+        if activeSession != nil {
+            endCurrentSession(at: event.receivedAt)
+        }
+        activeSession = ClaudeSession(
+            id: event.sessionId,
+            cwd: event.cwd,
+            startedAt: event.receivedAt
+        )
+    }
+
+    private func handleSessionEnd(_ event: SessionEvent) {
+        guard activeSession?.id == event.sessionId else { return }
+        endCurrentSession(at: event.receivedAt)
+    }
+
+    private func handleTaskCompleted(_ event: SessionEvent) {
+        guard activeSession?.id == event.sessionId else { return }
+        activeSession?.taskCompleted()
+    }
+
+    private func handleSubagentStart(_ event: SessionEvent) {
+        guard activeSession?.id == event.sessionId else { return }
+        activeSession?.subagentStarted()
+    }
+
+    private func handleSubagentStop(_ event: SessionEvent) {
+        guard activeSession?.id == event.sessionId else { return }
+        activeSession?.subagentStopped()
+    }
+
+    private func handleStop(_ event: SessionEvent) {
+        guard activeSession?.id == event.sessionId else { return }
+        activeSession?.stop()
+    }
+
+    private func handleNotification(_ event: SessionEvent) {
+        guard activeSession?.id == event.sessionId else { return }
+        activeSession?.awaitInput(event.message, at: event.receivedAt)
+    }
+
+    private func handleUserPromptSubmit(_ event: SessionEvent) {
+        guard activeSession?.id == event.sessionId else { return }
+        activeSession?.resume()
+    }
+
+    private func endCurrentSession(at date: Date) {
+        guard var session = activeSession else { return }
+        session.end(at: date)
+        recentSessions.insert(session, at: 0)
+        if recentSessions.count > maxRecentSessions {
+            recentSessions = Array(recentSessions.prefix(maxRecentSessions))
+        }
+        activeSession = nil
+    }
+}
