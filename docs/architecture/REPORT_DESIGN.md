@@ -244,4 +244,4 @@ Analyzer tests use temp directories with test JSONL content — no real `~/.clau
 
 - [Architecture Overview](ARCHITECTURE.md) — Layered architecture and QuotaMonitor
 - [Theme Design](THEME_DESIGN.md) — Card styling tokens and theme system
-- [add-report skill](../../.claude/skills/add-report/SKILL.md) — Step-by-step guide for adding new reports
+- See the repository contribution guide for the report workflow and test conventions.

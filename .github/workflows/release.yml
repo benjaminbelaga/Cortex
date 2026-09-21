@@ -25,7 +25,7 @@ env:
   APP_NAME: Cortex
   PROJECT_NAME: ClaudeBar
   BUNDLE_ID: fr.yoyaku.cortex
-  NOTARYTOOL_PROFILE: YOYAKU-NOTARY
+  NOTARYTOOL_PROFILE: CORTEX-NOTARY
 
 jobs:
   release:
