@@ -18,7 +18,7 @@ jobs:
     name: Unit Tests with Coverage
     # Anti-fork guard (E2): see build.yml — same rationale.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: macos-14
+    runs-on: [self-hosted, macos, arm64, cortex-ci]
     timeout-minutes: 60
 
     concurrency:

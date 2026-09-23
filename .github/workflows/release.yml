@@ -30,7 +30,7 @@ env:
 jobs:
   release:
     name: Build, sign, notarize, and release
-    runs-on: [self-hosted, macos, arm64, cortex-release]
+    runs-on: [self-hosted, macos, arm64, cortex-ci]
     timeout-minutes: 90
     environment:
       name: github-pages
