@@ -21,7 +21,7 @@ jobs:
     # code from a fork PR. Workflows are dispatch-only today; this stays as
     # defense-in-depth if pull_request triggers are ever re-enabled.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: macos-14
+    runs-on: [self-hosted, macos, arm64, cortex-ci]
     timeout-minutes: 45
 
     concurrency:
