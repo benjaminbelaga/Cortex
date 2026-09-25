@@ -92,7 +92,7 @@ struct HonestStatesTests {
     @Test("needsReconnect follows the typed auth state only")
     func needsReconnectTyped() {
         #expect(row(windows: [], authState: .reconnectRequired).needsReconnect)
-        #expect(!row(windows: [], error: "Reconnexion requise").needsReconnect,
+        #expect(!row(windows: [], error: "Reconnection required").needsReconnect,
                 "an error string that merely looks reconnect-ish must NOT arm the button")
         #expect(!row(windows: [], authState: .connected).needsReconnect)
     }

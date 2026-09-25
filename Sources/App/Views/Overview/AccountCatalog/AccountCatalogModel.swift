@@ -275,7 +275,7 @@ final class AccountCatalogModel {
             APIAccountCredentials.key(providerId: providerId, config: $0, credentials: credentials,
                                       homeDirectory: homeDirectory) == key
         }) {
-            proposalError = "Cette clé est déjà enregistrée (« \(existing.label) »)."
+            proposalError = "This key is already enrolled (“\(existing.label)”)."
             return
         }
         isValidatingKey = true
@@ -291,7 +291,7 @@ final class AccountCatalogModel {
             if let identity = reading.accountEmail?.lowercased(), !identity.isEmpty,
                let twin = settingsRepository.accounts(forProvider: providerId)
                    .first(where: { $0.email?.lowercased() == identity }) {
-                proposalError = "Ce compte est déjà suivi (« \(twin.label) »)."
+                proposalError = "This account is already followed (“\(twin.label)”)."
                 return
             }
             // OpenCode Go, Ollama Cloud and Command Code keys join the shared
@@ -359,14 +359,14 @@ final class AccountCatalogModel {
         for entry in entries {
             let target = (autoRoute ? entry.providerHint : nil) ?? providerId
             guard ProviderCatalog.apiKeyAccountIDs.contains(target) else {
-                failures.append("\(entry.label) : aucun fournisseur reconnu pour cette forme de clé")
+                failures.append("\(entry.label): no provider recognises this key shape")
                 continue
             }
             await addAPIAccount(providerId: target, label: entry.label, apiKey: entry.key)
             if addedAccountLabel == entry.label {
                 added.append(entry.label)
             } else {
-                failures.append("\(entry.label) : \(proposalError ?? "échec")")
+                failures.append("\(entry.label): \(proposalError ?? "failed")")
             }
         }
         if !added.isEmpty { NSPasteboard.general.clearContents() }
@@ -464,7 +464,7 @@ final class AccountCatalogModel {
         case .profileCollision:
             return "Another account already owns this folder — choose another label."
         case .unsupportedProvider(let providerId):
-            return "Outil non pris en charge : \(providerId)."
+            return "Unsupported tool: \(providerId)."
         }
     }
 }

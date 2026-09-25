@@ -70,7 +70,7 @@ public enum OverviewSort: String, Sendable, CaseIterable, Identifiable {
     /// French UI label (rawValue is the stable storage key).
     public var displayName: String {
         switch self {
-        case .percentRemaining: return "% restant"
+        case .percentRemaining: return "% left"
         case .timeToReset: return "Reset"
         }
     }

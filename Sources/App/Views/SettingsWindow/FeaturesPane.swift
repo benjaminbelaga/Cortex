@@ -108,14 +108,14 @@ struct FeaturesPane: View {
             (.sessions, "sessions"),
             (.history, "historique"),
             (.costEstimate, "costs"),
-            (.reconnect, "reconnexion"),
+            (.reconnect, "reconnect"),
         ]
         let names = labels.filter { descriptor.capabilities.contains($0.0) }.map(\.1)
         let source: String
         switch descriptor.runtime {
-        case .router: source = "source routeur"
-        case .native: source = "source native"
-        case .routerOrNative: source = "source routeur ou native"
+        case .router: source = "router source"
+        case .native: source = "native source"
+        case .routerOrNative: source = "router or native source"
         }
         return "\(names.joined(separator: " · ")) — \(source)"
     }
@@ -173,7 +173,7 @@ struct FeaturesPane: View {
                 .padding(.bottom, 8)
 
             SettingsRow(
-                title: "Routeur llm-router",
+                title: "llm-router",
                 subtitle: routerPresent
                     ? "Detected — router rows read the shared snapshot."
                     : "Absent — Cortex natively probes installed tools."
@@ -198,7 +198,7 @@ struct FeaturesPane: View {
                 SettingsRowDivider()
 
                 SettingsRow(
-                    title: "Bascule OpenCode Go",
+                    title: "OpenCode Go failover",
                     subtitle: failoverSummary
                 ) {
                     Text("SSOT")
@@ -220,10 +220,10 @@ struct FeaturesPane: View {
         let state = FailoverChainReader().read()
         guard !state.slots.isEmpty else { return nil }
         var parts: [String] = []
-        parts.append("\(state.goSlots.count) compte\(state.goSlots.count > 1 ? "s" : "") Go")
-        if let serving = state.servingGo { parts.append("sert : \(serving.label)") }
+        parts.append("\(state.goSlots.count) Go account\(state.goSlots.count > 1 ? "s" : "")")
+        if let serving = state.servingGo { parts.append("serving: \(serving.label)") }
         let benched = state.slots.filter(\.isQuarantined).count
-        if benched > 0 { parts.append("\(benched) en quarantaine") }
+        if benched > 0 { parts.append("\(benched) quarantined") }
         parts.append(state.ollamaArmed ? "Ollama armed" : "Ollama off")
         return parts.joined(separator: " · ")
     }
@@ -233,7 +233,7 @@ struct FeaturesPane: View {
     private func setFollowed(_ followed: Bool, descriptor: ProviderDescriptor) {
         if followed {
             guard monitor.follow(providerId: descriptor.id) else {
-                activationError = "Impossible d'activer \(descriptor.name) : aucun provider n'a pu être construit depuis le catalogue."
+                activationError = "Cannot enable \(descriptor.name): no provider could be built from the catalogue."
                 return
             }
         } else {

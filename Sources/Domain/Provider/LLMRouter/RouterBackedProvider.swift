@@ -9,7 +9,7 @@ import Observation
 public final class RouterBackedProvider: AIProvider, MultiAccountProvider, GroupErrorReporting, ClaudeSupplementProviding, RouterResourceReporting, RouterTimeStateReporting, AccountStateReporting, AccountErrorClassReporting {
     /// The exact inline message for a disconnected account. The overview row
     /// matches on it to render a "Connecter" button instead of dead text.
-    public static let reconnectMessage = "Reconnexion requise"
+    public static let reconnectMessage = "Reconnection required"
 
     public let id: String
     public let name: String

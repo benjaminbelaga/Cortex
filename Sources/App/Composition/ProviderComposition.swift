@@ -64,7 +64,7 @@ public struct ProviderComposition {
     public func makeProvider(id: String) -> (any AIProvider)? {
         guard let descriptor = ProviderCatalog.descriptor(forId: id) else {
             AppLog.providers.error(
-                "makeProvider: id « \(id) » inconnu du catalogue — provider NOT instantiated"
+                "makeProvider: unknown catalogue id “\(id)” — provider NOT instantiated"
             )
             return nil
         }

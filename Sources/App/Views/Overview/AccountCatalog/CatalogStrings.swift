@@ -1,7 +1,7 @@
 import Foundation
 import Domain
 
-/// French labels for every typed enrolment state and error (D — catalogue).
+/// English labels for every typed enrolment state and error (D — catalogue).
 /// One switch per surface, localization at the last moment: views never
 /// string-match states, and new enum cases fail to compile here instead of
 /// silently rendering an empty row.
@@ -12,8 +12,8 @@ enum CatalogStrings {
     static func title(for state: EnrolmentState) -> String {
         switch state {
         case .profileDetected: return "Profile detected"
-        case .authRequired: return "Connexion requise"
-        case .loginInProgress: return "Connexion en cours…"
+        case .authRequired: return "Connection required"
+        case .loginInProgress: return "Connecting…"
         case .identityConfirmed: return "Identity confirmed"
         case .quotaPending: return "Connected · quotas pending"
         case .quotaReceived: return "Tracked account"
@@ -37,7 +37,7 @@ enum CatalogStrings {
         case .quotaReceived(_, let observedAt):
             let formatter = RelativeDateTimeFormatter()
             formatter.unitsStyle = .abbreviated
-            return "Premier relevé reçu il y a \(formatter.localizedString(for: observedAt, relativeTo: Date()))"
+            return "First reading received \(formatter.localizedString(for: observedAt, relativeTo: Date()))"
         case .failed(_, let error):
             return detail(for: error)
         case .cancelled:
@@ -49,27 +49,27 @@ enum CatalogStrings {
 
     static func title(for error: EnrolmentError) -> String {
         switch error {
-        case .dependencyMissing(let tool): return "Outil introuvable : \(tool)"
+        case .dependencyMissing(let tool): return "Tool not found: \(tool)"
         case .loginFailed: return "Connection failed"
         case .identityMismatch: return "Identity differs from expected"
         case .profileCollision: return "Another account already owns this folder"
         case .registryRejected: return "Router registration refused"
         case .timeout: return "Timed out"
         case .cancelled: return "Cancelled"
-        case .underlying: return "Erreur inattendue"
+        case .underlying: return "Unexpected error"
         }
     }
 
     static func detail(for error: EnrolmentError) -> String? {
         switch error {
         case .dependencyMissing(let tool):
-            return "Installez \(tool) puis réessayez."
+            return "Install \(tool) and try again."
         case .loginFailed(_, let stderrTail):
             return stderrTail.isEmpty ? "The connection command failed." : stderrTail
         case .identityMismatch(let expected, let actual):
-            var line = "Identité relue : \(IdentityMasking.mask(actual) ?? actual)."
+            var line = "Re-read identity: \(IdentityMasking.mask(actual) ?? actual)."
             if let expected {
-                line += " Attendue : \(IdentityMasking.mask(expected) ?? expected)."
+                line += " Expected: \(IdentityMasking.mask(expected) ?? expected)."
             }
             return line + " Nothing was saved — keep the re-read identity by retrying without input."
         case .profileCollision(let path):
@@ -77,7 +77,7 @@ enum CatalogStrings {
         case .registryRejected(let reason):
             return reason
         case .timeout(let seconds):
-            return "Aucune réponse après \(Int(seconds)) s. Le login reste possible — réessayez."
+            return "No response after \(Int(seconds))s. Logging in may still work — try again."
         case .cancelled:
             return nil
         case .underlying(let message):
@@ -109,7 +109,7 @@ enum CatalogStrings {
     static let accountsSectionTitle = "Add account"
     static let connectionsSectionTitle = "Add a connection"
     static let searchAction = "Find accounts"
-    static let followAction = "Suivre"
+    static let followAction = "Follow"
     static let newAccountAction = "Create account"
     static let activateAction = "Enable"
     static let activeLabel = "Enabled"

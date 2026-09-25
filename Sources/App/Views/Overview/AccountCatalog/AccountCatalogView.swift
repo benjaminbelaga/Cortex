@@ -53,7 +53,7 @@ struct AccountCatalogView: View {
 
     private var newAccountControls: some View {
         VStack(spacing: 5) {
-            Picker("Outil", selection: $model.selectedProvider) {
+            Picker("Tool", selection: $model.selectedProvider) {
                 ForEach(Self.providers, id: \.self) { Text(ProviderCatalog.descriptor(forId: $0)?.name ?? $0).tag($0) }
             }
             .pickerStyle(.segmented)

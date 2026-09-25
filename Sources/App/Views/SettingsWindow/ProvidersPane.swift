@@ -72,7 +72,7 @@ private struct ProviderListRow: View {
               multi.accounts.count > 1 else { return nil }
         let total = multi.accounts.count
         let available = multi.accounts.filter { multi.accountSnapshots[$0.accountId] != nil }.count
-        return "\(total) compte\(total > 1 ? "s" : "") · \(available) dispo"
+        return "\(total) account\(total > 1 ? "s" : "") · \(available) available"
     }
 
     var body: some View {
@@ -252,7 +252,7 @@ private struct ProviderDetailView: View {
                     consoleRegion = site == "domestic" ? "cn-beijing" : "ap-southeast-1"
                 }
                 TextField("Region", text: $consoleRegion)
-                Text("Connexion : bl auth login --console --console-site \(consoleSite) --config \(bailianProfile)")
+                Text("Connection: bl auth login --console --console-site \(consoleSite) --config \(bailianProfile)")
                     .font(.caption).textSelection(.enabled)
                 Button("Save and read quotas") {
                     Task { await catalog.configureQwen(profile: bailianProfile, site: consoleSite, region: consoleRegion) }

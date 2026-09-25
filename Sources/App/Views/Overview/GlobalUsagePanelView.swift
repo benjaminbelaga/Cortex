@@ -485,7 +485,7 @@ struct GlobalUsagePanelView: View {
 
     private func freshnessLabel(_ usage: RouterUsageSnapshot) -> String {
         if usage.isStale {
-            return usage.refreshError.map { "périmé · \($0)" } ?? "stale data"
+            return usage.refreshError.map { "stale · \($0)" } ?? "stale data"
         }
         let age = max(usage.cacheAgeSeconds ?? 0, Date().timeIntervalSince(usage.generatedAt))
         if age < 60 { return "updated just now" }

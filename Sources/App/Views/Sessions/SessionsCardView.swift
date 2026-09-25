@@ -83,7 +83,7 @@ struct SessionsCardView: View {
                 // le même modèle que la section détaillée.
                 await sessionsActivity.refresh()
             }
-            .help("Nombre par outil = sessions ayant écrit un transcript sur les dernières 24h (un fichier .jsonl par session/dossier). tmux = sessions tmux vivantes · cmux = panes terminaux cmux présents. Répartition par backend (Claude-GLM, Claude-MiniMax…) + usage local : roadmap.")
+            .help("Count per tool = sessions that wrote a transcript in the last 24h (one .jsonl file per session/folder). tmux = live tmux sessions · cmux = cmux terminal panes present. Per-backend split (Claude-GLM, Claude-MiniMax…) + local usage: roadmap.")
 
             // OpenCode : sessions RÉELLEMENT ouvertes (fichier de liveness + PID
             // vérifié) et historique local, backend observé compris. Rien n'est
@@ -115,7 +115,7 @@ struct SessionsCardView: View {
                     toolId: "cmux",
                     label: "cmux",
                     icon: "rectangle.split.3x1",
-                    help: "Panes terminaux présents dans l'état de session cmux. En travail = un agent y tourne (statut Running frais < 1 h). Ouvert = état encore frais ; un état trop vieux pour prouver la vie reste « inconnu », jamais « fermé »."
+                    help: "Terminal panes present in the cmux session state. Working = an agent is running in it (fresh Running status < 1h). Open = the state is still fresh; a state too old to prove life stays “unknown”, never “closed”."
                 )
                 .task { await activityRefreshLoop() }
             }

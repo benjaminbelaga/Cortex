@@ -346,7 +346,7 @@ struct ProviderSnapshotRow: View {
             }
             switch snapshot.credentialState {
             case "rotation_required": return "key to renew"
-            case "configured": return snapshot.resourceState == "available" ? "disponible" : "state to confirm"
+            case "configured": return snapshot.resourceState == "available" ? "available" : "state to confirm"
             default: return snapshot.resourceState == "blocked" ? "blocked" : "unknown state"
             }
         }()
@@ -417,7 +417,7 @@ struct ProviderSnapshotRow: View {
     }
 
     private func forecastTooltip(_ forecast: RouterQuotaForecast) -> String {
-        var parts = ["Prévision · confiance \(forecast.confidence)", "\(forecast.sampleCount) intervalles"]
+        var parts = ["Forecast · confidence \(forecast.confidence)", "\(forecast.sampleCount) intervals"]
         if let burn = forecast.burnRatePercentPerHour {
             parts.append(String(format: "%.2f %%/h", burn))
         }

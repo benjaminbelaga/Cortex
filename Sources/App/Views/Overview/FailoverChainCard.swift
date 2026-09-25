@@ -26,7 +26,7 @@ struct FailoverChainCard: View {
             } else {
                 poolSection("OpenCode Go", slots: state.goSlots, pool: .go,
                             serving: state.servingGo)
-                poolSection("Ollama Cloud (secours)", slots: state.ollamaSlots, pool: .ollama,
+                poolSection("Ollama Cloud (backup)", slots: state.ollamaSlots, pool: .ollama,
                             serving: state.ollamaSlots.first { !$0.isQuarantined })
                 ollamaSwitch
             }
@@ -47,7 +47,7 @@ struct FailoverChainCard: View {
                 .foregroundStyle(theme.textSecondary)
             Spacer()
             if let serving = state.servingGo {
-                Text("sert : \(serving.label)")
+                Text("serving: \(serving.label)")
                     .font(theme.font(size: 10))
                     .foregroundStyle(theme.statusColor(for: .healthy))
             }
@@ -95,7 +95,7 @@ struct FailoverChainCard: View {
                 .font(theme.font(size: 10))
                 .foregroundStyle(state.ollamaArmed ? theme.statusColor(for: .healthy) : theme.textTertiary)
             Text(state.ollamaArmed
-                 ? "Bascule Ollama armée · \(state.sessionsOnOllama) session\(state.sessionsOnOllama > 1 ? "s" : "") basculée\(state.sessionsOnOllama > 1 ? "s" : "")"
+                 ? "Ollama failover armed · \(state.sessionsOnOllama) session\(state.sessionsOnOllama > 1 ? "s" : "") switched"
                  : "Ollama failover off")
                 .font(theme.font(size: 10))
                 .foregroundStyle(theme.textTertiary)
