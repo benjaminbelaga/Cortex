@@ -7,8 +7,11 @@ import Domain
 ///
 /// Deux signaux, jamais confondus :
 /// 1. **Liveness** : les fichiers `opencode-<pid>.json` écrits par le plugin de
-///    suivi, dont le PID est vérifié vivant → `activity: .open`. Leur contenu
-///    porte la session (titre, dossier, agent, modèle/backend observé).
+///    suivi (`session.created/updated/idle`), dont le PID est vérifié vivant.
+///    La fraîcheur du traceur distingue ce qui **travaille** (réécrit < 2 min →
+///    `.working`) de ce qui est simplement **ouvert** (processus vivant sans
+///    activité récente → `.open`). Leur contenu porte la session (titre, dossier,
+///    agent, modèle/backend observé).
 /// 2. **Historique local** : la base SQLite d'OpenCode (`session`, lue en
 ///    READ-ONLY). Les lignes déjà vues en liveness sont conservées telles
 ///    quelles ; les autres deviennent `.working` (activité < 2 min) ou
@@ -78,8 +81,11 @@ public struct OpenCodeSessionSource: SessionSource {
         var bySession: [String: SessionObservation] = [:]
         var failure: String?
 
-        // 1) Sessions vivantes (fichiers de suivi + PID vérifié).
+        // 1) Sessions vivantes (fichiers de suivi + PID vérifié). Le traceur est
+        //    réécrit à chaque `session.updated`/`session.idle` : frais (< 2 min),
+        //    la session travaille ; sinon elle est ouverte mais au repos.
         for tracker in liveTrackers(now: now) {
+            let isFresh = tracker.updatedAt.map { now.timeIntervalSince($0) < Self.workingWindow } ?? false
             bySession[tracker.sessionId] = SessionObservation(
                 id: tracker.sessionId,
                 toolId: toolId,
@@ -87,7 +93,7 @@ public struct OpenCodeSessionSource: SessionSource {
                 directory: tracker.directory,
                 model: tracker.model,
                 updatedAt: tracker.updatedAt,
-                activity: .open,
+                activity: isFresh ? .working : .open,
                 isSubagent: tracker.parentId != nil
             )
         }
@@ -145,8 +151,8 @@ public struct OpenCodeSessionSource: SessionSource {
 
     private static func rank(_ activity: SessionObservation.Activity) -> Int {
         switch activity {
-        case .open: 0
-        case .working: 1
+        case .working: 0
+        case .open: 1
         case .recent: 2
         case .unknown: 3
         }

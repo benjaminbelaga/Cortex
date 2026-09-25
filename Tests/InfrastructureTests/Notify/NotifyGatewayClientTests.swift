@@ -33,7 +33,7 @@ struct NotifyGatewayClientTests {
     static let widgetResponse = """
     {
       "widgetId": "WG4H2QZ1",
-      "content": { "title": "ClaudeBar" },
+      "content": { "title": "Cortex" },
       "createdAt": "2026-09-03T09:00:00Z",
       "updatedAt": "2026-09-03T09:00:00Z",
       "updateUrl": "https://push.getnotifyapp.com/widgets/WG4H2QZ1"
@@ -41,11 +41,11 @@ struct NotifyGatewayClientTests {
     """
 
     /// The `ScreenWidget` object. `staleAt` is the phone's freshness deadline and rides along on
-    /// every write, but ClaudeBar has no decision to make about it, so only the id is read.
+    /// every write, but Cortex has no decision to make about it, so only the id is read.
     static let screenWidgetResponse = """
     {
       "screenWidgetId": "SW8N3PQ2",
-      "content": { "title": "ClaudeBar" },
+      "content": { "title": "Cortex" },
       "staleAt": 1772539200,
       "createdAt": "2026-09-03T09:00:00Z",
       "updatedAt": "2026-09-03T09:00:00Z",
@@ -88,7 +88,7 @@ struct NotifyGatewayClientTests {
         try #require(NotifyMetric(label: label, value: value, unit: unit, tintHex: tintHex))
     }
 
-    /// A tile with every field ClaudeBar drives populated, and a second metric left bare, so one
+    /// A tile with every field Cortex drives populated, and a second metric left bare, so one
     /// fixture can show both what the client sends and what it stays silent about.
     private func makeTile() throws -> NotifyTile {
         let metrics = [
@@ -97,7 +97,7 @@ struct NotifyGatewayClientTests {
         ]
         return try #require(
             NotifyTile(
-                title: "ClaudeBar",
+                title: "Cortex",
                 body: "Claude 5h 42% left",
                 symbolName: NotifySymbol.quota,
                 tintHex: "#59EBAD",
@@ -111,7 +111,7 @@ struct NotifyGatewayClientTests {
     private func makeGauge() throws -> NotifyGauge {
         try #require(
             NotifyGauge(
-                title: "ClaudeBar",
+                title: "Cortex",
                 value: "42",
                 unit: "%",
                 detail: "Claude 5h, resets in 2:14",
@@ -122,10 +122,10 @@ struct NotifyGatewayClientTests {
         )
     }
 
-    /// A gauge carrying nothing but its identity, for proving the fields ClaudeBar drives are
+    /// A gauge carrying nothing but its identity, for proving the fields Cortex drives are
     /// stated as explicit nulls rather than quietly left out.
     private func makeTitleOnlyGauge() throws -> NotifyGauge {
-        try #require(NotifyGauge(title: "ClaudeBar"))
+        try #require(NotifyGauge(title: "Cortex"))
     }
 
     // MARK: - Helpers
@@ -210,7 +210,7 @@ struct NotifyGatewayClientTests {
         // Then: `new` is what stops the start taking over a tile the user began elsewhere
         let body = try jsonBody(of: capturedRequest)
         #expect(body["new"] as? Bool == true)
-        #expect(body["title"] as? String == "ClaudeBar")
+        #expect(body["title"] as? String == "Cortex")
         #expect(body["body"] as? String == "Claude 5h 42% left")
         #expect(body["symbol"] as? String == "gauge.with.needle")
         #expect(body["tint"] as? String == "#59EBAD")
@@ -290,7 +290,7 @@ struct NotifyGatewayClientTests {
         )
         let body = try jsonBody(of: capturedRequest)
         #expect(body.keys.contains("new") == false)
-        #expect(body["title"] as? String == "ClaudeBar")
+        #expect(body["title"] as? String == "Cortex")
     }
 
     @Test
@@ -341,7 +341,7 @@ struct NotifyGatewayClientTests {
         #expect(capturedRequest?.httpMethod == "POST")
         let body = try jsonBody(of: capturedRequest)
         #expect(body["new"] as? Bool == true)
-        #expect(body["title"] as? String == "ClaudeBar")
+        #expect(body["title"] as? String == "Cortex")
         #expect(body["value"] as? String == "42")
         #expect(body["unit"] as? String == "%")
         #expect(body["detail"] as? String == "Claude 5h, resets in 2:14")
@@ -396,7 +396,7 @@ struct NotifyGatewayClientTests {
     }
 
     @Test
-    func `gauge body states a null for every field ClaudeBar drives but has no value for`() async throws {
+    func `gauge body states a null for every field Cortex drives but has no value for`() async throws {
         // Given: a gauge carrying nothing but its identity
         let link = try makeLink()
         let gauge = try makeTitleOnlyGauge()
@@ -414,7 +414,7 @@ struct NotifyGatewayClientTests {
         _ = try await client.publishGauge(gauge, link: link, widgetId: nil)
 
         // Then: the gateway merges rather than replaces, so a field left unsaid keeps whatever it
-        // held. Every field ClaudeBar owns is therefore stated on every write, as an explicit null
+        // held. Every field Cortex owns is therefore stated on every write, as an explicit null
         // when it has no value, or the widget would keep a percent sign and a ring belonging to a
         // reading it no longer shows.
         let body = try jsonBody(of: capturedRequest)
@@ -435,7 +435,7 @@ struct NotifyGatewayClientTests {
         let link = try makeLink()
         let tile = try #require(
             NotifyTile(
-                title: "ClaudeBar",
+                title: "Cortex",
                 body: "Amp Code Balance, $3.10 left",
                 symbolName: NotifySymbol.quota,
                 tintHex: QuotaStatus.healthy.notifyTintHex,
@@ -464,7 +464,7 @@ struct NotifyGatewayClientTests {
         #expect(body["progress"] is NSNull)
         #expect(body["metrics"] is NSNull)
 
-        // The fields ClaudeBar never drives stay unsaid, so a tile can still carry whatever else
+        // The fields Cortex never drives stay unsaid, so a tile can still carry whatever else
         // the user set up elsewhere.
         #expect(body["status"] == nil)
         #expect(body["endsIn"] == nil)
@@ -503,7 +503,7 @@ struct NotifyGatewayClientTests {
         #expect(capturedRequest?.value(forHTTPHeaderField: "Content-Type") == "application/json")
         let body = try jsonBody(of: capturedRequest)
         #expect(body["new"] as? Bool == true)
-        #expect(body["title"] as? String == "ClaudeBar")
+        #expect(body["title"] as? String == "Cortex")
         #expect(identifier == Self.screenWidgetId)
     }
 
@@ -551,7 +551,7 @@ struct NotifyGatewayClientTests {
         )
         let body = try jsonBody(of: capturedRequest)
         #expect(body.keys.contains("new") == false)
-        #expect(body["title"] as? String == "ClaudeBar")
+        #expect(body["title"] as? String == "Cortex")
         #expect(identifier == Self.screenWidgetId)
     }
 
@@ -595,7 +595,7 @@ struct NotifyGatewayClientTests {
 
         // And the thing being compared is a real body rather than two empty dictionaries, which
         // would satisfy the equality above and prove nothing.
-        #expect(screenBody["title"] as? String == "ClaudeBar")
+        #expect(screenBody["title"] as? String == "Cortex")
         #expect((screenBody["metrics"] as? [[String: Any]])?.count == 2)
     }
 
@@ -659,7 +659,7 @@ struct NotifyGatewayClientTests {
     func `a gauge aimed at a browser is sent, because widgets carry no device gate`() async throws {
         // Given a browser link. A Live Activity would be refused for one, but the gateway is
         // explicit that widgets are different: there is no device-type gate on them and legacy,
-        // WB and MC ids can all own one. Refusing this locally would be ClaudeBar inventing a
+        // WB and MC ids can all own one. Refusing this locally would be Cortex inventing a
         // rule the service does not have, and taking a working surface away from the user.
         let link = try makeLink(deviceId: Self.webDeviceId)
         let gauge = try makeGauge()
@@ -752,7 +752,7 @@ struct NotifyGatewayClientTests {
     func `a Home Screen tile aimed at a Mac is sent, because screen widgets carry no device gate`() async throws {
         // Given a Mac link. A Live Activity would be refused for one, and a screen widget is not:
         // the gateway is explicit that this route has no device-type gate and that legacy, IO, WB
-        // and MC ids can each own one. Refusing it here would be ClaudeBar inventing a rule the
+        // and MC ids can each own one. Refusing it here would be Cortex inventing a rule the
         // service does not have.
         let link = try makeLink(deviceId: Self.macDeviceId)
         let tile = try makeTile()
@@ -907,7 +907,7 @@ struct NotifyGatewayClientTests {
 
     @Test
     func `endTile treats a 410 as the tile already being gone`() async throws {
-        // Given: dismissed, ended or reaped before ClaudeBar asked
+        // Given: dismissed, ended or reaped before Cortex asked
         let link = try makeLink()
         let client = makeClient(status: 410, body: """
         { "error": "LiveActivityGone", "message": "already ended" }
@@ -1049,7 +1049,7 @@ struct NotifyGatewayClientTests {
     @Test
     func `409 on the Home Screen route becomes invalidPayload, not liveActivityUnavailable`() async throws {
         // Given the one thing a 409 can mean here: the device dialect found several screen widgets
-        // and cannot tell which was meant. ClaudeBar creates its own and addresses it by SW id
+        // and cannot tell which was meant. Cortex creates its own and addresses it by SW id
         // afterwards, so it should never see this.
         let link = try makeLink()
         let tile = try makeTile()
@@ -1070,7 +1070,7 @@ struct NotifyGatewayClientTests {
 
     @Test
     func `503 is the Home Screen surface being switched off, and worth trying again later`() async throws {
-        // Given the server side kill switch this surface shipped behind, so a ClaudeBar that
+        // Given the server side kill switch this surface shipped behind, so a Cortex that
         // supports it can meet a gateway that is not serving it yet
         let link = try makeLink()
         let tile = try makeTile()
@@ -1083,7 +1083,7 @@ struct NotifyGatewayClientTests {
             _ = try await client.publishScreenTile(tile, link: link, screenWidgetId: nil)
             Issue.record("Expected the kill switch to surface")
         } catch let error as NotifyPublishError {
-            // Then: nothing is wrong with ClaudeBar, the credentials or the content, and the only
+            // Then: nothing is wrong with Cortex, the credentials or the content, and the only
             // remedy is the day the surface is switched on. The gateway's own sentence is not
             // carried, and that costs nothing: an empty message picks the error's own wording,
             // which is the sentence to put in front of a user however the server phrased it.

@@ -74,7 +74,7 @@ public enum EnrolmentState: Sendable, Equatable {
     /// identity was supplied, that just exists). Account is enrolled.
     case identityConfirmed(AccountDescriptor, identity: VerifiedIdentity)
     /// Identity verified + persisted; first quota snapshot not yet observed.
-    /// The user sees "Connecté · quotas en attente".
+    /// The user sees "Connected · quotas pending".
     case quotaPending(AccountDescriptor)
     /// First quota snapshot observed. Steady state — the row joins the menu.
     case quotaReceived(AccountDescriptor, observedAt: Date)

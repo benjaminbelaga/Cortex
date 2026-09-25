@@ -1,6 +1,6 @@
 import Foundation
 
-/// The content of the Notify! widget ClaudeBar keeps on the Lock Screen.
+/// The content of the Notify! widget Cortex keeps on the Lock Screen.
 ///
 /// `progress` is the gauge: the gateway draws it as a bar on the rectangular
 /// widget and as a ring on the circular one, which is the whole reason a quota
@@ -27,7 +27,7 @@ public struct NotifyGauge: Sendable, Equatable {
     /// Accent color as `#RRGGBB`, normally the shown quota's status.
     public let tintHex: String?
 
-    /// The gauge, 0 to 100. ClaudeBar sends quota remaining here.
+    /// The gauge, 0 to 100. Cortex sends quota remaining here.
     public let progress: Double?
 
     public init?(

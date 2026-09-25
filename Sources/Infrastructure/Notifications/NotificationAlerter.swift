@@ -69,6 +69,38 @@ public final class NotificationAlerter: QuotaAlerter, @unchecked Sendable {
         }
     }
 
+    // MARK: - Time-tariff transitions (bible §15 hour rule)
+
+    /// Alerts only on a real transition INTO the cheaper `discount` window, or
+    /// back out of it — the two moments Ben can act on. The first observation
+    /// (`previous == nil`) is recorded, never announced.
+    public func alertTimeState(providerId: String, previous: String?, current: RouterTimeState) async {
+        guard let previous, previous != current.state else { return }
+        guard current.state == "discount" || previous == "discount" else { return }
+
+        let providerName = providerDisplayName(for: providerId)
+        let title: String
+        let body: String
+        if current.state == "discount" {
+            title = "Off-peak · \(providerName)"
+            body = "Reduced rate \(String(format: "×%.2g", current.multiplier)) active — calls cost less now."
+        } else {
+            title = "Peak · \(providerName)"
+            var text = "Off-peak has ended."
+            if let slot = current.nextBetterSlot {
+                text += " Next better slot at \(slot.formatted(date: .omitted, time: .shortened))."
+            }
+            body = text
+        }
+
+        AppLog.notifications.notice("Time state \(previous) -> \(current.state) for \(providerId)")
+        do {
+            try await alertSender.send(title: title, body: body, categoryIdentifier: "TIME_STATE_ALERT")
+        } catch {
+            AppLog.notifications.error("Failed to send time-state alert: \(error.localizedDescription)")
+        }
+    }
+
     // MARK: - Helpers (internal for testability)
 
     func shouldAlert(for status: QuotaStatus) -> Bool {
@@ -95,6 +127,7 @@ public final class NotificationAlerter: QuotaAlerter, @unchecked Sendable {
         case "omp": return "Oh My Pi"
         case "grok": return "Grok"
         case "commandcode": return "Command Code"
+        case "ollama": return "Ollama Cloud"
         default: return providerId.capitalized
         }
     }

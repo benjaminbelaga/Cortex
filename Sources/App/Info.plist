@@ -22,11 +22,11 @@
     <string>2.1.0</string>
     <key>CFBundleVersion</key>
     <string>20100</string>
-    <key>ClaudeBarGitSHA</key>
+    <key>CortexGitSHA</key>
     <string>$(CORTEX_GIT_SHA)</string>
-    <key>ClaudeBarBuildUTC</key>
+    <key>CortexBuildUTC</key>
     <string>$(CORTEX_BUILD_UTC)</string>
-    <key>ClaudeBarGitDirty</key>
+    <key>CortexGitDirty</key>
     <string>$(CORTEX_GIT_DIRTY)</string>
     <key>LSApplicationCategoryType</key>
     <string>public.app-category.utilities</string>
@@ -41,7 +41,7 @@
     <key>SUFeedURL</key>
     <string>https://benjaminbelaga.github.io/Cortex/appcast.xml</string>
     <!-- A Cortex-specific Sparkle key is provisioned at first signed release;
-         never reuse the upstream ClaudeBar signing key. Automatic checks stay
+         never reuse the upstream Cortex signing key. Automatic checks stay
          disabled until that key is configured. -->
     <key>SUEnableAutomaticChecks</key>
     <false/>

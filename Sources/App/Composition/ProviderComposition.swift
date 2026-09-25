@@ -20,6 +20,13 @@ public struct ProviderComposition {
 
     private let routerSnapshotClient: any RouterQuotaSnapshotProviding
     private let settingsRepository: JSONSettingsRepository
+
+    /// The settings file live-reload watchers observe. Nil under test, where a
+    /// per-provider `DispatchSource` on rapidly created/destroyed fixtures adds
+    /// no value and destabilises the shared App test host.
+    private var watchedSettingsURL: URL? {
+        CortexRuntime.isTesting ? nil : settingsRepository.settingsFileURL
+    }
     private let routerAvailability: any LLMRouterAvailabilityChecking
     private let sourceModeResolver: QuotaSourceResolver
     private let defaultSourceMode: QuotaSourceMode
@@ -81,8 +88,8 @@ public struct ProviderComposition {
     /// A catalog entry with no mapping fails CI instead of silently vanishing.
     public static let knownCatalogIDs: Set<String> = [
         "claude", "codex", "kimi", "qwen", "glm", "minimax",
-        "gemini", "antigravity", "copilot", "opencode-go", "commandcode",
-        "qwen-api", "bedrock", "local", "ampcode", "kiro", "cursor",
+        "gemini", "antigravity", "copilot", "opencode-go", "commandcode", "ollama",
+        "bedrock", "local", "ampcode", "kiro", "cursor",
         "deepseek", "vercel-gateway", "mistral", "omp", "grok",
     ]
 
@@ -197,13 +204,15 @@ public struct ProviderComposition {
             }
             return AccountUsageProvider(id: descriptor.id, name: descriptor.name,
                 cliCommand: descriptor.cliCommand, dashboardURL: descriptor.dashboardURL,
-                settings: settingsRepository, makeProbe: { config in
+                settings: settingsRepository, settingsFileURL: watchedSettingsURL,
+                makeProbe: { config in
                     CodexUsageProbe(client: DefaultCodexRPCClient(codexHome: config.probeConfig["codexHome"]))
                 })
         case "qwen":
             return AccountUsageProvider(id: descriptor.id, name: descriptor.name,
                 cliCommand: "bl", dashboardURL: descriptor.dashboardURL, settings: settingsRepository,
-                defaultConfig: .init(accountId: "default", label: "Token Plan"), makeProbe: { config in
+                defaultConfig: .init(accountId: "default", label: "Token Plan"),
+                settingsFileURL: watchedSettingsURL, makeProbe: { config in
                     QwenPlanUsageProbe(profile: config.probeConfig["bailianProfile"] ?? "default",
                         site: config.probeConfig["consoleSite"] ?? "international",
                         region: config.probeConfig["consoleRegion"] ?? "ap-southeast-1")
@@ -236,10 +245,11 @@ public struct ProviderComposition {
             )
         case "mistral":
             return MistralProvider(probe: MistralUsageProbe(), settingsRepository: settingsRepository)
-        case "opencode-go", "commandcode":
+        case "opencode-go", "commandcode", "ollama":
             return AccountUsageProvider(
                 id: descriptor.id, name: descriptor.name, cliCommand: descriptor.cliCommand,
                 dashboardURL: descriptor.dashboardURL, settings: settingsRepository,
+                settingsFileURL: watchedSettingsURL,
                 makeProbe: { config in APIAccountCredentials.probe(providerId: descriptor.id, config: config) }
             )
         case "omp":

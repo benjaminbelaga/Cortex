@@ -5,24 +5,41 @@ import Domain
 public enum APIAccountCredentials {
     public static func probe(providerId: String, config: ProviderAccountConfig,
                              credentials: any CredentialRepository = KeychainCredentialRepository.shared) -> any UsageProbe {
+        guard let key = key(providerId: providerId, config: config, credentials: credentials) else {
+            return MissingCredentialProbe()
+        }
+        return probe(providerId: providerId, apiKey: key)
+    }
+
+    /// The copyable key of one account, resolved through the SAME references
+    /// the probe uses (managed Keychain item, OpenCode Go pool slot, Command
+    /// Code CLI slot). nil when the provider has no copyable key — a caller
+    /// must never invent one. Values stay in-process: callers hand the result
+    /// to a concealed pasteboard, never to a log.
+    public static func key(providerId: String, config: ProviderAccountConfig,
+                           credentials: any CredentialRepository = KeychainCredentialRepository.shared,
+                           homeDirectory: String = NSHomeDirectory()) -> String? {
         let key: String?
         if let reference = config.probeConfig["credentialKey"] {
             key = credentials.get(forKey: reference)
         } else if providerId == "opencode-go", let slot = config.probeConfig["externalSlot"] {
-            key = OpenCodeCredentialLoader().loadPool().first { $0.slot == slot }?.key
-        } else if providerId == "commandcode", config.probeConfig["externalSlot"] == "cli" {
-            key = CommandCodeCredentialLoader().loadAPIKey()
+            key = OpenCodeCredentialLoader(homeDirectory: homeDirectory).loadPool().first { $0.slot == slot }?.key
+        } else if providerId == "ollama", let slot = config.probeConfig["externalSlot"] {
+            key = OpenCodeCredentialLoader.ollamaCloud(homeDirectory: homeDirectory).loadPool().first { $0.slot == slot }?.key
+        } else if providerId == "commandcode", let slot = config.probeConfig["externalSlot"] {
+            key = CommandCodeCredentialLoader(homeDirectory: homeDirectory).loadPool().first { $0.slot == slot }?.key
         } else {
             key = nil
         }
-        guard let key, !key.isEmpty else { return MissingCredentialProbe() }
-        return probe(providerId: providerId, apiKey: key)
+        guard let key, !key.isEmpty else { return nil }
+        return key
     }
 
     public static func probe(providerId: String, apiKey: String) -> any UsageProbe {
         switch providerId {
         case "opencode-go": return OpenCodeAPIUsageProbe(apiKey: apiKey)
         case "commandcode": return CommandCodeUsageProbe(apiKey: apiKey)
+        case "ollama": return OllamaCloudUsageProbe(apiKey: apiKey)
         default: return MissingCredentialProbe()
         }
     }
@@ -36,8 +53,10 @@ public enum APIAccountCredentials {
                 entries = OpenCodeCredentialLoader().loadPool().enumerated().map {
                     ($0.element.slot, $0.element.label ?? "Account \($0.offset + 1)")
                 }
-            } else if CommandCodeCredentialLoader().loadAPIKey() != nil {
-                entries = [("cli", "Account 1")]
+            } else {
+                entries = CommandCodeCredentialLoader().loadPool().enumerated().map {
+                    ($0.element.slot, $0.element.label ?? "Account \($0.offset + 1)")
+                }
             }
             for (slot, label) in entries {
                 let id = "imported-" + slot

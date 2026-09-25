@@ -34,6 +34,13 @@ public struct CmuxSessionSource: SessionSource {
     /// fichier à chaque changement ; la fenêtre est volontairement large.
     public static let livenessWindow: TimeInterval = 30 * 60
 
+    /// Une entrée de statut `Running` prouve qu'un agent travaille dans le
+    /// workspace : l'intégration agent de cmux écrit `Running` au début d'un
+    /// tour et `Idle` à la fin. Au-delà de cette fenêtre, un `Running` jamais
+    /// effacé (arrêt brutal) ne vaut plus « en travail » — la session reste
+    /// ouverte, jamais gonflée en faux travail.
+    public static let workingWindow: TimeInterval = 60 * 60
+
     /// Le fichier d'état reste petit (quelques centaines de Ko) ; on borne tout
     /// de même la lecture.
     static let maxSnapshotBytes = 8 * 1024 * 1024
@@ -89,7 +96,7 @@ public struct CmuxSessionSource: SessionSource {
         }
 
         let isLive = modifiedAt.map { now.timeIntervalSince($0) < livenessWindow } ?? false
-        let observations = Self.panes(in: root, updatedAt: modifiedAt, isLive: isLive)
+        let observations = Self.panes(in: root, updatedAt: modifiedAt, isLive: isLive, now: now)
         return SessionSourceReport(
             toolId: toolId,
             observations: Array(observations.prefix(limit)),
@@ -99,7 +106,7 @@ public struct CmuxSessionSource: SessionSource {
 
     // MARK: - Parsing
 
-    private static func panes(in root: [String: Any], updatedAt: Date?, isLive: Bool) -> [SessionObservation] {
+    private static func panes(in root: [String: Any], updatedAt: Date?, isLive: Bool, now: Date) -> [SessionObservation] {
         var byPane: [String: SessionObservation] = [:]
         var order: [String] = []
         guard let windows = root["windows"] as? [[String: Any]] else { return [] }
@@ -109,6 +116,9 @@ public struct CmuxSessionSource: SessionSource {
             for workspace in workspaces {
                 let workspaceDirectory = workspace["currentDirectory"] as? String
                 let processTitle = workspace["processTitle"] as? String
+                // `Running` (frais) = un agent travaille dans ce workspace ; il
+                // prime alors sur le simple « ouvert » de ses panes terminaux.
+                let isWorking = isLive && isWorkspaceWorking(workspace, now: now)
                 guard let panels = workspace["panels"] as? [[String: Any]] else { continue }
                 for panel in panels {
                     guard (panel["type"] as? String) == "terminal" else { continue }
@@ -127,9 +137,11 @@ public struct CmuxSessionSource: SessionSource {
                         // pane focalisé (« … · <modèle> »).
                         model: modelToken(from: title) ?? modelToken(from: processTitle),
                         updatedAt: updatedAt,
-                        // Un pane présent dans l'état vivant est « ouvert » ; un
-                        // état trop vieux pour le prouver reste `.unknown`.
-                        activity: isLive ? .open : .unknown,
+                        // Un pane présent dans l'état vivant est « ouvert » ;
+                        // si un agent y travaille (statut `Running` frais), il
+                        // est « en travail » ; un état trop vieux pour le
+                        // prouver reste `.unknown`.
+                        activity: !isLive ? .unknown : (isWorking ? .working : .open),
                         isSubagent: false
                     )
                     order.append(identifier)
@@ -137,6 +149,18 @@ public struct CmuxSessionSource: SessionSource {
             }
         }
         return order.compactMap { byPane[$0] }
+    }
+
+    /// Un workspace travaille si une de ses entrées de statut vaut `Running` et
+    /// est fraîche. Les entrées sans horodatage exploitable sont ignorées :
+    /// sans preuve de fraîcheur, jamais de faux « en travail ».
+    private static func isWorkspaceWorking(_ workspace: [String: Any], now: Date) -> Bool {
+        guard let entries = workspace["statusEntries"] as? [[String: Any]] else { return false }
+        return entries.contains { entry in
+            guard (entry["value"] as? String) == "Running",
+                  let timestamp = (entry["timestamp"] as? NSNumber)?.doubleValue else { return false }
+            return now.timeIntervalSince1970 - timestamp < workingWindow
+        }
     }
 
     /// Extrait le dernier segment « · <modèle> » d'un titre de pane/processus,

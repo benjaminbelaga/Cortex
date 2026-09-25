@@ -532,7 +532,7 @@ extension AIProvider {
 }
 
 // Router-backed providers are intentionally one concrete domain type. Their
-// first-class visual identity is selected by stable ClaudeBar provider ID.
+// first-class visual identity is selected by stable Cortex provider ID.
 extension RouterBackedProvider: ProviderVisualIdentity {
     public var symbolIcon: String { ProviderVisualIdentityLookup.symbolIcon(for: id) }
     public var iconAssetName: String { ProviderVisualIdentityLookup.iconAssetName(for: id) }
@@ -629,6 +629,10 @@ enum ProviderVisualIdentityLookup {
             return scheme == .dark
                 ? Color(white: 0.92)
                 : Color(white: 0.12)
+        case "ollama":
+            return scheme == .dark
+                ? Color(white: 0.92)
+                : Color(white: 0.10)
         case "commandcode":
             // Command Code brand: Burple-foreground #546BF3 / monochrome black
             return scheme == .dark
@@ -726,6 +730,10 @@ enum ProviderVisualIdentityLookup {
             secondaryColor = scheme == .dark
                 ? Color(white: 0.60)
                 : Color(white: 0.40)
+        case "ollama":
+            secondaryColor = scheme == .dark
+                ? Color(white: 0.50)
+                : Color(white: 0.30)
         case "commandcode":
             // Command Code Burple-background #2E1B9C
             secondaryColor = scheme == .dark
@@ -772,6 +780,7 @@ enum ProviderVisualIdentityLookup {
         case "opencode-go": return "OpenCodeIcon"
         case "omp": return "OmpIcon"
         case "grok": return "GrokIcon"
+        case "ollama": return "OllamaIcon"
         case "commandcode": return "CommandCodeIcon"
         case "vercel-gateway": return "VercelIcon"
         default: return "QuestionIcon"
@@ -811,6 +820,7 @@ enum ProviderVisualIdentityLookup {
         case "opencode-go": return "OpenCode Go"
         case "omp": return "Oh My Pi"
         case "grok": return "Grok"
+        case "ollama": return "Ollama Cloud"
         case "commandcode": return "Command Code"
         case "vercel-gateway": return "Vercel Gateway"
         default: return providerId.capitalized
@@ -839,6 +849,7 @@ enum ProviderVisualIdentityLookup {
         case "opencode-go": return "square.stack.3d.up.fill"
         case "omp": return "terminal.fill"
         case "grok": return "line.diagonal"
+        case "ollama": return "cloud.circle.fill"
         case "commandcode": return "command"
         case "vercel-gateway": return "triangle.fill"
         default: return "questionmark.circle.fill"

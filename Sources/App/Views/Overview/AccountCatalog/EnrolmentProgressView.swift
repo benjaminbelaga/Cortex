@@ -36,7 +36,7 @@ struct EnrolmentProgressView: View {
             Spacer(minLength: 0)
             if isCancellable, let onCancel {
                 Button(action: onCancel) {
-                    Text("Annuler")
+                    Text("Cancel")
                         .font(theme.font(size: 9, weight: .semibold))
                 }
                 .buttonStyle(.plain)

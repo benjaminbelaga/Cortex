@@ -37,30 +37,27 @@ echo ""
 
 echo "--- Checking file format ---"
 
-# Check first line. Split the marker so scanners never mistake documentation
-# strings for a checked-in private key.
-PRIVATE_KEY_BEGIN="-----BEGIN"' PRIVATE KEY-----'
+# Check first line
 FIRST_LINE=$(head -1 "$P8_FILE")
-if [ "$FIRST_LINE" != "$PRIVATE_KEY_BEGIN" ]; then
-    echo -e "${RED}FAIL: File does not start with a PEM private-key header${NC}"
+if [ "$FIRST_LINE" != "-----BEGIN PRIVATE KEY-----" ]; then
+    echo -e "${RED}FAIL: File does not start with '-----BEGIN PRIVATE KEY-----'${NC}"
     echo ""
     echo "First line is: $FIRST_LINE"
     echo ""
     echo "This is not a valid .p8 file."
     exit 1
 fi
-echo -e "${GREEN}PASS: Starts with a PEM private-key header${NC}"
+echo -e "${GREEN}PASS: Starts with '-----BEGIN PRIVATE KEY-----'${NC}"
 
 # Check last line
-PRIVATE_KEY_END="-----END"' PRIVATE KEY-----'
 LAST_LINE=$(tail -1 "$P8_FILE")
-if [ "$LAST_LINE" != "$PRIVATE_KEY_END" ]; then
-    echo -e "${RED}FAIL: File does not end with a PEM private-key footer${NC}"
+if [ "$LAST_LINE" != "-----END PRIVATE KEY-----" ]; then
+    echo -e "${RED}FAIL: File does not end with '-----END PRIVATE KEY-----'${NC}"
     echo ""
     echo "Last line is: $LAST_LINE"
     exit 1
 fi
-echo -e "${GREEN}PASS: Ends with a PEM private-key footer${NC}"
+echo -e "${GREEN}PASS: Ends with '-----END PRIVATE KEY-----'${NC}"
 
 # Check line count (should be around 6-8 lines)
 LINE_COUNT=$(wc -l < "$P8_FILE" | tr -d ' ')

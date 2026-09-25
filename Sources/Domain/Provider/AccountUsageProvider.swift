@@ -20,6 +20,11 @@ public final class AccountUsageProvider: MultiAccountProvider {
     private var activeID: String
     private let settings: any MultiAccountSettingsRepository
     private let defaultConfig: ProviderAccountConfig?
+    /// Settings file to watch so an external (CLI) account add/remove is picked
+    /// up live, instead of only at init/in-process add (the anchor gap). nil
+    /// disables watching (tests, single-account providers).
+    @ObservationIgnored private let settingsFileURL: URL?
+    @ObservationIgnored private var settingsWatcher: DispatchSourceFileSystemObject?
     private var configs: [ProviderAccountConfig] {
         let stored = settings.accounts(forProvider: id)
         return stored.isEmpty ? defaultConfig.map { [$0] } ?? [] : stored
@@ -29,6 +34,7 @@ public final class AccountUsageProvider: MultiAccountProvider {
     public init(id: String, name: String, cliCommand: String, dashboardURL: URL?,
                 settings: any MultiAccountSettingsRepository,
                 defaultConfig: ProviderAccountConfig? = nil,
+                settingsFileURL: URL? = nil,
                 makeProbe: @escaping @Sendable (ProviderAccountConfig) -> any UsageProbe) {
         self.id = id
         self.name = name
@@ -36,12 +42,74 @@ public final class AccountUsageProvider: MultiAccountProvider {
         self.dashboardURL = dashboardURL
         self.settings = settings
         self.defaultConfig = defaultConfig
+        self.settingsFileURL = settingsFileURL
         self.makeProbe = makeProbe
         self.isEnabled = settings.isEnabled(forProvider: id)
         let stored = settings.accounts(forProvider: id)
         let configs = stored.isEmpty ? defaultConfig.map { [$0] } ?? [] : stored
         self.accounts = configs.map { $0.toProviderAccount(providerId: id) }
         self.activeID = settings.activeAccountId(forProvider: id) ?? configs.first?.accountId ?? "default"
+        startWatchingSettings()
+    }
+
+    deinit {
+        settingsWatcher?.cancel()
+    }
+
+    // MARK: - Live roster reload (external CLI writes)
+
+    /// Rebuilds the published `accounts` from settings when the roster changed.
+    /// Snapshots keyed by `accountId` survive; a new account has none until its
+    /// next refresh; the active id falls back if it vanished. No-op when the
+    /// account ids are unchanged, so it is cheap to call on every popover open.
+    public func reloadAccounts() {
+        let refreshed = configs.map { $0.toProviderAccount(providerId: id) }
+        guard refreshed.map(\.accountId) != accounts.map(\.accountId) else { return }
+        accounts = refreshed
+        if !refreshed.contains(where: { $0.accountId == activeID }) {
+            activeID = settings.activeAccountId(forProvider: id)
+                ?? refreshed.first?.accountId
+                ?? activeID
+        }
+    }
+
+    /// Popover-appear hook: pick up any external roster change immediately,
+    /// without waiting for a file-system event.
+    public func reloadOnAppear() { reloadAccounts() }
+
+    /// Watches the settings file for external writes (CLI add/remove account).
+    /// Re-arms on every event so an atomic rename/delete (which swaps the watched
+    /// inode) keeps a live watcher on the path.
+    ///
+    /// The event handler captures ONLY `[weak self]` — never the source — so the
+    /// source's sole owner is `settingsWatcher`. deinit then cancels it before
+    /// its last release, honoring libdispatch's cancel-before-release contract.
+    private func startWatchingSettings() {
+        guard let settingsFileURL else { return }
+        settingsWatcher?.cancel()
+        settingsWatcher = nil
+        let fd = open(settingsFileURL.path, O_EVTONLY)
+        guard fd >= 0 else { return }
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd,
+            eventMask: [.write, .rename, .delete],
+            queue: DispatchQueue.global(qos: .utility)
+        )
+        // @Sendable prevents MainActor inference: libdispatch invokes these on
+        // the utility queue, so an isolated closure would trap (SIGTRAP,
+        // _dispatch_assert_queue_fail) on every settings write / cancel.
+        source.setEventHandler { @Sendable [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.reloadAccounts()
+                // Re-arm: an atomic write renames a temp over the file, so the
+                // current fd now points at a dead inode. Re-open the path.
+                self.startWatchingSettings()
+            }
+        }
+        source.setCancelHandler { @Sendable in close(fd) }
+        settingsWatcher = source
+        source.resume()
     }
 
     public var activeAccount: ProviderAccount {

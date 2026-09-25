@@ -18,6 +18,9 @@ public enum ProviderCapability: String, Sendable, Equatable, Hashable, CaseItera
     case costEstimate
     /// Reconnexion assistée (relogin vérifié).
     case reconnect
+    /// Comptes enrôlés par clé API (sonde live → Trousseau). Seule source de
+    /// vérité des écrans d'ajout par clé : aucune liste d'ids codée en dur.
+    case apiKeyAccounts
 }
 
 /// Description statique d'un provider reconnu par Cortex. C'est le contrat de
@@ -164,15 +167,20 @@ public enum ProviderCatalog {
 
     public static let qwenPlan = ProviderDescriptor(
         id: "qwen",
-        name: "Qwen Plan",
+        name: "Alibaba Cloud Model Studio",
         cliCommand: "qwen",
-        dashboardURL: URL(string: "https://modelstudio.console.alibabacloud.com"),
+        dashboardURL: URL(string: "https://modelstudio.console.alibabacloud.com/ap-southeast-1/subscription/token-plan/personal"),
         supportedModes: [.autonomous, .router],
         category: .account,
         isOptional: false,
         symbolName: "globe",
         capabilities: [.quota, .sessions, .costEstimate],
-        runtime: .routerOrNative(RouterBacking(routerProviderId: "qwen_personal_pro"))
+        // 2026-09-24 (Ben): il n'existe qu'UN abonnement Alibaba — le Token Plan
+        // Personal, router id `bailian_token_plan`. L'ancien `qwen_personal_pro`
+        // n'était qu'une sync manuelle morte (2026-08-17). Le backing suivait
+        // `qwen_personal_pro` alors que RouterProviderIdMap mappait déjà
+        // `qwen -> bailian_token_plan` : la contradiction est levée ici.
+        runtime: .routerOrNative(RouterBacking(routerProviderId: "bailian_token_plan"))
     )
 
     public static let glm = ProviderDescriptor(
@@ -253,7 +261,7 @@ public enum ProviderCatalog {
         category: .integration,
         isOptional: false,
         symbolName: "curlybraces",
-        capabilities: [.quota, .accounts, .sessions],
+        capabilities: [.quota, .accounts, .apiKeyAccounts, .sessions],
         runtime: .native
     )
 
@@ -266,24 +274,32 @@ public enum ProviderCatalog {
         category: .integration,
         isOptional: false,
         symbolName: "command",
-        capabilities: [.quota, .sessions],
+        capabilities: [.quota, .accounts, .apiKeyAccounts, .sessions],
+        runtime: .native
+    )
+
+    /// Ollama Cloud : une clé API par abonnement, usage lu sur
+    /// `GET ollama.com/api/usage` (fractions consommées par fenêtre).
+    public static let ollama = ProviderDescriptor(
+        id: "ollama",
+        name: "Ollama Cloud",
+        cliCommand: "ollama",
+        dashboardURL: URL(string: "https://ollama.com/settings"),
+        supportedModes: [.autonomous],
+        category: .integration,
+        isOptional: false,
+        symbolName: "cloud.circle",
+        capabilities: [.quota, .accounts, .apiKeyAccounts],
         runtime: .native
     )
 
     // MARK: - Connexions optionnelles (activées explicitement)
 
-    public static let qwenAPI = ProviderDescriptor(
-        id: "qwen-api",
-        name: "Qwen API",
-        cliCommand: "codex-qwencloud-payg",
-        dashboardURL: URL(string: "https://modelstudio.console.alibabacloud.com"),
-        supportedModes: [.router],
-        category: .integration,
-        isOptional: true,
-        symbolName: "cloud",
-        capabilities: [.quota],
-        runtime: .router(RouterBacking(routerProviderId: "qwen_cloud_payg"))
-    )
+    // NOTE 2026-09-23 (Cortex v7.2): the `qwen-api` descriptor was removed. It
+    // pointed at the dead router provider `qwen_cloud_payg`; the Qwen token plan
+    // is served by `qwen` → `bailian_token_plan`. Never reintroduce
+    // `qwen_cloud_payg`. `QwenApiRemovalMigration` deletes any residual
+    // `providers.qwen-api` settings key.
 
     public static let bedrock = ProviderDescriptor(
         id: "bedrock",
@@ -418,8 +434,8 @@ public enum ProviderCatalog {
     /// disappear silently.
     public static let all: [ProviderDescriptor] = [
         claude, codex, kimi, qwenPlan, glm, minimax,
-        gemini, antigravity, copilot, openCodeGo, commandCode,
-        qwenAPI, bedrock, local, ampcode, kiro, cursor,
+        gemini, antigravity, copilot, openCodeGo, commandCode, ollama,
+        bedrock, local, ampcode, kiro, cursor,
         deepseek, vercelGateway, mistral, omp, grok,
     ]
 
@@ -431,6 +447,16 @@ public enum ProviderCatalog {
     /// inconnu arrivant depuis un settings.json legacy.
     public static func descriptor(forId id: String) -> ProviderDescriptor? {
         all.first { $0.id == id }
+    }
+
+    /// Providers dont les comptes s'enrôlent par clé API, dans l'ordre du catalogue.
+    public static var apiKeyAccountIDs: [String] {
+        all.filter { $0.capabilities.contains(.apiKeyAccounts) }.map(\.id)
+    }
+
+    /// Providers où l'utilisateur peut ajouter un compte (profil ou clé).
+    public static var addableAccountIDs: [String] {
+        all.filter { $0.capabilities.contains(.accounts) }.map(\.id)
     }
 
     /// Les providers routables depuis le snapshot llm-router (dans l'ordre).

@@ -30,6 +30,14 @@ public protocol AccountStateReporting {
     var accountAuthStates: [String: AccountAuthState] { get }
 }
 
+/// Providers that expose a typed `error_class` per account (from the router
+/// snapshot). Keyed by `accountId`; the row maps it to a French label via
+/// `RouterErrorClass` and keeps the raw error string for the tooltip.
+@MainActor
+public protocol AccountErrorClassReporting {
+    var accountErrorClasses: [String: String] { get }
+}
+
 /// How live the row's data is — drives the fleet summary and the age badges
 /// without ever inventing a 0 % or a 100 %.
 public enum RowDataState: Sendable, Equatable {
@@ -55,6 +63,21 @@ public enum FleetAvailabilitySummary: Sendable, Equatable {
     /// window, `needsAction` counts reconnect/failed rows, `unknownCount`
     /// counts rows that never produced a reading.
     case known(status: QuotaStatus, usable: Int, needsAction: Int, unknownCount: Int)
+
+    /// Menu-bar pill label. Unknown rows are surfaced when present — an
+    /// unmeasured provider must not silently inflate the fleet count
+    /// (Ben 2026-09-22, honest states).
+    public var headerLabel: String {
+        switch self {
+        case .unknown:
+            return "Unknown state"
+        case .known(_, let usable, let needsAction, let unknownCount):
+            var parts = ["\(usable) available"]
+            if needsAction > 0 { parts.append("\(needsAction) to reconnect") }
+            if unknownCount > 0 { parts.append("\(unknownCount) unknown") }
+            return parts.joined(separator: " · ")
+        }
+    }
 }
 
 /// Masks an email for the catalogue, tooltips and diagnostics exports:

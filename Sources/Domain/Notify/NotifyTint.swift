@@ -1,6 +1,6 @@
 import Foundation
 
-/// The accent color ClaudeBar sends to Notify! for a quota status.
+/// The accent color Cortex sends to Notify! for a quota status.
 ///
 /// These are the same four colors the Mac uses (`BaseTheme.defaultStatus*`),
 /// written as hex because Domain has no view layer and the gateway wants
@@ -17,7 +17,7 @@ public extension QuotaStatus {
     }
 }
 
-/// SF Symbols ClaudeBar asks Notify! to draw. Named here rather than inline so
+/// SF Symbols Cortex asks Notify! to draw. Named here rather than inline so
 /// the tile and the widget cannot drift apart.
 public enum NotifySymbol {
     /// The tile and widget icon. A gauge reads correctly at both sizes and does

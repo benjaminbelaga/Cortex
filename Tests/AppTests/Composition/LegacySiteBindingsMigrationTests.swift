@@ -2,7 +2,7 @@ import Testing
 import Foundation
 import Domain
 import Infrastructure
-@testable import ClaudeBar
+@testable import Cortex
 
 /// Pins the E1 site-specific row bindings: the `local` router id and extra
 /// tmux sockets are remembered from detected capability, never hardcoded.

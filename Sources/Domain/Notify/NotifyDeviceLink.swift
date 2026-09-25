@@ -1,6 +1,6 @@
 import Foundation
 
-/// The credentials that let ClaudeBar write to one Notify! device: the device
+/// The credentials that let Cortex write to one Notify! device: the device
 /// id and its per device token.
 ///
 /// The settings pane asks for the two values separately, which is how the
@@ -19,7 +19,7 @@ public struct NotifyDeviceLink: Sendable, Equatable, Hashable {
     /// Which namespace the id belongs to, and therefore which surfaces this
     /// link can carry. A group, a Mac and a browser can all receive a Notify!
     /// notification, but none of them can show a Live Activity or a Lock Screen
-    /// widget, so ClaudeBar has to know the difference before it writes.
+    /// widget, so Cortex has to know the difference before it writes.
     public var kind: NotifyDeviceKind {
         NotifyDeviceKind.kind(ofDeviceId: deviceId)
     }
@@ -132,7 +132,7 @@ public struct NotifyDeviceLink: Sendable, Equatable, Hashable {
     }
 }
 
-/// Which kind of Notify! identity an id names, and therefore what ClaudeBar can
+/// Which kind of Notify! identity an id names, and therefore what Cortex can
 /// put on it.
 ///
 /// Notify! mints ids in several namespaces, fenced against each other, and they
@@ -146,7 +146,7 @@ public struct NotifyDeviceLink: Sendable, Equatable, Hashable {
 /// The two surfaces are gated differently, and only one of them is gated by the
 /// namespace at all. A Live Activity is refused for a Mac or a browser. A widget
 /// is not: the gateway is explicit that there is no device-type gate on widgets
-/// and that legacy, `WB` and `MC` devices alike can own one, so ClaudeBar does
+/// and that legacy, `WB` and `MC` devices alike can own one, so Cortex does
 /// not invent a rule the service does not have. A group is the exception to
 /// both, being a fan-out target rather than a device, with no surface of its own.
 ///
@@ -155,7 +155,7 @@ public struct NotifyDeviceLink: Sendable, Equatable, Hashable {
 /// fixed shape: the legacy format is 8 characters, the newer iOS namespace is
 /// `IO` plus 14, and more will follow. Listing what may pass would refuse a real
 /// phone the day Notify! mints a format this file has never heard of, and a
-/// refused phone looks like ClaudeBar being broken.
+/// refused phone looks like Cortex being broken.
 public enum NotifyDeviceKind: Sendable, Equatable, Hashable, CaseIterable {
     /// An iPhone or iPad: the `IO` plus 14 namespace, or the legacy 8 character
     /// format that iOS and older Mac listeners share.
@@ -229,7 +229,7 @@ public enum NotifyDeviceKind: Sendable, Equatable, Hashable, CaseIterable {
     ///
     /// The gateway refuses a start for a Mac or a browser with a 400, so asking
     /// is not merely useless, it burns a request and reads to the user as a
-    /// failure of ClaudeBar's.
+    /// failure of Cortex's.
     public var supportsLiveActivity: Bool {
         switch self {
         case .appDevice, .unrecognized: true
@@ -242,7 +242,7 @@ public enum NotifyDeviceKind: Sendable, Equatable, Hashable, CaseIterable {
     /// Everything except a group. The gateway says plainly that widgets carry no
     /// device-type gate and that legacy, `WB` and `MC` devices can all own one,
     /// so which of them actually draws it is Notify!'s business rather than a
-    /// rule for ClaudeBar to invent. A group is excluded because it is not a
+    /// rule for Cortex to invent. A group is excluded because it is not a
     /// device: it fans a notification out to its members and owns nothing.
     public var supportsWidget: Bool {
         switch self {
@@ -285,9 +285,9 @@ public enum NotifyDeviceKind: Sendable, Equatable, Hashable, CaseIterable {
         case .appDevice, .unrecognized:
             nil
         case .mac:
-            "This is a Mac ID. A Live Activity is an iPhone and iPad feature, so ClaudeBar cannot start one here. The widget still works."
+            "This is a Mac ID. A Live Activity is an iPhone and iPad feature, so Cortex cannot start one here. The widget still works."
         case .web:
-            "This is a browser ID. A Live Activity is an iPhone and iPad feature, so ClaudeBar cannot start one here. The widget still works."
+            "This is a browser ID. A Live Activity is an iPhone and iPad feature, so Cortex cannot start one here. The widget still works."
         case .group:
             Self.groupReason
         }

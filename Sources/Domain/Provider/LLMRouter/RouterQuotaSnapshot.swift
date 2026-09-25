@@ -2,7 +2,7 @@ import Foundation
 
 /// Normalized, credential-free snapshot supplied by llm-router.
 ///
-/// Percentages deliberately remain fractions here. Conversion to ClaudeBar's
+/// Percentages deliberately remain fractions here. Conversion to Cortex's
 /// 0...100 `UsageQuota` model happens once in `RouterBackedProvider`.
 public struct RouterQuotaSnapshot: Sendable, Equatable {
     public let generatedAt: Date
@@ -13,6 +13,9 @@ public struct RouterQuotaSnapshot: Sendable, Equatable {
     public let usage: RouterUsageSnapshot?
     /// Theoretical-cost estimate (v6 Phase B) — optional, same reason.
     public let costEstimate: RouterCostEstimate?
+    /// "Route right now" recommendation block (Contract B, v7.2) — optional:
+    /// a router without it makes the "Priority" card show "indisponible".
+    public let routeNow: RouterRouteNow?
 
     public init(
         generatedAt: Date,
@@ -20,7 +23,8 @@ public struct RouterQuotaSnapshot: Sendable, Equatable {
         isStale: Bool = false,
         fallbackError: String? = nil,
         usage: RouterUsageSnapshot? = nil,
-        costEstimate: RouterCostEstimate? = nil
+        costEstimate: RouterCostEstimate? = nil,
+        routeNow: RouterRouteNow? = nil
     ) {
         self.generatedAt = generatedAt
         self.providers = providers
@@ -28,6 +32,7 @@ public struct RouterQuotaSnapshot: Sendable, Equatable {
         self.fallbackError = fallbackError
         self.usage = usage
         self.costEstimate = costEstimate
+        self.routeNow = routeNow
     }
 
     public func stale(after error: Error) -> Self {
@@ -37,7 +42,8 @@ public struct RouterQuotaSnapshot: Sendable, Equatable {
             isStale: true,
             fallbackError: error.localizedDescription,
             usage: usage,
-            costEstimate: costEstimate
+            costEstimate: costEstimate,
+            routeNow: routeNow
         )
     }
 
@@ -51,6 +57,9 @@ public struct RouterProviderQuota: Sendable, Equatable {
     public let providerId: String
     public let windows: [RouterQuotaWindow]
     public let error: String?
+    /// Typed error class (Contract B, v7.2) mapped to a French line label by
+    /// `RouterErrorClass`; the raw `error` stays for the detail/tooltip.
+    public let errorClass: String?
     public let source: String?
     public let capturedAt: Date
     public let accounts: [RouterAccountQuota]
@@ -70,11 +79,15 @@ public struct RouterProviderQuota: Sendable, Equatable {
     public let credentialExpiresAt: Date?
     public let expiryCandidates: [String]
     public let forecast: RouterQuotaForecast?
+    /// Catalog family from providers.yaml (SSOT), e.g. "zai"/"opencode". Drives
+    /// the preferred-model picker so new families need no Cortex release.
+    public let family: String?
 
     public init(
         providerId: String,
         windows: [RouterQuotaWindow] = [],
         error: String? = nil,
+        errorClass: String? = nil,
         source: String? = nil,
         capturedAt: Date,
         accounts: [RouterAccountQuota] = [],
@@ -88,11 +101,13 @@ public struct RouterProviderQuota: Sendable, Equatable {
         resourceExpiresAt: Date? = nil,
         credentialExpiresAt: Date? = nil,
         expiryCandidates: [String] = [],
-        forecast: RouterQuotaForecast? = nil
+        forecast: RouterQuotaForecast? = nil,
+        family: String? = nil
     ) {
         self.providerId = providerId
         self.windows = windows
         self.error = error
+        self.errorClass = errorClass
         self.source = source
         self.capturedAt = capturedAt
         self.accounts = accounts
@@ -107,6 +122,7 @@ public struct RouterProviderQuota: Sendable, Equatable {
         self.credentialExpiresAt = credentialExpiresAt
         self.expiryCandidates = expiryCandidates
         self.forecast = forecast
+        self.family = family
     }
 }
 
@@ -150,6 +166,8 @@ public struct RouterAccountQuota: Sendable, Equatable {
     public let windows: [RouterQuotaWindow]
     public let present: Bool
     public let error: String?
+    /// Typed error class for this account (Contract B, v7.2).
+    public let errorClass: String?
     public let source: String?
     public let active: Bool
     public let stale: Bool
@@ -162,6 +180,7 @@ public struct RouterAccountQuota: Sendable, Equatable {
         windows: [RouterQuotaWindow] = [],
         present: Bool = true,
         error: String? = nil,
+        errorClass: String? = nil,
         source: String? = nil,
         active: Bool = true,
         stale: Bool = false,
@@ -173,6 +192,7 @@ public struct RouterAccountQuota: Sendable, Equatable {
         self.windows = windows
         self.present = present
         self.error = error
+        self.errorClass = errorClass
         self.source = source
         self.active = active
         self.stale = stale
@@ -213,6 +233,32 @@ public protocol RouterQuotaSnapshotProviding: Sendable {
 @MainActor
 public protocol RouterResourceReporting: Sendable {
     var routerResource: RouterProviderQuota? { get }
+}
+
+/// The router's current time-tariff state (bible §15 hour rule): `normal`,
+/// `peak`, or `discount`, with the multiplier the router applied and the next
+/// cheaper slot when the router exposes one. Cortex never re-derives the rule;
+/// it only surfaces what `route_now` already decided.
+public struct RouterTimeState: Sendable, Equatable {
+    /// `normal` | `peak` | `discount`.
+    public let state: String
+    public let multiplier: Double
+    public let nextBetterSlot: Date?
+    public let promoExpiry: String?
+
+    public init(state: String, multiplier: Double, nextBetterSlot: Date? = nil, promoExpiry: String? = nil) {
+        self.state = state
+        self.multiplier = multiplier
+        self.nextBetterSlot = nextBetterSlot
+        self.promoExpiry = promoExpiry
+    }
+}
+
+/// Providers that can report the router's current time-tariff state, so the
+/// monitor can alert on peak/discount transitions without touching the rule.
+@MainActor
+public protocol RouterTimeStateReporting: Sendable {
+    var routerTimeState: RouterTimeState? { get }
 }
 
 public extension RouterQuotaSnapshotProviding {

@@ -30,9 +30,20 @@ public final class StatusLineObserver: @unchecked Sendable {
     private var listener: NWListener?
     private var observations: [String: ClaudeRateLimitObservation] = [:]
     public private(set) var actualPort: UInt16 = 0
+    /// Port-file persistence seam. Production writes
+    /// `~/.claude/cortex-statusline-port`; tests inject no-ops so a lifecycle
+    /// test never touches the real home.
+    private let portWriter: (Int) throws -> Void
+    private let portRemover: () -> Void
 
-    public init(defaultPort: UInt16 = HookConstants.defaultStatusLinePort) {
+    public init(
+        defaultPort: UInt16 = HookConstants.defaultStatusLinePort,
+        portWriter: @escaping (Int) throws -> Void = { try StatusLinePortDiscovery.writePort($0) },
+        portRemover: @escaping () -> Void = { StatusLinePortDiscovery.removePortFile() }
+    ) {
         self.defaultPort = defaultPort
+        self.portWriter = portWriter
+        self.portRemover = portRemover
     }
 
     /// Starts the observer. Idempotent — calling twice is a no-op the
@@ -47,15 +58,17 @@ public final class StatusLineObserver: @unchecked Sendable {
         parameters.requiredLocalEndpoint = NWEndpoint.hostPort(host: .ipv4(.loopback), port: port)
         let listener = try NWListener(using: parameters)
 
+        // `stateUpdateHandler` runs on `queue` (set by `listener.start`
+        // below), so mutable state is touched directly — a `queue.sync`
+        // here would deadlock against our own serial queue and trap
+        // (dispatch-sync-on-owned-queue). Regression proven live 2026-09-21.
         listener.stateUpdateHandler = { [weak self] state in
             guard let self else { return }
             switch state {
             case .ready:
                 if let actualPort = listener.port?.rawValue {
-                    self.queue.sync {
-                        self.actualPort = actualPort
-                    }
-                    try? StatusLinePortDiscovery.writePort(Int(actualPort))
+                    self.actualPort = actualPort
+                    try? self.portWriter(Int(actualPort))
                     AppLog.hooks.info("StatusLine observer listening on port \(actualPort)")
                 }
             case .failed(let error):
@@ -78,7 +91,7 @@ public final class StatusLineObserver: @unchecked Sendable {
             listener = nil
             observations.removeAll()
             actualPort = 0
-            StatusLinePortDiscovery.removePortFile()
+            portRemover()
             AppLog.hooks.info("StatusLine observer stopped")
         }
     }
@@ -92,10 +105,10 @@ public final class StatusLineObserver: @unchecked Sendable {
         maxAge: TimeInterval = 3600
     ) -> ClaudeRateLimitObservation? {
         let expanded = (configDir as NSString).expandingTildeInPath
-        let key = observations.keys.first { k in
-            ((k as NSString).expandingTildeInPath) == expanded
-        } ?? expanded
         return queue.sync {
+            let key = observations.keys.first { k in
+                ((k as NSString).expandingTildeInPath) == expanded
+            } ?? expanded
             guard let observation = observations[key] else { return nil }
             let age = Date().timeIntervalSince(observation.capturedAt)
             return age <= maxAge ? observation : nil
@@ -120,23 +133,70 @@ public final class StatusLineObserver: @unchecked Sendable {
 
     // MARK: - Connection handling
 
+    /// HTTP requests are not guaranteed to arrive in a single `receive`
+    /// callback: URLSession writes head and body separately, and larger
+    /// payloads span TCP segments (live proof 2026-09-21 — a single-read
+    /// server parsed an empty body). Accumulate until the declared
+    /// Content-Length is present (or the connection finishes / the cap is
+    /// hit), then respond once and process.
+    private static let maxRequestBytes = 1 << 20 // 1 MiB
+
     private func handleConnection(_ connection: NWConnection) {
         connection.start(queue: queue)
-        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, _, error in
-            defer {
-                let response = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
-                connection.send(
-                    content: response.data(using: .utf8),
-                    contentContext: .finalMessage,
-                    isComplete: true,
-                    completion: .contentProcessed { _ in connection.cancel() }
-                )
+        receiveChunk(in: connection, accumulated: Data())
+    }
+
+    private func receiveChunk(in connection: NWConnection, accumulated: Data) {
+        connection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
+            guard let self else { return }
+            var buffer = accumulated
+            if let data { buffer.append(data) }
+
+            if Self.isRequestComplete(buffer) || isComplete || error != nil
+                || buffer.count >= Self.maxRequestBytes
+            {
+                self.respondAndClose(connection)
+                self.processRequest(buffer)
+                return
             }
-            guard let self, let data, error == nil else { return }
-            self.processRequest(data)
+            self.receiveChunk(in: connection, accumulated: buffer)
         }
     }
 
+    /// True when the accumulated bytes contain the header terminator and,
+    /// when a `Content-Length` is declared, at least that many body bytes.
+    static func isRequestComplete(_ data: Data) -> Bool {
+        let marker = Data("\r\n\r\n".utf8)
+        guard let headerEnd = data.range(of: marker) else { return false }
+        guard let headerText = String(data: data[..<headerEnd.lowerBound], encoding: .utf8) else {
+            return true
+        }
+        guard let lengthLine = headerText.split(separator: "\r\n").first(where: {
+            $0.lowercased().hasPrefix("content-length:")
+        }) else {
+            return true // no declared body — headers suffice
+        }
+        guard let rawValue = lengthLine.split(separator: ":", maxSplits: 1).last,
+              let declared = Int(rawValue.trimmingCharacters(in: .whitespaces))
+        else {
+            return true
+        }
+        return data.count - headerEnd.upperBound >= declared
+    }
+
+    private func respondAndClose(_ connection: NWConnection) {
+        let response = "HTTP/1.1 200 OK\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        connection.send(
+            content: response.data(using: .utf8),
+            contentContext: .finalMessage,
+            isComplete: true,
+            completion: .contentProcessed { _ in connection.cancel() }
+        )
+    }
+
+    /// Runs on `queue` (called from `connection.receive`, itself started on
+    /// the queue) — no `queue.sync` for state mutation, same rule as the
+    /// listener callbacks above.
     private func processRequest(_ rawData: Data) {
         guard let rawString = String(data: rawData, encoding: .utf8) else { return }
         guard let separator = rawString.range(of: "\r\n\r\n") else { return }
@@ -150,9 +210,7 @@ public final class StatusLineObserver: @unchecked Sendable {
         do {
             if let observation = try ClaudeRateLimitObservation.parse(bodyData, configDir: configDir) {
                 let expanded = (configDir as NSString).expandingTildeInPath
-                queue.sync {
-                    observations[expanded] = observation
-                }
+                observations[expanded] = observation
             }
         } catch {
             AppLog.hooks.warning("StatusLine parse failed: \(error)")

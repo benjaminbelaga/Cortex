@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Observation
 import Domain
@@ -142,17 +143,115 @@ final class AccountCatalogModel {
     /// Reconnect for an existing dashboard row (router alias seat). Returns
     /// the live stream so the row can surface the typed outcome in place.
     func reconnect(providerId: String, alias: String) -> AsyncStream<EnrolmentState> {
-        guard let config = settingsRepository.accounts(forProvider: providerId).first(where: {
-            $0.accountId == alias || $0.probeConfig["routerAlias"] == alias || $0.label == alias
-        }) else {
+        guard let config = Self.matchAccount(
+            alias: alias,
+            providerId: providerId,
+            accounts: settingsRepository.accounts(forProvider: providerId)
+        ) else {
             return AsyncStream { continuation in
                 continuation.yield(.failed(AccountDescriptor(providerId: providerId, label: alias,
-                    profile: .none, source: .native), error: .underlying("Profil local introuvable. Ajoutez ce compte depuis le catalogue.")))
+                    profile: .none, source: .native), error: .underlying("Local profile not found. Add this account from the catalog.")))
                 continuation.finish()
             }
         }
         let descriptor = config.descriptor(providerId: providerId)
+        if ["claude", "codex"].contains(providerId), let routerAlias = config.probeConfig["routerAlias"] {
+            return routerSeatReconnect(providerId: providerId, config: config,
+                routerAlias: routerAlias, descriptor: descriptor)
+        }
         return enrolmentService.reconnect(account: descriptor)
+    }
+
+    /// The dashboard row carries the ROUTER account id (`claude-tech`) while
+    /// settings hold `accountId "tech"` + `routerAlias "TECH"` — the old
+    /// exact-string match dead-ended on that mismatch and the row showed only
+    /// "Erreur inattendue" (defect observed 2026-09-22). Match on the
+    /// de-prefixed, case-folded forms.
+    static func matchAccount(alias: String, providerId: String, accounts: [ProviderAccountConfig]) -> ProviderAccountConfig? {
+        let needle = normalizeAlias(alias, providerId: providerId)
+        guard !needle.isEmpty else { return nil }
+        return accounts.first { config in
+            [config.accountId, config.probeConfig["routerAlias"] ?? "", config.label]
+                .contains { normalizeAlias($0, providerId: providerId) == needle }
+        }
+    }
+
+    private static func normalizeAlias(_ raw: String, providerId: String) -> String {
+        var value = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        for prefix in ["\(providerId.lowercased())-", "\(providerId.lowercased())_"] where value.hasPrefix(prefix) {
+            value.removeFirst(prefix.count)
+        }
+        return value
+    }
+
+    /// A router seat (claude-swap / llm-router) is repaired by the FULL guided
+    /// sequence — login in the account's declared auth home, then `cswap add`
+    /// and the registrar — not by a bare CLI login that leaves the seat dead
+    /// (R14, design doc §"Gestes Ben restants": `cswap add` clears
+    /// `relogin_required`). The stream polls the live refresh until the seat
+    /// answers again, and reports a timeout instead of claiming success from a
+    /// launched terminal.
+    private func routerSeatReconnect(
+        providerId: String,
+        config: ProviderAccountConfig,
+        routerAlias: String,
+        descriptor: AccountDescriptor
+    ) -> AsyncStream<EnrolmentState> {
+        AsyncStream { continuation in
+            Task { @MainActor in
+                continuation.yield(.authRequired(descriptor, reason: .explicitReconnect))
+                continuation.yield(.loginInProgress(descriptor, stage: .launching))
+                let provider: AccountConnectRunner.Provider = providerId == "codex" ? .codex : .claude
+                let profile = config.probeConfig["claudeConfigDir"] ?? config.probeConfig["codexHome"]
+                let launch = await AccountConnectRunner.connect(
+                    provider: provider,
+                    alias: routerAlias,
+                    identity: config.email,
+                    profileOverride: profile
+                )
+                guard launch.succeeded else {
+                    continuation.yield(.failed(descriptor, error: .underlying(launch.message)))
+                    continuation.finish()
+                    return
+                }
+                continuation.yield(.loginInProgress(descriptor, stage: .waitingForUser))
+                let deadline = Date().addingTimeInterval(Self.routerSeatPollTimeout)
+                while Date() < deadline, !Task.isCancelled {
+                    do {
+                        if let observedAt = try await accountChanged(providerId, config.accountId) {
+                            continuation.yield(.quotaReceived(descriptor, observedAt: observedAt))
+                            continuation.finish()
+                            return
+                        }
+                    } catch {
+                        // A refresh failure is not the reconnect verdict — keep polling.
+                    }
+                    try? await Task.sleep(for: .seconds(5))
+                }
+                continuation.yield(.failed(descriptor, error: .timeout(afterSeconds: Self.routerSeatPollTimeout)))
+                continuation.finish()
+            }
+        }
+    }
+
+    private static let routerSeatPollTimeout: TimeInterval = 120
+
+    /// Whether a row's account exposes a copyable API key. Metadata-only: the
+    /// value itself is read only inside `apiKey(...)`, on the operator's click —
+    /// never during view rendering.
+    func canCopyAPIKey(providerId: String, accountId: String) -> Bool {
+        guard let config = settingsRepository.accounts(forProvider: providerId)
+            .first(where: { $0.accountId == accountId }) else { return false }
+        return config.probeConfig["credentialKey"] != nil || config.probeConfig["externalSlot"] != nil
+    }
+
+    /// The copyable key of one account, through the same references the probe
+    /// uses. nil when the account vanished or has no copyable key.
+    func apiKey(providerId: String, accountId: String) -> String? {
+        guard let config = settingsRepository.accounts(forProvider: providerId)
+            .first(where: { $0.accountId == accountId }) else { return nil }
+        return APIAccountCredentials.key(providerId: providerId, config: config, credentials: credentials,
+                                         homeDirectory: homeDirectory)
     }
 
     func present(providerId: String) {
@@ -160,13 +259,23 @@ final class AccountCatalogModel {
         isPresented = true
     }
 
-    /// Validate the key before storing it. The JSON settings receive only its Keychain reference.
+    /// Validate the key before storing it. The JSON settings receive only a reference
+    /// (pool slot for OpenCode Go / Ollama / Command Code, Keychain item otherwise).
     func addAPIAccount(providerId: String, label: String, apiKey: String) async {
-        guard !isValidatingKey, ["opencode-go", "commandcode"].contains(providerId) else { return }
+        guard !isValidatingKey, ProviderCatalog.apiKeyAccountIDs.contains(providerId) else { return }
         let label = label.trimmingCharacters(in: .whitespacesAndNewlines)
         let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !label.isEmpty, !key.isEmpty, !key.contains("*"), !key.contains(where: \.isWhitespace) else {
-            proposalError = "Saisissez un libellé et une clé API complète."
+            proposalError = "Enter a label and a complete API key."
+            return
+        }
+        // Same key twice = same subscription twice, never extra credit (bible R40).
+        // Compared in-process against every existing account, imported slots included.
+        if let existing = settingsRepository.accounts(forProvider: providerId).first(where: {
+            APIAccountCredentials.key(providerId: providerId, config: $0, credentials: credentials,
+                                      homeDirectory: homeDirectory) == key
+        }) {
+            proposalError = "Cette clé est déjà enregistrée (« \(existing.label) »)."
             return
         }
         isValidatingKey = true
@@ -177,18 +286,48 @@ final class AccountCatalogModel {
         do {
             let reading = try await probeAPIKey(providerId, key)
             try Task.checkCancellation()
+            // A different key of an already-enrolled identity is the same
+            // account again (CLI slot + console key), not a new subscription.
+            if let identity = reading.accountEmail?.lowercased(), !identity.isEmpty,
+               let twin = settingsRepository.accounts(forProvider: providerId)
+                   .first(where: { $0.email?.lowercased() == identity }) {
+                proposalError = "Ce compte est déjà suivi (« \(twin.label) »)."
+                return
+            }
+            // OpenCode Go, Ollama Cloud and Command Code keys join the shared
+            // failover pools so the CLIs rotate onto them too; Cortex then reads
+            // the slot (no Keychain prompt). Other providers keep a Keychain reference.
             let reference = "account.\(providerId).\(descriptor.uuid.uuidString)"
-            credentials.save(key, forKey: reference)
-            guard credentials.get(forKey: reference) == key else {
-                throw ProbeError.executionFailed("Impossible d’enregistrer la clé dans le Trousseau.")
+            let preserving: [String: String]
+            if providerId == "commandcode" {
+                // Command Code keys join the CLI failover pool (auth-pool.json).
+                let slot = try CommandCodeFailoverPool(loader: CommandCodeCredentialLoader(
+                    homeDirectory: homeDirectory, environment: [:])).enroll(label: label, key: key)
+                preserving = ["externalSlot": slot]
+            } else if providerId == "opencode-go" || providerId == "ollama" {
+                // Scoped to the model's home so tests never touch the real pool.
+                // Ollama keys feed the opencode `ollama-cloud` rotation (tier-2
+                // fallback target) and never need a Keychain prompt.
+                let loader = providerId == "ollama"
+                    ? OpenCodeCredentialLoader.ollamaCloud(homeDirectory: homeDirectory)
+                    : OpenCodeCredentialLoader(homeDirectory: homeDirectory)
+                let pool = OpenCodeFailoverPool(loader: loader)
+                let slot = try pool.enroll(label: label, key: key)
+                preserving = ["externalSlot": slot]
+            } else {
+                credentials.save(key, forKey: reference)
+                guard credentials.get(forKey: reference) == key else {
+                    throw ProbeError.executionFailed("Could not save the key in the Keychain.")
+                }
+                preserving = ["credentialKey": reference]
             }
             let config = ProviderAccountConfig.from(descriptor: descriptor,
                 accountId: descriptor.uuid.uuidString, email: reading.accountEmail,
-                preserving: ["credentialKey": reference])
+                preserving: preserving)
             settingsRepository.addAccount(config, forProvider: providerId)
             guard settingsRepository.accounts(forProvider: providerId).contains(where: { $0.accountId == config.accountId }) else {
-                credentials.delete(forKey: reference)
-                throw ProbeError.executionFailed("Impossible d’enregistrer le compte.")
+                if preserving["credentialKey"] != nil { credentials.delete(forKey: reference) }
+                throw ProbeError.executionFailed("Could not save the account.")
             }
             activateIntegration(providerId)
             _ = try await accountChanged(providerId, config.accountId)
@@ -196,6 +335,43 @@ final class AccountCatalogModel {
         } catch {
             proposalError = error.localizedDescription
         }
+    }
+
+    /// One-gesture enrolment: every "label line + key line" pair on the
+    /// pasteboard goes through `addAPIAccount` (same validation, dedupe, live
+    /// probe). The pasteboard is cleared once at least one key was added.
+    ///
+    /// `autoRoute` lets the global paste button send each key to the provider
+    /// its shape belongs to (`oc_…` → OpenCode Go, Ollama form → Ollama)
+    /// instead of forcing the caller to pick one provider up front.
+    func addAPIAccountsFromPasteboard(providerId: String, fallbackLabel: String, autoRoute: Bool = false) async {
+        guard let text = NSPasteboard.general.string(forType: .string) else {
+            proposalError = "Presse-papiers vide."
+            return
+        }
+        let entries = APIKeyPasteParser.parse(text, fallbackLabel: fallbackLabel)
+        guard !entries.isEmpty else {
+            proposalError = "No key found: copy the “label” then the key on the next line."
+            return
+        }
+        var added: [String] = []
+        var failures: [String] = []
+        for entry in entries {
+            let target = (autoRoute ? entry.providerHint : nil) ?? providerId
+            guard ProviderCatalog.apiKeyAccountIDs.contains(target) else {
+                failures.append("\(entry.label) : aucun fournisseur reconnu pour cette forme de clé")
+                continue
+            }
+            await addAPIAccount(providerId: target, label: entry.label, apiKey: entry.key)
+            if addedAccountLabel == entry.label {
+                added.append(entry.label)
+            } else {
+                failures.append("\(entry.label) : \(proposalError ?? "échec")")
+            }
+        }
+        if !added.isEmpty { NSPasteboard.general.clearContents() }
+        addedAccountLabel = added.isEmpty ? nil : added.joined(separator: ", ")
+        proposalError = failures.isEmpty ? nil : failures.joined(separator: " · ")
     }
 
     func removeAccount(providerId: String, accountId: String) async {
@@ -286,7 +462,7 @@ final class AccountCatalogModel {
     private static func proposalMessage(_ error: ProfileResolutionError) -> String {
         switch error {
         case .profileCollision:
-            return "Un autre compte possède déjà ce dossier — choisissez un autre libellé."
+            return "Another account already owns this folder — choose another label."
         case .unsupportedProvider(let providerId):
             return "Outil non pris en charge : \(providerId)."
         }

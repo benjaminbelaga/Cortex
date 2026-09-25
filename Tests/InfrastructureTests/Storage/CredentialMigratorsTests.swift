@@ -110,4 +110,18 @@ struct CredentialMigratorsTests {
         #expect(newDefaults.string(forKey: "other-key") == "old-other")
         #expect(oldDefaults.string(forKey: "migrated-key") == "old-value")
     }
+
+    @Test("migrator kill-switch skips only on the exact env value")
+    func killSwitchReadsEnvExactly() {
+        #expect(LegacyMigratorGate.shouldSkip(
+            environment: ["CORTEX_SKIP_LEGACY_MIGRATORS": "1"]
+        ))
+        #expect(!LegacyMigratorGate.shouldSkip(
+            environment: ["CORTEX_SKIP_LEGACY_MIGRATORS": "0"]
+        ))
+        #expect(!LegacyMigratorGate.shouldSkip(
+            environment: ["CORTEX_SKIP_LEGACY_MIGRATORS": "true"]
+        ))
+        #expect(!LegacyMigratorGate.shouldSkip(environment: [:]))
+    }
 }

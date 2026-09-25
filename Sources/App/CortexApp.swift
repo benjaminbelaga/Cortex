@@ -16,7 +16,7 @@ extension Notification.Name {
 }
 
 @main
-struct ClaudeBarApp: App {
+struct CortexApp: App {
     /// The main domain service - monitors all AI providers
     /// This is the single source of truth for providers and their state
     @State private var monitor: QuotaMonitor
@@ -102,28 +102,39 @@ struct ClaudeBarApp: App {
         // E4 bundle-id migration (non-destructive, idempotent): copy Keychain
         // items and UserDefaults keys from the legacy com.tddworks.claudebar
         // namespace. Old items are preserved; explicit new values win.
-        KeychainServiceMigrator.migrateIfNeeded()
-        UserDefaultsDomainMigrator.migrateIfNeeded()
+        // RC gate enabler: `CORTEX_SKIP_LEGACY_MIGRATORS=1` skips both reads
+        // (no system prompt on the real login keychain); default path unchanged.
+        if LegacyMigratorGate.shouldSkip() {
+            AppLog.credentials.notice(
+                "\(LegacyMigratorGate.skipEnvVar)=1 — legacy Keychain/UserDefaults migrators skipped (RC gate mode)"
+            )
+        } else {
+            KeychainServiceMigrator.migrateIfNeeded()
+            UserDefaultsDomainMigrator.migrateIfNeeded()
+        }
         // Seed known Claude profiles so each isolated config directory
         // (e.g. ~/.claude, ~/.claude-admin) appears as a separate account.
         // First-run discovery shells out per candidate — dispatched off the
         // init critical path (idempotent; B2 doctrine: never block startup).
         Task { @MainActor in
-            await ClaudeBarApp.seedClaudeAccountsIfNeeded(
+            await CortexApp.seedClaudeAccountsIfNeeded(
                 settingsRepository: settingsRepository
             )
         }
         // Backfill email on accounts that were seeded before the resolver
         // was wired (Ben 2026-08-19: dashboard couldn't tell which Claude
         // account was at 0% because the email was missing).
-        ClaudeBarApp.backfillClaudeAccountEmailsIfNeeded(settingsRepository: settingsRepository)
+        CortexApp.backfillClaudeAccountEmailsIfNeeded(settingsRepository: settingsRepository)
         // Site-specific row bindings (E1): remember the local router id and
         // extra tmux sockets detected on this machine. No-ops everywhere else.
         LegacyInstallMigration.seedLocalRouterIdIfNeeded(settingsRepository: settingsRepository)
         LegacyInstallMigration.seedTmuxSocketsIfNeeded(settingsRepository: settingsRepository)
         // Bake in the curated roster: hide niche native probe providers so a
         // fresh install stays curated. Keys already stored are never clobbered.
-        ClaudeBarApp.seedCuratedProviderDefaultsIfNeeded(settingsRepository: settingsRepository)
+        CortexApp.seedCuratedProviderDefaultsIfNeeded(settingsRepository: settingsRepository)
+        // v7.2: drop the removed `qwen-api` provider settings subtree (dead
+        // router id `qwen_cloud_payg`). Idempotent — no-op on a clean install.
+        QwenApiRemovalMigration.applyIfNeeded()
 
         // Détection machine : un registre llm-router présent garde la lecture
         // partagée (comportement historique de cette machine) ; une installation
@@ -162,7 +173,8 @@ struct ClaudeBarApp: App {
         let monitor = QuotaMonitor(
             providers: repository,
             alerter: quotaAlerter,
-            providerFactory: { composition.makeProvider(id: $0) }
+            providerFactory: { composition.makeProvider(id: $0) },
+            cortexExporter: CortexAccountsExporter()
         )
         self.monitor = monitor
         AppLog.monitor.info("QuotaMonitor initialized")
@@ -305,7 +317,7 @@ struct ClaudeBarApp: App {
             // Reconcile installed hooks so newly-added events (e.g.
             // UserPromptSubmit, which revives a stopped session) register for
             // existing users without re-toggling the setting. install() is
-            // idempotent — it replaces only ClaudeBar's own matcher entries
+            // idempotent — it replaces only Cortex's own matcher entries
             // per event and preserves hooks from other tools.
             if HookInstaller.isInstalled() {
                 try? HookInstaller.install()
@@ -328,7 +340,7 @@ struct ClaudeBarApp: App {
         // Note: Notification permission is requested in onAppear, not here
         // Menu bar apps need the run loop to be active before requesting permissions
 
-        AppLog.ui.info("ClaudeBar initialization complete")
+        AppLog.ui.info("Cortex initialization complete")
     }
 
     /// App settings for theme
@@ -349,10 +361,10 @@ struct ClaudeBarApp: App {
                 let events = try await hookServer.start()
                 AppLog.hooks.info("Hook server started, listening for events")
                 for await event in events {
-                    // Ignore ClaudeBar's own background quota probe so routine
+                    // Ignore Cortex's own background quota probe so routine
                     // polling doesn't spam "Claude Code Finished: Probe"
                     // notifications or pollute the recent-sessions list. (issue #172)
-                    guard !event.isClaudeBarProbe else { continue }
+                    guard !event.isCortexProbe else { continue }
                     await sessionMonitor.processEvent(event)
                     await sendSessionNotification(for: event)
                 }
@@ -478,7 +490,7 @@ struct ClaudeBarApp: App {
             "omp", "kiro", "ampcode",
             "grok", "cursor", "mistral", "deepseek", "vercel-gateway",
             // Optional connectors: available in the catalog, never auto-shown.
-            "qwen-api", "bedrock", "local",
+            "bedrock", "local",
         ]
         for id in disabledByDefault {
             // Key absent iff the two defaults disagree (each falls back to its own).

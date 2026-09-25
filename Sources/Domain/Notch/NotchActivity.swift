@@ -10,7 +10,7 @@ import Foundation
 /// Ordering is by how loudly the activity demands attention, so two activities
 /// of the same kind are order-equivalent without being equal.
 public enum NotchActivity: Sendable, Equatable {
-    /// Nothing is happening, so the notch does the job ClaudeBar exists for:
+    /// Nothing is happening, so the notch does the job Cortex exists for:
     /// shows how much of the quota the user chose to watch is left.
     ///
     /// This is the resting state, not an absence of one. A notch that goes

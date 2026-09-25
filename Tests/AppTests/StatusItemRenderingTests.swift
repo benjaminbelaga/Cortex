@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 import Testing
-@testable import ClaudeBar
+@testable import Cortex
 @testable import Domain
 
 @Suite("Status item rendering")
@@ -10,9 +10,9 @@ struct StatusItemRenderingTests {
     @Test("build provenance reads full SHA UTC timestamp and clean marker")
     func buildProvenanceReadsStampedValues() {
         let provenance = BuildProvenance(infoDictionary: [
-            "ClaudeBarGitSHA": "0123456789abcdef0123456789abcdef01234567",
-            "ClaudeBarBuildUTC": "2026-08-21T08:00:00Z",
-            "ClaudeBarGitDirty": false,
+            "CortexGitSHA": "0123456789abcdef0123456789abcdef01234567",
+            "CortexBuildUTC": "2026-08-21T08:00:00Z",
+            "CortexGitDirty": false,
         ])
 
         #expect(provenance.gitSHA.count == 40)

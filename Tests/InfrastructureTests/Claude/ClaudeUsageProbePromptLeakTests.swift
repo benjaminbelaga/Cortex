@@ -7,7 +7,7 @@ import Foundation
 /// prompts, settings dialogs, ANSI-mangled redraw fragments) leaking into
 /// parsed fields and rendering in the menu bar.
 ///
-/// Fixtures mirror payloads captured in ~/Library/Logs/ClaudeBar/ClaudeBar.log
+/// Fixtures mirror payloads captured in ~/Library/Logs/Cortex/Cortex.log
 /// on 2026-08-18: the Chrome-extension onboarding prompt and the
 /// settings-validation dialog both appeared in place of the usage table.
 @Suite

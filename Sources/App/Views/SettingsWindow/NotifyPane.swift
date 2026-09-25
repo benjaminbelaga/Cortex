@@ -141,7 +141,7 @@ struct NotifyPane: View {
                 // read that as "in the Keychain", so where it actually went is
                 // said out loud rather than left to be assumed.
                 statusText(
-                    "Stored in ClaudeBar's app credentials rather than the Keychain, which refuses builds that are not signed with a developer identity.",
+                    "Stored in Cortex's app credentials rather than the Keychain, which refuses builds that are not signed with a developer identity.",
                     tone: theme.textTertiary
                 )
                 .padding(.top, 6)
@@ -308,7 +308,7 @@ struct NotifyPane: View {
     /// carries the full sentence, including what to paste instead, because that
     /// is where the problem is and where the user is looking while pasting. The
     /// publish card carries only the short form, because a dimmed switch whose
-    /// explanation sits in another card reads as a bug in ClaudeBar, while four
+    /// explanation sits in another card reads as a bug in Cortex, while four
     /// copies of a long sentence reads as a wall of text.
     private func unsupportedReasonLine(_ reason: String, isProminent: Bool = false) -> some View {
         HStack(alignment: .top, spacing: 5) {
@@ -661,7 +661,7 @@ struct NotifyPane: View {
         // actually on file before it congratulates anyone.
         guard hasDeviceToken else {
             verifyOutcome = NotifyActionOutcome(
-                message: "Could not store the token on this Mac. Check Console for a Keychain error from ClaudeBar, and try again.",
+                message: "Could not store the token on this Mac. Check Console for a Keychain error from Cortex, and try again.",
                 isFailure: true
             )
             return

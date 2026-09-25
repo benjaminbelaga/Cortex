@@ -4,7 +4,7 @@ import Foundation
 /// enforces the same rules at construction instead of hoping the caller did.
 ///
 /// The gateway rejects an oversized string with a 400 naming the field, and
-/// clamps an out of range number rather than rejecting it. ClaudeBar does both
+/// clamps an out of range number rather than rejecting it. Cortex does both
 /// itself: a quota label that happens to be long should shorten, never fail to
 /// reach the phone.
 public enum NotifyLimits {

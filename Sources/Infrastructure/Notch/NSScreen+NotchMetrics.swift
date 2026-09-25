@@ -19,7 +19,7 @@ public extension NSScreen {
         )
     }
 
-    /// The display ClaudeBar draws its notch on: the one with a real cutout if
+    /// The display Cortex draws its notch on: the one with a real cutout if
     /// there is one, otherwise the main display.
     static var preferredNotchScreen: NSScreen? {
         screens.first { $0.safeAreaInsets.top > 0 } ?? main ?? screens.first

@@ -77,6 +77,31 @@ public protocol AppSettingsRepository: Sendable {
     func overviewSort() -> OverviewSort
     func setOverviewSort(_ sort: OverviewSort)
 
+    /// Multi-account provider groups the user collapsed/expanded in the overview.
+    /// Absent id = collapsed (the default keeps the list synthetic).
+    func overviewExpandedGroups() -> Set<String>
+    func setOverviewExpandedGroups(_ ids: Set<String>)
+
+    /// Preferred model families per overview row id (`provider` or `provider|account`).
+    /// A display preference, never a routing guarantee (bible §6).
+    func preferredModels() -> [String: [String]]
+    func setPreferredModels(_ map: [String: [String]])
+
+    /// Provider-level preferred LLM (Settings → provider): one family id per
+    /// provider id, shown ONCE on the provider's group header. A display
+    /// preference, never a routing guarantee (bible §6).
+    func providerPreferredModel() -> [String: String]
+    func setProviderPreferredModel(_ map: [String: String])
+
+    /// Selected "Priority" recommendation profile (plan / execute / flexible).
+    /// Stored as the raw string; defaults to `.plan`.
+    func routeProfile() -> RouterRouteNow.Profile
+    func setRouteProfile(_ profile: RouterRouteNow.Profile)
+
+    /// Whether the "Priority" card is expanded (default: collapsed).
+    func priorityCardExpanded() -> Bool
+    func setPriorityCardExpanded(_ expanded: Bool)
+
     /// What the menu-bar glyph shows (text / running cat / both).
     func menuBarGlyphMode() -> MenuBarGlyphMode
     func setMenuBarGlyphMode(_ mode: MenuBarGlyphMode)

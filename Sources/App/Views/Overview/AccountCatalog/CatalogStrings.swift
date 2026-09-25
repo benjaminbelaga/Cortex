@@ -11,14 +11,14 @@ enum CatalogStrings {
 
     static func title(for state: EnrolmentState) -> String {
         switch state {
-        case .profileDetected: return "Profil détecté"
+        case .profileDetected: return "Profile detected"
         case .authRequired: return "Connexion requise"
         case .loginInProgress: return "Connexion en cours…"
-        case .identityConfirmed: return "Identité confirmée"
-        case .quotaPending: return "Connecté · quotas en attente"
-        case .quotaReceived: return "Compte suivi"
-        case .failed: return "Échec de l'enrôlement"
-        case .cancelled: return "Annulé"
+        case .identityConfirmed: return "Identity confirmed"
+        case .quotaPending: return "Connected · quotas pending"
+        case .quotaReceived: return "Tracked account"
+        case .failed: return "Enrolment failed"
+        case .cancelled: return "Cancelled"
         }
     }
 
@@ -31,9 +31,9 @@ enum CatalogStrings {
         case .loginInProgress(_, let stage):
             return stageLabel(stage)
         case .identityConfirmed(_, let identity):
-            return IdentityMasking.mask(identity.email) ?? "identité vérifiée"
+            return IdentityMasking.mask(identity.email) ?? "identity verified"
         case .quotaPending:
-            return "Premier relevé pas encore reçu — l'état est valide, pas une erreur."
+            return "First reading not received yet — the state is valid, not an error."
         case .quotaReceived(_, let observedAt):
             let formatter = RelativeDateTimeFormatter()
             formatter.unitsStyle = .abbreviated
@@ -41,7 +41,7 @@ enum CatalogStrings {
         case .failed(_, let error):
             return detail(for: error)
         case .cancelled:
-            return "Rien n'a été enregistré."
+            return "Nothing was saved."
         }
     }
 
@@ -50,12 +50,12 @@ enum CatalogStrings {
     static func title(for error: EnrolmentError) -> String {
         switch error {
         case .dependencyMissing(let tool): return "Outil introuvable : \(tool)"
-        case .loginFailed: return "Échec de la connexion"
-        case .identityMismatch: return "Identité différente de celle attendue"
-        case .profileCollision: return "Un autre compte possède déjà ce dossier"
-        case .registryRejected: return "Enregistrement routeur refusé"
-        case .timeout: return "Délai dépassé"
-        case .cancelled: return "Annulé"
+        case .loginFailed: return "Connection failed"
+        case .identityMismatch: return "Identity differs from expected"
+        case .profileCollision: return "Another account already owns this folder"
+        case .registryRejected: return "Router registration refused"
+        case .timeout: return "Timed out"
+        case .cancelled: return "Cancelled"
         case .underlying: return "Erreur inattendue"
         }
     }
@@ -65,13 +65,13 @@ enum CatalogStrings {
         case .dependencyMissing(let tool):
             return "Installez \(tool) puis réessayez."
         case .loginFailed(_, let stderrTail):
-            return stderrTail.isEmpty ? "La commande de connexion a échoué." : stderrTail
+            return stderrTail.isEmpty ? "The connection command failed." : stderrTail
         case .identityMismatch(let expected, let actual):
             var line = "Identité relue : \(IdentityMasking.mask(actual) ?? actual)."
             if let expected {
                 line += " Attendue : \(IdentityMasking.mask(expected) ?? expected)."
             }
-            return line + " Rien n'a été enregistré — gardez l'identité relue en réessayant sans saisie."
+            return line + " Nothing was saved — keep the re-read identity by retrying without input."
         case .profileCollision(let path):
             return path
         case .registryRejected(let reason):
@@ -89,28 +89,28 @@ enum CatalogStrings {
 
     static func reasonLabel(_ reason: AuthReason) -> String {
         switch reason {
-        case .neverAuthenticated: return "Jamais connecté"
-        case .refreshTokenExpired: return "Session expirée"
-        case .credentialsRevoked: return "Identifiants révoqués"
-        case .explicitReconnect: return "Reconnexion demandée"
+        case .neverAuthenticated: return "Never connected"
+        case .refreshTokenExpired: return "Session expired"
+        case .credentialsRevoked: return "Credentials revoked"
+        case .explicitReconnect: return "Reconnect requested"
         }
     }
 
     static func stageLabel(_ stage: LoginStage) -> String {
         switch stage {
-        case .launching: return "Ouverture du terminal…"
-        case .waitingForUser: return "En attente de votre login dans le terminal"
-        case .pollingIdentity: return "Lecture de l'identité vérifiée…"
+        case .launching: return "Opening terminal…"
+        case .waitingForUser: return "Waiting for your login in the terminal"
+        case .pollingIdentity: return "Reading verified identity…"
         }
     }
 
     // MARK: - Sections
 
-    static let accountsSectionTitle = "Ajouter un compte"
-    static let connectionsSectionTitle = "Ajouter une connexion"
-    static let searchAction = "Rechercher des comptes"
+    static let accountsSectionTitle = "Add account"
+    static let connectionsSectionTitle = "Add a connection"
+    static let searchAction = "Find accounts"
     static let followAction = "Suivre"
-    static let newAccountAction = "Créer le compte"
-    static let activateAction = "Activer"
-    static let activeLabel = "Activée"
+    static let newAccountAction = "Create account"
+    static let activateAction = "Enable"
+    static let activeLabel = "Enabled"
 }

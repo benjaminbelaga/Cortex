@@ -59,7 +59,7 @@ struct GeminiAPIProbeTests {
 
         // Setup mocks: loadCodeAssist returns the cloudaicompanionProject, then
         // retrieveUserQuota returns model buckets. This mirrors how gemini-cli
-        // bootstraps a session, which is the path ClaudeBar must follow to get
+        // bootstraps a session, which is the path Cortex must follow to get
         // accurate per-user quota for personal-OAuth users.
         let projectsResponse = """
         { "cloudaicompanionProject": "alien-superstate-rq4hk" }

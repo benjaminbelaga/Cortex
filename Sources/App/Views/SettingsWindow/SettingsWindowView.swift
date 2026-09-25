@@ -69,7 +69,7 @@ struct SettingsWindowView: View {
         .frame(minWidth: 760, minHeight: 520)
         .background(TouchBarWindowAccessor())
         .touchBar {
-            ClaudeBarNativeTouchBar(monitor: monitor)
+            CortexNativeTouchBar(monitor: monitor)
         }
         // The hooks toggle posts this from HooksPane; the app's start/stop
         // closure must run even while the menu bar popover is closed.

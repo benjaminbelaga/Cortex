@@ -65,7 +65,7 @@ public struct LLMRouterSuggestionClient: Sendable {
     public func suggest(mission: String, load: MissionLoad) async throws -> MissionSuggestion {
         let trimmed = mission.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            throw RouterQuotaIssue("Décris d’abord la mission")
+            throw RouterQuotaIssue("Describe the mission first")
         }
         guard let executable = executableResolver() else {
             throw RouterQuotaIssue("llm-router executable was not found")
@@ -116,7 +116,7 @@ public struct LLMRouterSuggestionClient: Sendable {
             )
         }
         guard !candidates.isEmpty else {
-            throw RouterQuotaIssue("Aucune route lançable n’est disponible")
+            throw RouterQuotaIssue("No launchable route available")
         }
         return MissionSuggestion(
             missionId: wire.missionId,

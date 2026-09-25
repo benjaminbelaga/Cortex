@@ -212,6 +212,25 @@ struct OverviewBuilderTests {
         #expect(allSorted.map(\.id) == ["c", "b", "a"])
     }
 
+    @Test("sort keeps accounts of one provider adjacent while groups stay severity-ordered")
+    func sortKeepsAccountsOfOneProviderAdjacent() {
+        func row(_ id: String, _ providerId: String, percent: Double) -> ProviderSnapshot {
+            ProviderSnapshot(id: id, providerId: providerId, providerName: providerId, accountLabel: nil, windows: [
+                WindowSnapshot(id: "\(id)-5h", title: "5h", percentRemaining: percent, resetsAt: nil, compactReset: "1h", scope: .session),
+            ])
+        }
+        let input = [
+            row("opencode-go|compte-1", "opencode-go", percent: 65),
+            row("kimi", "kimi", percent: 100),
+            row("opencode-go|compte-2", "opencode-go", percent: 30),
+            row("codex", "codex", percent: 63),
+        ]
+
+        let sorted = OverviewBuilder.sort(input, by: .percentRemaining, filter: .session)
+
+        #expect(sorted.map(\.id) == ["opencode-go|compte-1", "opencode-go|compte-2", "codex", "kimi"])
+    }
+
     @Test("sort by time to reset is soonest first with unknowns last")
     func sortByTimeToResetIsSoonestFirstWithUnknownsLast() {
         let soon = ProviderSnapshot(id: "soon", providerId: "soon", providerName: "S", accountLabel: nil, windows: [

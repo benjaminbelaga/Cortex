@@ -47,16 +47,16 @@ struct AccountManagementCard: View {
                         .stroke(theme.glassBorder, lineWidth: 1)
                 )
         )
-        .confirmationDialog("Retirer ce compte de Cortex ?", isPresented: Binding(
+        .confirmationDialog("Remove this account from Cortex?", isPresented: Binding(
             get: { accountToRemove != nil }, set: { if !$0 { accountToRemove = nil } }
         )) {
             if let account = accountToRemove {
-                Button("Retirer \(account.displayName)", role: .destructive) {
+                Button("Remove \(account.displayName)", role: .destructive) {
                     Task { await catalog.removeAccount(providerId: provider.id, accountId: account.accountId) }
                 }
             }
         } message: {
-            Text("Le profil de votre outil reste intact. Seule la clé ajoutée dans Cortex est retirée du Trousseau.")
+            Text("Your tool profile stays intact. Only the key added in Cortex is removed from the Keychain.")
         }
         .sheet(isPresented: $showAddSheet) {
             AccountCatalogView(model: catalog) { showAddSheet = false }
@@ -173,7 +173,14 @@ struct AccountManagementCard: View {
         }
         .padding(.vertical, 4)
         .contextMenu {
-            Button("Retirer du suivi", role: .destructive) { accountToRemove = account }
+            if catalog.canCopyAPIKey(providerId: provider.id, accountId: account.accountId) {
+                Button("Copy API key") {
+                    if let key = catalog.apiKey(providerId: provider.id, accountId: account.accountId) {
+                        SecretClipboard.copy(key)
+                    }
+                }
+            }
+            Button("Remove from tracking", role: .destructive) { accountToRemove = account }
         }
     }
 

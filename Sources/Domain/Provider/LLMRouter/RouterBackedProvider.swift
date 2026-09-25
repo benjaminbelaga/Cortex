@@ -1,12 +1,12 @@
 import Foundation
 import Observation
 
-/// A first-class ClaudeBar provider backed by one entry in llm-router's v2
+/// A first-class Cortex provider backed by one entry in llm-router's v2
 /// snapshot. All instances share a single `RouterQuotaSnapshotProviding`
 /// client, so a refresh cycle executes the expensive CLI command only once.
 @MainActor
 @Observable
-public final class RouterBackedProvider: AIProvider, MultiAccountProvider, GroupErrorReporting, ClaudeSupplementProviding, RouterResourceReporting, AccountStateReporting {
+public final class RouterBackedProvider: AIProvider, MultiAccountProvider, GroupErrorReporting, ClaudeSupplementProviding, RouterResourceReporting, RouterTimeStateReporting, AccountStateReporting, AccountErrorClassReporting {
     /// The exact inline message for a disconnected account. The overview row
     /// matches on it to render a "Connecter" button instead of dead text.
     public static let reconnectMessage = "Reconnexion requise"
@@ -32,6 +32,22 @@ public final class RouterBackedProvider: AIProvider, MultiAccountProvider, Group
     public var routerResource: RouterProviderQuota? {
         quotaSnapshot?.providers[routerProviderId]
     }
+    /// The router's time-tariff state, taken from the `route_now` profiles
+    /// (they agree on the hour rule). `execute` first, then `plan`, then
+    /// `flexible` — the same default the priority card leads with.
+    public var routerTimeState: RouterTimeState? {
+        guard let routeNow = quotaSnapshot?.routeNow else { return nil }
+        let rec = routeNow.recommendation(for: .execute)
+            ?? routeNow.recommendation(for: .plan)
+            ?? routeNow.recommendation(for: .flexible)
+        guard let rec else { return nil }
+        return RouterTimeState(
+            state: rec.timeState,
+            multiplier: rec.timeMultiplier,
+            nextBetterSlot: rec.nextBetterSlot,
+            promoExpiry: rec.promoExpiry
+        )
+    }
     public private(set) var lastError: Error?
 
     public private(set) var accounts: [ProviderAccount] = []
@@ -42,6 +58,9 @@ public final class RouterBackedProvider: AIProvider, MultiAccountProvider, Group
     /// `present`/`auth_state` fields — replaces the error-string heuristics
     /// that used to decide reconnect affordances.
     public private(set) var accountAuthStates: [String: AccountAuthState] = [:]
+    /// Typed error class per account (from the router snapshot) — the row maps
+    /// it to a French label, keeping the raw error string for the tooltip.
+    public private(set) var accountErrorClasses: [String: String] = [:]
 
     /// Router-backed accounts refresh together through one shared snapshot,
     /// so the per-account lifecycle is derived from the provider-level state.
@@ -58,10 +77,13 @@ public final class RouterBackedProvider: AIProvider, MultiAccountProvider, Group
                 // hiding the row. Only a cold account (no cached snapshot yet)
                 // renders the syncing placeholder.
                 states[account.accountId] = .ready
+            } else if let message = lastGroupErrors[account.accountId] {
+                // A known verdict outranks a refresh in flight: the last
+                // collection FAILED, and re-arming "Syncing…" on every popover
+                // open would hide that (Ben 2026-09-22).
+                states[account.accountId] = .failed(message: message)
             } else if isSyncing {
                 states[account.accountId] = .refreshing
-            } else if let message = lastGroupErrors[account.accountId] {
-                states[account.accountId] = .failed(message: message)
             } else {
                 states[account.accountId] = .idle
             }
@@ -199,7 +221,7 @@ public final class RouterBackedProvider: AIProvider, MultiAccountProvider, Group
     }
 
     /// Account membership is owned by the upstream credential tools, not by
-    /// ClaudeBar. Authentication actions therefore never mutate this roster.
+    /// Cortex. Authentication actions therefore never mutate this roster.
     public func addAccount(_ config: ProviderAccountConfig) -> Bool { false }
 
     @discardableResult
@@ -230,6 +252,7 @@ public final class RouterBackedProvider: AIProvider, MultiAccountProvider, Group
         var newSnapshots: [String: UsageSnapshot] = [:]
         var newErrors: [String: String] = [:]
         var newAuthStates: [String: AccountAuthState] = [:]
+        var newErrorClasses: [String: String] = [:]
 
         if provider.accounts.isEmpty {
             let account = ProviderAccount(providerId: id, label: name)
@@ -246,6 +269,9 @@ public final class RouterBackedProvider: AIProvider, MultiAccountProvider, Group
             }
             if let error = provider.error {
                 newErrors[account.accountId] = error
+            }
+            if let errorClass = provider.errorClass {
+                newErrorClasses[account.accountId] = errorClass
             }
             newAuthStates[account.accountId] = provider.error == nil ? .connected : .unknown
         } else {
@@ -271,6 +297,9 @@ public final class RouterBackedProvider: AIProvider, MultiAccountProvider, Group
                     authState = .connected
                 }
                 newAuthStates[accountId] = authState
+                if let errorClass = routerAccount.errorClass ?? provider.errorClass {
+                    newErrorClasses[accountId] = errorClass
+                }
 
                 // A standby account (`!active`) KEEPS its reading — "En veille"
                 // is a warning, not data loss. The reading is flagged stale
@@ -313,9 +342,9 @@ public final class RouterBackedProvider: AIProvider, MultiAccountProvider, Group
                     // slot. This is the NORMAL single-active model, not a
                     // failure — never render "Account is disabled" for a healthy
                     // standby account (was the alarming banner Ben saw).
-                    messages.append("En veille — actif sur un autre compte")
+                    messages.append("Standby — active on another account")
                 }
-                if routerAccount.stale { messages.append("Lecture obsolète") }
+                if routerAccount.stale { messages.append("Stale reading") }
                 if let error = routerAccount.error { messages.append(error) }
                 if !messages.isEmpty {
                     newErrors[accountId] = Array(Set(messages)).sorted().joined(separator: "; ")
@@ -346,6 +375,7 @@ public final class RouterBackedProvider: AIProvider, MultiAccountProvider, Group
         accountSnapshots = newSnapshots
         lastGroupErrors = newErrors
         accountAuthStates = newAuthStates
+        accountErrorClasses = newErrorClasses
 
         let persisted = settingsRepository.activeAccountId(forProvider: id)
         let preferred = persisted.flatMap { wanted in

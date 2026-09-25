@@ -109,4 +109,94 @@ struct CommandCodeCredentialLoaderTests {
 
         #expect(loader.authFilePath == "/tmp/home/.commandcode/auth.json")
     }
+
+    // MARK: - Failover pool
+
+    private func writePoolFile(at directory: URL, json: String) throws {
+        let commandCodeDir = directory.appendingPathComponent(".commandcode", isDirectory: true)
+        try FileManager.default.createDirectory(at: commandCodeDir, withIntermediateDirectories: true)
+        try Data(json.utf8).write(to: commandCodeDir.appendingPathComponent("auth-pool.json"))
+    }
+
+    @Test
+    func `pool is the primary first, then siblings deduped by key`() throws {
+        let tempDir = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        try writeAuthFile(at: tempDir, json: #"{ "apiKey": "user_primary" }"#)
+        try writePoolFile(at: tempDir, json: #"""
+        { "accounts": [
+            { "label": "compte-4", "key": "user_sib1" },
+            { "label": "principal précédent", "key": "user_primary" },
+            { "label": "compte principal précédent", "key": "user_sib2" }
+        ] }
+        """#)
+
+        let loader = CommandCodeCredentialLoader(homeDirectory: tempDir.path, environment: [:])
+        let pool = loader.loadPool()
+
+        // The sibling that repeats the primary key is dropped (dedupe by key);
+        // the diacritic label folds to a stable ASCII slot.
+        #expect(pool.map(\.slot) == ["cli", "pool:compte-4", "pool:compte-principal-precedent"])
+        #expect(pool.map(\.key) == ["user_primary", "user_sib1", "user_sib2"])
+        #expect(pool.count == 3)
+        #expect(pool.first?.label == nil)
+        #expect(pool[1].label == "compte-4")
+    }
+
+    @Test
+    func `pool env key wins and stays a single entry`() throws {
+        let tempDir = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        try writeAuthFile(at: tempDir, json: #"{ "apiKey": "user_primary" }"#)
+        try writePoolFile(at: tempDir, json: #"{ "accounts": [{ "label": "compte-4", "key": "user_sib1" }] }"#)
+
+        let loader = CommandCodeCredentialLoader(
+            homeDirectory: tempDir.path,
+            environment: ["COMMAND_CODE_API_KEY": "user_env"]
+        )
+        let pool = loader.loadPool()
+
+        #expect(pool.map(\.slot) == ["env"])
+        #expect(pool.first?.key == "user_env")
+    }
+
+    @Test
+    func `pool without the pool file returns the primary only`() throws {
+        let tempDir = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        try writeAuthFile(at: tempDir, json: #"{ "apiKey": "user_primary" }"#)
+
+        let loader = CommandCodeCredentialLoader(homeDirectory: tempDir.path, environment: [:])
+
+        #expect(loader.loadPool().map(\.slot) == ["cli"])
+    }
+
+    @Test
+    func `pool tolerates a bare array and skips empty keys`() throws {
+        let tempDir = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        try writeAuthFile(at: tempDir, json: #"{ "apiKey": "user_primary" }"#)
+        try writePoolFile(at: tempDir, json: #"""
+        [ { "label": "compte-4", "key": "user_sib1" },
+          { "label": "vide", "key": "   " } ]
+        """#)
+
+        let loader = CommandCodeCredentialLoader(homeDirectory: tempDir.path, environment: [:])
+
+        #expect(loader.loadPool().map(\.key) == ["user_primary", "user_sib1"])
+    }
+
+    @Test
+    func `pool without any credential is empty`() throws {
+        let tempDir = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let loader = CommandCodeCredentialLoader(homeDirectory: tempDir.path, environment: [:])
+
+        #expect(loader.loadPool().isEmpty)
+    }
 }

@@ -21,19 +21,19 @@ struct FeaturesPane: View {
 
     var body: some View {
         SettingsPane(
-            title: "Fonctionnalités",
-            subtitle: "Choisissez ce que Cortex suit et ce qu'il affiche. Masquer n'arrête pas la collecte ; arrêter le suivi n'efface pas les données déjà lues."
+            title: "Features",
+            subtitle: "Choose what Cortex tracks and what it shows. Hiding does not stop collection; stopping tracking does not erase data already read."
         ) {
             if let activationError {
                 errorBanner(activationError)
             }
             modulesCard
             toolsCard(
-                title: "OUTILS ET COMPTES SUIVIS",
+                title: "TRACKED TOOLS AND ACCOUNTS",
                 descriptors: ProviderCatalog.all.filter { !$0.isOptional }
             )
             toolsCard(
-                title: "CONNEXIONS À ACTIVER",
+                title: "CONNECTIONS TO ENABLE",
                 descriptors: ProviderCatalog.all.filter { $0.isOptional }
             )
             sessionsCard
@@ -89,8 +89,8 @@ struct FeaturesPane: View {
                         ))
                         .help(
                             descriptor.isOptional
-                                ? "Suivre cette connexion : Cortex l'instancie et lance une collecte immédiatement."
-                                : "Suivre cette connexion. La désactiver arrête la collecte et les alertes, sans effacer le dernier relevé."
+                                ? "Follow this connection: Cortex instantiates it and starts a collection immediately."
+                                : "Follow this connection. Disabling it stops collection and alerts without erasing the last reading."
                         )
                     }
                 }
@@ -104,10 +104,10 @@ struct FeaturesPane: View {
         let labels: [(ProviderCapability, String)] = [
             (.quota, "quotas"),
             (.accounts, "comptes"),
-            (.discovery, "détection"),
+            (.discovery, "detection"),
             (.sessions, "sessions"),
             (.history, "historique"),
-            (.costEstimate, "coûts"),
+            (.costEstimate, "costs"),
             (.reconnect, "reconnexion"),
         ]
         let names = labels.filter { descriptor.capabilities.contains($0.0) }.map(\.1)
@@ -127,14 +127,14 @@ struct FeaturesPane: View {
             SettingsFieldLabel(text: "SESSIONS")
                 .padding(.bottom, 4)
 
-            Text("Choisissez les outils dont les sessions sont affichées. Un outil masqué reste suivi pour ses quotas.")
+            Text("Choose which tools' sessions are shown. A hidden tool is still tracked for its quotas.")
                 .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
                 .foregroundStyle(theme.textTertiary)
                 .padding(.bottom, 8)
 
             ForEach(Array(sessionTools.enumerated()), id: \.element.id) { index, descriptor in
                 if index > 0 { SettingsRowDivider() }
-                SettingsRow(title: descriptor.name, subtitle: "sessions détectées localement") {
+                SettingsRow(title: descriptor.name, subtitle: "sessions detected locally") {
                     SettingsSegmentedControl(
                         options: ModuleVisibility.allCases,
                         label: { $0.displayLabel },
@@ -147,7 +147,7 @@ struct FeaturesPane: View {
 
             SettingsRow(
                 title: "Sous-agents",
-                subtitle: "Compter les sous-agents sous leur session principale, avec un compteur séparé."
+                subtitle: "Count sub-agents under their main session, with a separate counter."
             ) {
                 SettingsSegmentedControl(
                     options: [ModuleVisibility.visible, .hidden],
@@ -169,16 +169,16 @@ struct FeaturesPane: View {
 
     private var advancedCard: some View {
         SettingsCard {
-            SettingsFieldLabel(text: "INTÉGRATIONS AVANCÉES")
+            SettingsFieldLabel(text: "ADVANCED INTEGRATIONS")
                 .padding(.bottom, 8)
 
             SettingsRow(
                 title: "Routeur llm-router",
                 subtitle: routerPresent
-                    ? "Détecté — les lignes routeur lisent le snapshot partagé."
-                    : "Absent — Cortex sonde nativement les outils installés."
+                    ? "Detected — router rows read the shared snapshot."
+                    : "Absent — Cortex natively probes installed tools."
             ) {
-                Text(routerPresent ? "Détecté" : "Absent")
+                Text(routerPresent ? "Detected" : "Absent")
                     .font(.system(size: 11, weight: .semibold, design: theme.fontDesign))
                     .foregroundStyle(routerPresent ? theme.statusHealthy : theme.textTertiary)
             }
@@ -186,8 +186,8 @@ struct FeaturesPane: View {
             SettingsRowDivider()
 
             SettingsRow(
-                title: "Détection automatique",
-                subtitle: "Cortex détecte au démarrage, au réveil et sur demande. Un outil installé seul reste une suggestion ; une configuration ou un usage constaté le rend visible."
+                title: "Automatic detection",
+                subtitle: "Cortex detects on launch, on wake and on demand. A tool installed alone stays a suggestion; a configured or observed usage makes it visible."
             ) {
                 Text("Active")
                     .font(.system(size: 11, weight: .semibold, design: theme.fontDesign))
@@ -213,18 +213,19 @@ struct FeaturesPane: View {
         RouterSourceModeMigration.routerRegistryPresent()
     }
 
-    /// Lecture seule du SSOT de bascule (mapping clé → compte, quarantaine
-    /// partagée) : Cortex montre l'état réel sans dupliquer le fichier.
+    /// Lecture seule de la chaîne de secours réelle (Go → Ollama) via le même
+    /// lecteur que la carte de la fiche reset : Cortex montre l'état vivant
+    /// (sert maintenant, quarantaines, tier2) sans dupliquer le fichier.
     private var failoverSummary: String? {
-        let path = ("~/.config/opencode/failover-ssot.json" as NSString).expandingTildeInPath
-        guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
-              let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let tier1 = root["tier1"] as? [String: Any] else {
-            return nil
-        }
-        let slots = (tier1["slots"] as? [String]) ?? []
-        let minKeys = (tier1["min_keys"] as? Int) ?? 2
-        return "\(slots.count) comptes déclarés (minimum \(minKeys) pour basculer) · quarantaine partagée entre processus"
+        let state = FailoverChainReader().read()
+        guard !state.slots.isEmpty else { return nil }
+        var parts: [String] = []
+        parts.append("\(state.goSlots.count) compte\(state.goSlots.count > 1 ? "s" : "") Go")
+        if let serving = state.servingGo { parts.append("sert : \(serving.label)") }
+        let benched = state.slots.filter(\.isQuarantined).count
+        if benched > 0 { parts.append("\(benched) en quarantaine") }
+        parts.append(state.ollamaArmed ? "Ollama armed" : "Ollama off")
+        return parts.joined(separator: " · ")
     }
 
     // MARK: - Actions

@@ -46,7 +46,7 @@ struct SessionTimelineTests {
         let monitor = SessionMonitor()
         monitor.processEvent(SessionEvent(
             sessionId: "p", eventName: .postCompact,
-            cwd: "/Users/tester/Library/Application Support/ClaudeBar/Probe"
+            cwd: "/Users/tester/Library/Application Support/Cortex/Probe"
         ))
         #expect(monitor.recentNotableEvents.isEmpty)
     }

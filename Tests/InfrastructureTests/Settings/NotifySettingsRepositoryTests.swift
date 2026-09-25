@@ -29,7 +29,7 @@ struct NotifySettingsRepositoryTests {
     }
 
     /// A credential store that accepts every call and keeps nothing, which is how the Keychain
-    /// behaves for a locally built ClaudeBar: the app is ad-hoc signed, so it has no stable
+    /// behaves for a locally built Cortex: the app is ad-hoc signed, so it has no stable
     /// identity for an item's access control to name, and reads and writes alike come back
     /// errSecAuthFailed. `CredentialRepository` has no way to report that, so a refusal and a
     /// success are indistinguishable to the caller, which is exactly the situation under test.
@@ -449,7 +449,7 @@ struct NotifySettingsRepositoryTests {
 
     @Test
     func `a token the Keychain refuses is still stored, and still round trips`() throws {
-        // Given a secure store that drops everything, which is what a locally built ClaudeBar
+        // Given a secure store that drops everything, which is what a locally built Cortex
         // actually has: the user presses Save and, without this fallback, nothing is kept and
         // nothing says so.
         let fixture = makeRefusedFixture()

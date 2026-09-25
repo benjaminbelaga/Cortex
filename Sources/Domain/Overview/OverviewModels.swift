@@ -44,8 +44,8 @@ public enum OverviewWindowFilter: String, Sendable, CaseIterable, Identifiable {
     public var displayName: String {
         switch self {
         case .session: return "Session 5h"
-        case .weekly: return "Semaine"
-        case .all: return "Tout"
+        case .weekly: return "Week"
+        case .all: return "All"
         }
     }
 
@@ -135,6 +135,9 @@ public struct ProviderSnapshot: Identifiable, Sendable, Hashable {
     public let windows: [WindowSnapshot]
     public let isSyncing: Bool
     public let errorMessage: String?
+    /// Typed error class from the router snapshot (`nil` when none) — the row
+    /// maps it to a French label; the raw `errorMessage` stays in the tooltip.
+    public let errorClass: String?
     /// Typed authentication verdict for this account (`.unknown` when the
     /// provider does not report one) — drives the reconnect affordance.
     public let authState: AccountAuthState
@@ -178,6 +181,7 @@ public struct ProviderSnapshot: Identifiable, Sendable, Hashable {
         windows: [WindowSnapshot],
         isSyncing: Bool = false,
         errorMessage: String? = nil,
+        errorClass: String? = nil,
         authState: AccountAuthState = .unknown,
         capturedAt: Date? = nil,
         resourceKind: String = "rolling_quota",
@@ -198,6 +202,7 @@ public struct ProviderSnapshot: Identifiable, Sendable, Hashable {
         self.windows = windows
         self.isSyncing = isSyncing
         self.errorMessage = errorMessage
+        self.errorClass = errorClass
         self.authState = authState
         self.capturedAt = capturedAt
         self.resourceKind = resource?.resourceKind ?? resourceKind

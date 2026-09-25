@@ -118,7 +118,7 @@ struct ClaudeConfigCard: View {
                 .pickerStyle(.segmented)
                 .onChange(of: claudeProbeMode) { _, newValue in
                     settings.claude.setClaudeProbeMode(newValue)
-                    // In API mode ClaudeBar caches usage data for 15 min to stay
+                    // In API mode Cortex caches usage data for 15 min to stay
                     // under Anthropic's API rate limits, so a faster background
                     // cadence is wasted (calls just return the cache). Snap an
                     // enabled sub-15-min interval up to 15 min (issue #204); leave

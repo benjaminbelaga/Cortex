@@ -16,12 +16,26 @@ struct ResetsCalendarSheet: View {
     /// MenuBarExtra and just greys the popover), the host passes a close
     /// closure. When nil we fall back to the environment `dismiss` (real window).
     var onClose: (() -> Void)? = nil
+    /// Set for API-key providers (Ollama, OpenCode Go, Command Code): enrols
+    /// the key on the pasteboard as another account — the two-click path
+    /// (open provider → add) Ben asked for on 2026-09-25.
+    var onAddAccountFromPasteboard: (() -> Void)? = nil
+    /// Destructive removal of the shown provider (or account) from Cortex.
+    /// Never touches the underlying tool/CLI profile — only Cortex's tracking.
+    var onRemove: (() -> Void)? = nil
 
     @Environment(\.appTheme) private var theme
     @Environment(\.dismiss) private var dismiss
+    @State private var showRemoveConfirm = false
 
     private let windowStart: Date = Calendar.current.startOfDay(for: Date())
     private let windowEnd: Date = Calendar.current.startOfDay(for: Date()).addingTimeInterval(7 * 24 * 3600)
+
+    /// Both ends of the failover chain show the same live panel: the Go pool
+    /// (tier 1) and Ollama Cloud (tier 2) are one chain, seen from either row.
+    static func showsFailoverChain(providerId: String) -> Bool {
+        providerId == "opencode-go" || providerId == "ollama"
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -34,6 +48,9 @@ struct ResetsCalendarSheet: View {
                     windowEnd: windowEnd,
                     theme: theme
                 )
+            }
+            if Self.showsFailoverChain(providerId: snapshot.providerId) {
+                FailoverChainCard()
             }
             footer
         }
@@ -65,7 +82,7 @@ struct ResetsCalendarSheet: View {
                         .truncationMode(.middle)
                 }
             }
-            Text("Resets sur 7 jours · \(snapshot.windows.count) fenêtre\(snapshot.windows.count > 1 ? "s" : "")")
+            Text("Resets over 7 days · \(snapshot.windows.count) window\(snapshot.windows.count > 1 ? "s" : "")")
                 .font(theme.font(size: 10))
                 .foregroundStyle(theme.textTertiary)
         }
@@ -113,11 +130,35 @@ struct ResetsCalendarSheet: View {
 
     private var footer: some View {
         HStack {
+            if let onAddAccountFromPasteboard {
+                Button {
+                    onAddAccountFromPasteboard()
+                } label: {
+                    Label("Add account (key from clipboard)", systemImage: "plus.circle")
+                }
+            }
             Spacer()
-            Button("Fermer") {
+            if let onRemove {
+                Button(role: .destructive) {
+                    showRemoveConfirm = true
+                } label: {
+                    Label("Remove from Cortex", systemImage: "trash")
+                }
+            }
+            Button("Close") {
                 if let onClose { onClose() } else { dismiss() }
             }
             .keyboardShortcut(.defaultAction)
+        }
+        .confirmationDialog(
+            "Remove this provider from Cortex?",
+            isPresented: $showRemoveConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Remove", role: .destructive) { onRemove?() }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Only Cortex's tracking is removed. Your tool profile and credentials stay intact.")
         }
     }
 }

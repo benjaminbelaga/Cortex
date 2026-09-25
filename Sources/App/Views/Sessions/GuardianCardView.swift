@@ -33,7 +33,7 @@ struct GuardianCardView: View {
                     }
                 }
             } else {
-                Text("Gardien muet — état illisible")
+                Text("Guardian silent — state unreadable")
                     .font(theme.font(size: 10))
                     .foregroundStyle(theme.textTertiary)
             }
@@ -59,7 +59,7 @@ struct GuardianCardView: View {
                     await GuardianActionRunner.run(action)
                 }
             }
-            actionButton(symbol: "slider.horizontal.3", label: "Règles") {
+            actionButton(symbol: "slider.horizontal.3", label: "Rules") {
                 await GuardianActionRunner.editRules()
             }
         }

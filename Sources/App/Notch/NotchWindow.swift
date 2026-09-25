@@ -7,7 +7,7 @@ import SwiftUI
 /// the notch animates *inside* it rather than the window resizing, which is how
 /// both boring.notch and DynamicNotch avoid visible resize jank.
 ///
-/// `canBecomeKey` and `canBecomeMain` stay false on purpose. ClaudeBar's notch
+/// `canBecomeKey` and `canBecomeMain` stay false on purpose. Cortex's notch
 /// has nothing to type into, and it must never pull focus from the terminal the
 /// user is working in.
 final class NotchWindow: NSPanel {

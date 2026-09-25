@@ -245,4 +245,89 @@ struct NotificationAlerterTests {
         #expect(result == true)
         verify(mockSender).requestPermission().called(1)
     }
+
+    // MARK: - Time-tariff transitions (bible §15)
+
+    @Test
+    func `alertTimeState sends a discount notification when entering the cheap window`() async {
+        let mockSender = MockAlertSender()
+        given(mockSender).send(title: .any, body: .any, categoryIdentifier: .any).willReturn(())
+        let alerter = NotificationAlerter(alertSender: mockSender)
+
+        await alerter.alertTimeState(
+            providerId: "qwen",
+            previous: "normal",
+            current: RouterTimeState(state: "discount", multiplier: 0.5)
+        )
+
+        verify(mockSender).send(
+            title: .matching { $0.contains("Off-peak") },
+            body: .matching { $0.contains("Reduced rate") },
+            categoryIdentifier: .value("TIME_STATE_ALERT")
+        ).called(1)
+    }
+
+    @Test
+    func `alertTimeState sends a peak notification when leaving the cheap window`() async {
+        let mockSender = MockAlertSender()
+        given(mockSender).send(title: .any, body: .any, categoryIdentifier: .any).willReturn(())
+        let alerter = NotificationAlerter(alertSender: mockSender)
+
+        await alerter.alertTimeState(
+            providerId: "qwen",
+            previous: "discount",
+            current: RouterTimeState(
+                state: "peak", multiplier: 2.0,
+                nextBetterSlot: Date(timeIntervalSince1970: 1_800_000_000)
+            )
+        )
+
+        verify(mockSender).send(
+            title: .matching { $0.contains("Peak") },
+            body: .matching { $0.contains("ended") },
+            categoryIdentifier: .value("TIME_STATE_ALERT")
+        ).called(1)
+    }
+
+    @Test
+    func `alertTimeState stays silent on the first observation`() async {
+        let mockSender = MockAlertSender()
+        let alerter = NotificationAlerter(alertSender: mockSender)
+
+        await alerter.alertTimeState(
+            providerId: "qwen",
+            previous: nil,
+            current: RouterTimeState(state: "discount", multiplier: 0.5)
+        )
+
+        verify(mockSender).send(title: .any, body: .any, categoryIdentifier: .any).called(0)
+    }
+
+    @Test
+    func `alertTimeState stays silent when the state does not change`() async {
+        let mockSender = MockAlertSender()
+        let alerter = NotificationAlerter(alertSender: mockSender)
+
+        await alerter.alertTimeState(
+            providerId: "qwen",
+            previous: "discount",
+            current: RouterTimeState(state: "discount", multiplier: 0.5)
+        )
+
+        verify(mockSender).send(title: .any, body: .any, categoryIdentifier: .any).called(0)
+    }
+
+    @Test
+    func `alertTimeState stays silent on a normal to peak flip`() async {
+        let mockSender = MockAlertSender()
+        let alerter = NotificationAlerter(alertSender: mockSender)
+
+        await alerter.alertTimeState(
+            providerId: "qwen",
+            previous: "normal",
+            current: RouterTimeState(state: "peak", multiplier: 2.0)
+        )
+
+        verify(mockSender).send(title: .any, body: .any, categoryIdentifier: .any).called(0)
+    }
 }

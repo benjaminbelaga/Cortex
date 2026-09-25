@@ -1,7 +1,10 @@
 name: Tests
 
 on:
-  # Manual by default: callers must name the exact commit under test.
+  # Neutralised 2026-08-22 (Ben): these macOS-26 runs bill at 10x, gate no merge
+  # (0 required check on yoyaku-group/Cortex) and YOYAKU only needs the manual
+  # build-yoyaku.yml. dispatch-only kills the automatic macOS spend. Re-enable PR
+  # CI on the self-hosted macOS runner (plan Part 3).
   workflow_dispatch:
     inputs:
       expected_sha:
@@ -18,7 +21,8 @@ jobs:
     name: Unit Tests with Coverage
     # Anti-fork guard (E2): see build.yml — same rationale.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, macos, arm64, cortex-ci]
+    # Runner label: claudebar-ci (PR #11 — see build.yml).
+    runs-on: [self-hosted, macos, arm64, claudebar-ci]
     timeout-minutes: 60
 
     concurrency:
@@ -68,8 +72,8 @@ jobs:
       - name: Run Tests with Coverage
         run: |
           xcodebuild test \
-            -scheme ClaudeBar \
-            -workspace ClaudeBar.xcworkspace \
+            -scheme Cortex \
+            -workspace Cortex.xcworkspace \
             -destination 'platform=macOS,arch=arm64' \
             -enableCodeCoverage YES \
             -skipMacroValidation \

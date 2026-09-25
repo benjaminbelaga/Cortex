@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import ClaudeBar
+@testable import Cortex
 
 /// Executes the shell command produced by `AccountConnectRunner.connectCommand`
 /// against stub `codex`/`llm-router`/`cswap`/`claude` binaries in an isolated
@@ -125,5 +125,35 @@ struct AccountConnectRunnerCommandTests {
         )
         #expect(cmd.contains(".claude-accounts/compte-ephemere"))
         #expect(cmd.contains("--alias 'COMPTE EPHEMERE'"))
+    }
+
+    // MARK: - Declared auth home (router seats)
+
+    @Test("Claude profile override reuses the declared auth home, never mints one")
+    func claudeProfileOverrideReusesDeclaredAuthHome() {
+        let cmd = AccountConnectRunner.connectCommand(
+            provider: .claude, alias: "TECH", identity: "tech@yoyaku.fr",
+            profileOverride: "/Users/example/.claude-tech"
+        )
+        #expect(cmd.contains("CLAUDE_CONFIG_DIR='/Users/example/.claude-tech'"))
+        #expect(cmd.contains("--auth-home '/Users/example/.claude-tech'"))
+        #expect(!cmd.contains(".claude-accounts"))
+    }
+
+    @Test("Codex profile override runs login and registrar in the declared home")
+    func codexProfileOverrideRegistersDeclaredHome() throws {
+        let home = try makeSandbox()
+        defer { try? FileManager.default.removeItem(at: home) }
+        let declared = home.appendingPathComponent(".codex-tech")
+        try FileManager.default.createDirectory(at: declared, withIntermediateDirectories: true)
+
+        let cmd = AccountConnectRunner.connectCommand(
+            provider: .codex, alias: "TECH", identity: nil, profileOverride: declared.path
+        )
+        let outcome = try run(cmd, home: home)
+
+        #expect(outcome.exitCode == 0)
+        #expect(outcome.calls.contains("llm-router account add codex"))
+        #expect(!FileManager.default.fileExists(atPath: home.appendingPathComponent(".codex-accounts/tech").path))
     }
 }

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ClaudeBar — Multi-Account UI Design (Phase 3)</title>
+<title>Cortex — Multi-Account UI Design (Phase 3)</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <style>
   :root {
@@ -1303,7 +1303,7 @@
         <div class="popover-header">
           <div class="logo-group">
             <div class="logo-icon">C</div>
-            <div class="logo-text">ClaudeBar</div>
+            <div class="logo-text">Cortex</div>
           </div>
           <div class="header-actions">
             <button class="header-btn" title="Refresh">↻</button>
@@ -1646,7 +1646,7 @@
         <div class="step-card">
           <div class="step-content">
             <div style="font-size:10px;color:var(--text-tertiary);margin-bottom:2px">
-              How should ClaudeBar fetch quota for this account?
+              How should Cortex fetch quota for this account?
             </div>
             <div class="probe-options">
               <div class="probe-option selected" onclick="selectProbe(this)">
@@ -1746,7 +1746,7 @@
     <div class="annotation" style="max-width:700px;margin:24px auto 0;opacity:1;animation:none">
       <strong>Add Account flow:</strong>
       1. User taps dashed button → 2. Enters label, email, avatar color → 3. Configures probe (CLI profile or API token from <strong>probeConfig</strong>) →
-      4. ClaudeBar verifies connectivity and fetches initial snapshot → 5. Account appears in parallel monitoring view.
+      4. Cortex verifies connectivity and fetches initial snapshot → 5. Account appears in parallel monitoring view.
       <br><br>
       <strong>Error path:</strong> If verification fails at step 4 (e.g., invalid profile, expired token), user sees a red ✗ with retry option.
       Account is saved as <strong>Unreachable</strong> with "Re-auth" tag if user chooses to add anyway.

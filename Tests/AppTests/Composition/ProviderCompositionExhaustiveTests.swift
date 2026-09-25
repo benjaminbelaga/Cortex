@@ -2,7 +2,7 @@ import Testing
 import Foundation
 import Domain
 import Infrastructure
-@testable import ClaudeBar
+@testable import Cortex
 
 /// C4 invariant (review critique 2026-09-16): every catalog descriptor must
 /// lead to exactly ONE composition decision — instantiated router provider,
@@ -58,7 +58,7 @@ struct ProviderCompositionExhaustiveTests {
     func optionalIdsGateAndNeverDuplicate() {
         let (repo, dir) = makeRepository()
         defer { try? FileManager.default.removeItem(at: dir) }
-        for id in ["qwen-api", "bedrock", "local"] {
+        for id in ["bedrock", "local"] {
             repo.setEnabled(true, forProvider: id)
         }
         // The local row needs a configured router id (fixture value here;
@@ -70,7 +70,7 @@ struct ProviderCompositionExhaustiveTests {
         )
         let providers = composition.compose()
         let ids = Dictionary(grouping: providers.map(\.id), by: { $0 })
-        for id in ["qwen-api", "bedrock", "local"] {
+        for id in ["bedrock", "local"] {
             #expect(ids[id]?.count == 1,
                     "enabled optional \(id) must yield exactly 1 provider, got \(ids[id]?.count ?? 0)")
         }

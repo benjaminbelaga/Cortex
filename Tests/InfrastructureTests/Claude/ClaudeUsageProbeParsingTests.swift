@@ -228,7 +228,7 @@ struct ClaudeUsageProbeParsingTests {
     static let newTrustPromptOutput = """
     Accessing workspace:
 
-    /Users/testuser/Library/Application Support/ClaudeBar/Probe
+    /Users/testuser/Library/Application Support/Cortex/Probe
 
     Quick safety check: Is this a project you created or one you trust? (Like your own code, a well-known open source project, or work from your team). If not, take a moment to review what's in this folder first.
 
@@ -448,7 +448,7 @@ struct ClaudeUsageProbeParsingTests {
     // Real CLI output format with Settings header
     static let realCliOutput = """
     Opus 4.5 · Claude Pro · Some User
-    ~/Projects/ClaudeBar
+    ~/Projects/Cortex
 
     Settings: Status  Config  Usage (tab to cycle)
 
@@ -470,7 +470,7 @@ struct ClaudeUsageProbeParsingTests {
     static let realCliOutputWithAnsi = """
     \u{1B}[?25l\u{1B}[?2004h\u{1B}[?25h\u{1B}[?2004l\u{1B}[?2026h
     Opus 4.5 · Claude Pro · Some User
-    ~/Projects/ClaudeBar
+    ~/Projects/Cortex
 
     \u{1B}[33mSettings:\u{1B}[0m Status  Config  \u{1B}[7mUsage\u{1B}[0m (tab to cycle)
 
@@ -703,7 +703,7 @@ struct ClaudeUsageProbeParsingTests {
     // Real output from API Usage Billing account showing subscription-only message
     static let apiUsageBillingOutput = """
     Sonnet 4.5 · API Usage Billing · dzienisz
-    ~/Library/Application Support/ClaudeBar/Probe
+    ~/Library/Application Support/Cortex/Probe
 
     Settings: Status  Config  Usage (tab to cycle)
 
@@ -718,7 +718,7 @@ struct ClaudeUsageProbeParsingTests {
     static let apiUsageBillingWithQuotasOutput = """
     ▐▛███▜▌   Claude Code v2.1.34
     ▝▜█████▛▘  Sonnet 4.5 · API Usage Billing · user@example.com
-    ▘▘ ▝▝    ~/Library/Application Support/ClaudeBar/Probe
+    ▘▘ ▝▝    ~/Library/Application Support/Cortex/Probe
 
     ❯ /usage
     Settings:  Status   Config   Usage  (←/→ or tab to cycle)
@@ -739,7 +739,7 @@ struct ClaudeUsageProbeParsingTests {
     static let claudeApiWithQuotasOutput = """
     ▐▛███▜▌   Claude Code v2.1.34
     ▝▜█████▛▘  Sonnet 4.5 · Claude API
-    ▘▘ ▝▝    ~/Library/Application Support/ClaudeBar/Probe
+    ▘▘ ▝▝    ~/Library/Application Support/Cortex/Probe
 
     ❯ /usage
     Settings:  Status   Config   Usage  (←/→ or tab to cycle)

@@ -113,6 +113,17 @@ struct LLMRouterSnapshotClientTests {
         #expect(restored?.usage?.last24h?.byModel["qwen3.8-max"]?.messages == 1)
     }
 
+    @Test("by_family and daily decode from the usage wire (v7.5)")
+    func decodesFamilySplitAndDailySeries() throws {
+        let snapshot = try LLMRouterSnapshotClient.parse(Self.payload())
+        let window = try #require(snapshot.usage?.last24h)
+        #expect(window.byFamily["qwen"]?.totalTokens == 1050)
+        let daily = try #require(snapshot.usage?.daily)
+        #expect(daily["2026-08-24"]?.sessions == 12)
+        #expect(daily["2026-08-24"]?.byFamily["deepseek"] == 45000)
+        #expect(daily["2026-08-25"]?.tokens == 120000)
+    }
+
     @Test("percentages above one are rejected as contract drift")
     func rejectsWholePercentValues() {
         #expect(throws: RouterQuotaIssue.self) {
@@ -214,6 +225,15 @@ struct LLMRouterSnapshotClientTests {
                     }
                   },
                   "by_backend": {},
+                  "by_family": {
+                    "qwen": {
+                      "input_tokens": 200,
+                      "output_tokens": 50,
+                      "cache_read_tokens": 800,
+                      "cache_creation_tokens": 0,
+                      "messages": 1
+                    }
+                  },
                   "sessions_by_harness": {"qwen": 1},
                   "totals": {
                     "input_tokens": 200,
@@ -223,7 +243,11 @@ struct LLMRouterSnapshotClientTests {
                     "messages": 1
                   }
                 },
-                "7d": null
+                "7d": null,
+                "daily": {
+                  "2026-08-24": {"sessions": 12, "tokens": 345000, "by_family": {"qwen": 300000, "deepseek": 45000}},
+                  "2026-08-25": {"sessions": 7, "tokens": 120000, "by_family": {"deepseek": 120000}}
+                }
               },
               "usage_anomalies": [
                 {

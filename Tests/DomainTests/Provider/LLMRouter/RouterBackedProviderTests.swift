@@ -5,7 +5,7 @@ import Testing
 @Suite("RouterBackedProvider")
 @MainActor
 struct RouterBackedProviderTests {
-    @Test("fraction is converted to ClaudeBar percent exactly once")
+    @Test("fraction is converted to Cortex percent exactly once")
     func convertsFractionExactlyOnce() async throws {
         let provider = makeProvider(snapshot: Self.snapshot())
 
@@ -63,7 +63,7 @@ struct RouterBackedProviderTests {
                 RouterBackedProvider.reconnectMessage
             ) == true
         )
-        #expect(provider.lastGroupErrors["WORK"]?.contains("En veille") == false)
+        #expect(provider.lastGroupErrors["WORK"]?.contains("Standby") == false)
     }
 
     @Test("overview renders missing account as an error, never healthy syncing data")

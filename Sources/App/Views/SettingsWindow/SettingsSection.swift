@@ -24,7 +24,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .appearance: "Appearance"
         case .menuBar: "Menu Bar"
         case .providers: "Providers"
-        case .features: "Fonctionnalités"
+        case .features: "Features"
         case .syncAlerts: "Sync & Alerts"
         case .hooks: "Hooks"
         case .notify: "Notify!"
@@ -41,7 +41,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .appearance: ["theme", "dark", "light", "cli", "christmas", "import"]
         case .menuBar: ["percentage", "duration", "quota display", "stacked", "status bar"]
         case .providers: ["claude", "codex", "gemini", "copilot", "glm", "qwen", "bedrock", "kimi", "minimax", "local", "llm-router", "enable"]
-        case .features: ["modules", "module", "visibilité", "visibility", "masquer", "hide", "afficher", "show", "sessions", "sous-agents", "subagents", "outils", "tools", "personnalisation"]
+        case .features: ["modules", "module", "visibility", "visibility", "hide", "hide", "show", "show", "sessions", "sous-agents", "subagents", "outils", "tools", "personnalisation"]
         case .syncAlerts: ["background", "refresh", "interval", "notification"]
         case .hooks: ["claude code", "session", "install"]
         case .notify: ["iphone", "phone", "lock screen", "live activity", "widget", "gauge", "push", "device"]

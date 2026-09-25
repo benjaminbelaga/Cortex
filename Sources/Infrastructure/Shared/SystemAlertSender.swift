@@ -29,7 +29,7 @@ public final class SystemAlertSender: AlertSender, @unchecked Sendable {
             AppLog.notifications.info("Alerts already authorized")
             return true
         case .denied:
-            AppLog.notifications.warning("Alerts denied by user - check System Settings > Notifications > ClaudeBar")
+            AppLog.notifications.warning("Alerts denied by user - check System Settings > Notifications > Cortex")
             return false
         case .notDetermined:
             do {

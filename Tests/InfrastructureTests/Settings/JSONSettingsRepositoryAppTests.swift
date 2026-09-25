@@ -362,6 +362,63 @@ struct JSONSettingsRepositoryAppTests {
         #expect(repo.receiveBetaUpdates() == true)
     }
 
+    // MARK: - Router Preferences (v7.3)
+
+    @Test
+    func `providerPreferredModel defaults to empty`() {
+        let (repo, dir) = makeRepository()
+        defer { cleanup(dir) }
+
+        #expect(repo.providerPreferredModel().isEmpty)
+    }
+
+    @Test
+    func `setProviderPreferredModel persists value and survives reload`() {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("claudebar-test-\(UUID().uuidString)")
+        let fileURL = tempDir.appendingPathComponent("settings.json")
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let store = JSONSettingsStore(fileURL: fileURL)
+        let repo1 = JSONSettingsRepository(store: store)
+        repo1.setProviderPreferredModel(["opencode-go": "glm", "claude": "claude"])
+
+        let repo2 = JSONSettingsRepository(store: store)
+        #expect(repo2.providerPreferredModel() == ["opencode-go": "glm", "claude": "claude"])
+    }
+
+    @Test
+    func `setProviderPreferredModel drops empty family values`() {
+        let (repo, dir) = makeRepository()
+        defer { cleanup(dir) }
+
+        repo.setProviderPreferredModel(["opencode-go": "glm", "claude": ""])
+        #expect(repo.providerPreferredModel() == ["opencode-go": "glm"])
+    }
+
+    @Test
+    func `priorityCardExpanded defaults to false`() {
+        let (repo, dir) = makeRepository()
+        defer { cleanup(dir) }
+
+        #expect(repo.priorityCardExpanded() == false)
+    }
+
+    @Test
+    func `setPriorityCardExpanded persists value and survives reload`() {
+        let tempDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("claudebar-test-\(UUID().uuidString)")
+        let fileURL = tempDir.appendingPathComponent("settings.json")
+        defer { try? FileManager.default.removeItem(at: tempDir) }
+
+        let store = JSONSettingsStore(fileURL: fileURL)
+        let repo1 = JSONSettingsRepository(store: store)
+        repo1.setPriorityCardExpanded(true)
+
+        let repo2 = JSONSettingsRepository(store: store)
+        #expect(repo2.priorityCardExpanded() == true)
+    }
+
     // MARK: - Persistence across instances
 
     @Test

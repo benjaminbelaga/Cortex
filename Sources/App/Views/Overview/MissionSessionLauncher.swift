@@ -37,7 +37,7 @@ enum MissionSessionLauncher {
                 let command = resumeCommand(payload: payload, candidate: candidate)
                 let launch = await TerminalCommandLauncher.open(
                     command,
-                    successMessage: "Mission yy ouverte — exécution en cours"
+                    successMessage: "Mission yy opened — running"
                 )
                 if launch.launched {
                     AppLog.ui.info("registered mission \(payload.missionId) opened via \(candidate.provider)")
@@ -45,7 +45,7 @@ enum MissionSessionLauncher {
                 }
                 return Result(
                     succeeded: false,
-                    message: "Mission créée — \(launch.message)",
+                    message: "Mission created — \(launch.message)",
                     command: command
                 )
             } catch {

@@ -20,7 +20,7 @@ public struct NotchActivityResolver: Sendable {
     ///
     /// - Parameters:
     ///   - sessions: Live and recently finished sessions. Callers filter out
-    ///     ClaudeBar's own probe runs before this point.
+    ///     Cortex's own probe runs before this point.
     ///   - quotas: Every provider quota currently known.
     ///   - headlineQuota: The quota the user chose to watch, shown whenever
     ///     nothing louder is happening. Nil before the first probe returns.

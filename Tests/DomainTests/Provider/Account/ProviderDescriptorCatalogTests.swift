@@ -17,15 +17,15 @@ struct ProviderDescriptorCatalogTests {
     /// Every id the composition can build, in catalog (= display) order.
     private static let shipped = [
         "claude", "codex", "kimi", "qwen", "glm", "minimax",
-        "gemini", "antigravity", "copilot", "opencode-go", "commandcode",
-        "qwen-api", "bedrock", "local", "ampcode", "kiro", "cursor",
+        "gemini", "antigravity", "copilot", "opencode-go", "commandcode", "ollama",
+        "bedrock", "local", "ampcode", "kiro", "cursor",
         "deepseek", "vercel-gateway", "mistral", "omp", "grok",
     ]
 
-    private static let routerOnly = ["kimi", "glm", "minimax", "qwen-api", "bedrock", "local"]
+    private static let routerOnly = ["kimi", "glm", "minimax", "bedrock", "local"]
 
     private static let optional = [
-        "qwen-api", "bedrock", "local", "ampcode", "kiro",
+        "bedrock", "local", "ampcode", "kiro",
         "cursor", "deepseek", "vercel-gateway", "mistral", "omp", "grok",
     ]
 
@@ -115,5 +115,13 @@ struct ProviderDescriptorCatalogTests {
     @Test("Unknown provider id returns nil (defensive composition)")
     func unknownIdReturnsNil() {
         #expect(ProviderCatalog.descriptor(forId: "mystery") == nil)
+    }
+}
+
+@Suite("API-key account capability")
+struct APIKeyAccountCapabilityTests {
+    @Test func `api key providers are derived from the catalog`() {
+        #expect(ProviderCatalog.apiKeyAccountIDs == ["opencode-go", "commandcode", "ollama"])
+        #expect(ProviderCatalog.addableAccountIDs == ["claude", "codex", "opencode-go", "commandcode", "ollama"])
     }
 }

@@ -125,7 +125,7 @@ struct NotchActivityResolverTests {
 
     @Test
     func `the headline quota is shown at a glance when nothing is happening`() {
-        // ClaudeBar is a quota monitor. With no session running, how much is
+        // Cortex is a quota monitor. With no session running, how much is
         // left is still the thing the user came for.
         let headline = quota(86)
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import Charts
 import Domain
 
 /// Collapsible global usage panel pinned at the bottom of the popover.
@@ -50,7 +51,7 @@ struct GlobalUsagePanelView: View {
                 .font(theme.font(size: 11))
                 .foregroundStyle(theme.textSecondary)
             VStack(alignment: .leading, spacing: 1) {
-                Text("Usage & dépense théorique")
+                Text("Usage & theoretical spend")
                     .font(theme.font(size: 12, weight: .semibold))
                     .foregroundStyle(theme.textSecondary)
                 if let usageSnapshot {
@@ -104,15 +105,62 @@ struct GlobalUsagePanelView: View {
                     metric("sessions", formatCount(usage.sessionsByHarness.values.reduce(0, +)))
                 }
 
+                dailyMonitor
+
                 Divider().overlay(theme.glassBorder)
-                Text("Usage réel par backend")
+                Text("Actual usage by backend")
                     .font(theme.font(size: 9, weight: .semibold))
                     .foregroundStyle(theme.textTertiary)
 
-                let sorted = usage.byBackend.sorted { $0.value.totalTokens > $1.value.totalTokens }
+                // Ordering (Ben 2026-09-23): one system — rows with a real
+                // amount first (desc), then benchmark estimates, then rows with
+                // no amount at all. Never bury a metered figure under a guess.
+                let sorted = usage.byBackend.sorted { lhs, rhs in
+                    func rank(_ key: String) -> Int {
+                        if cost?.byBackendRecordedUsd[key] != nil { return 0 }  // metered
+                        if cost?.byBackendSpendUsd[key] != nil { return 1 }     // benchmark
+                        return 2                                                // unknown
+                    }
+                    let (lr, rr) = (rank(lhs.key), rank(rhs.key))
+                    if lr != rr { return lr < rr }
+                    return lhs.value.totalTokens > rhs.value.totalTokens
+                }
                 let total = max(usage.totals.totalTokens, 1)
+                if hasSpendByBackend {
+                    HStack(spacing: 6) {
+                        Spacer()
+                        Text(hasEstimatedSpend ? "spend · ≈ estimated" : "recorded cost")
+                            .font(theme.font(size: 8, weight: .medium))
+                            .foregroundStyle(theme.textTertiary)
+                            .frame(minWidth: 56, alignment: .trailing)
+                    }
+                }
                 ForEach(Array(sorted.enumerated()), id: \.offset) { _, entry in
-                    backendRow(entry.key, usage: entry.value, total: total)
+                    backendRow(entry.key, usage: entry.value, total: total,
+                               spend: spendValue(for: entry.key),
+                               estimated: cost?.estimatedBackends.contains(entry.key) ?? false)
+                }
+
+                // Usage attributed by MODEL FAMILY (the weights that ran), not by
+                // subscription — so DeepSeek reached through OpenCode Go / Ollama
+                // / Command Code reads as one DeepSeek line (Ben 2026-09-23).
+                if !usage.byFamily.isEmpty {
+                    Divider().overlay(theme.glassBorder)
+                    HStack {
+                        Text("Actual usage by model")
+                            .font(theme.font(size: 9, weight: .semibold))
+                            .foregroundStyle(theme.textTertiary)
+                        Spacer()
+                        Text("family · executed weights")
+                            .font(theme.font(size: 8))
+                            .foregroundStyle(theme.textTertiary)
+                    }
+                    let families = usage.byFamily.sorted { $0.value.totalTokens > $1.value.totalTokens }
+                    let familyTotal = max(families.reduce(0) { $0 + $1.value.totalTokens }, 1)
+                    ForEach(Array(families.enumerated()), id: \.offset) { _, entry in
+                        familyRow(entry.key, usage: entry.value, total: familyTotal)
+                    }
+                    familyPie(families)
                 }
 
                 let anomalies = snapshot?.usageAnomalies ?? []
@@ -126,14 +174,14 @@ struct GlobalUsagePanelView: View {
                     }
                 }
             } else {
-                Text("Aucun usage local agrégé — le prochain refresh réessaiera automatiquement.")
+                Text("No local usage aggregated — the next refresh will retry automatically.")
                     .font(theme.font(size: 9))
                     .foregroundStyle(theme.textTertiary)
             }
 
             if let cost {
                 Divider().overlay(theme.glassBorder)
-                Text("Part tarifée de la dépense théorique")
+                Text("Billed share of theoretical spend")
                     .font(theme.font(size: 9, weight: .semibold))
                     .foregroundStyle(theme.textTertiary)
 
@@ -156,20 +204,32 @@ struct GlobalUsagePanelView: View {
                     if let perSession = cost.eurPerSession ?? cost.usdPerSession {
                         ratio(cost.eurPerSession == nil ? "$/session" : "€/session", formatted(perSession))
                     }
-                    ratio("tarifé", formattedCoverage(cost.coveragePct))
+                    ratio("billed", formattedCoverage(cost.coveragePct))
+                    if let recorded = cost.recordedUsd {
+                        ratio("actual cost", "$\(formatted(recorded))")
+                    }
+                    // "Combien j'ai dépensé" — recorded + benchmark estimates,
+                    // the one figure that is never blank (v7.4).
+                    if let spend = cost.spendUsd, hasEstimatedSpend {
+                        if let eur = cost.spendEur {
+                            ratio("spend ≈", "€\(formatted(eur))")
+                        } else {
+                            ratio("spend ≈", "$\(formatted(spend))")
+                        }
+                    }
                 }
 
                 if let estimate = snapshot?.costEstimate,
                    estimate.reportingCurrency == "EUR",
                    let observed = estimate.fxObservedAt {
-                    Text("Conversion EUR · référence BCE du \(observed)")
+                    Text("EUR conversion · ECB reference of \(observed)")
                         .font(theme.font(size: 8))
                         .foregroundStyle(theme.textTertiary)
-                        .help(estimate.fxSourceURL ?? "Taux de référence BCE")
+                        .help(estimate.fxSourceURL ?? "ECB reference rate")
                 }
 
                 if !cost.unpricedModels.isEmpty {
-                    Text("Non pricés : \(cost.unpricedModels.joined(separator: ", "))")
+                    Text("Unpriced: \(cost.unpricedModels.joined(separator: ", "))")
                         .font(theme.font(size: 8))
                         .foregroundStyle(theme.textTertiary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -181,16 +241,131 @@ struct GlobalUsagePanelView: View {
     @ViewBuilder
     private var freshnessBadges: some View {
         if let usageSnapshot, usageSnapshot.isStale {
-            badge("périmé", color: theme.statusWarning, icon: "exclamationmark.triangle")
+            badge("stale", color: theme.statusWarning, icon: "exclamationmark.triangle")
         } else if let usageSnapshot, usageSnapshot.isPartial {
             badge("partiel", color: theme.statusWarning, icon: "circle.lefthalf.filled")
         }
         if let cost, !cost.verified {
-            badge("prix non vérifiés", color: theme.statusWarning, icon: "dollarsign.circle")
+            badge("unverified prices", color: theme.statusWarning, icon: "dollarsign.circle")
         }
     }
 
-    private func backendRow(_ name: String, usage: RouterModelUsage, total: Int) -> some View {
+    /// True when the router priced any backend's spend for the selected window —
+    /// recorded (provider ledger) or benchmark estimate (pricing SSOT, v7.4).
+    /// Gates the spend column (hidden otherwise).
+    private var hasSpendByBackend: Bool {
+        !(cost?.byBackendSpendUsd.isEmpty ?? true) || !(cost?.byBackendRecordedUsd.isEmpty ?? true)
+    }
+
+    /// True when at least one backend's figure is a benchmark estimate rather
+    /// than a metered cost — drives the "≈ estimée" header wording.
+    private var hasEstimatedSpend: Bool {
+        !(cost?.estimatedBackends.isEmpty ?? true)
+    }
+
+    /// Recorded spend wins; the benchmark estimate fills the gap (bible R41).
+    private func spendValue(for backend: String) -> Double? {
+        if let recorded = cost?.byBackendRecordedUsd[backend] { return recorded }
+        return cost?.byBackendSpendUsd[backend]
+    }
+
+    /// Sessions/day + tokens/day over the last days (the "usage monitor",
+    /// Ben 2026-09-23: "combien de sessions par jour, combien de tokens").
+    @ViewBuilder
+    private var dailyMonitor: some View {
+        let daily = (usageSnapshot?.daily ?? [:]).sorted { $0.key < $1.key }
+        let recent = Array(daily.suffix(7))
+        if recent.count >= 2 {
+            let sessionsPerDay = Double(recent.reduce(0) { $0 + $1.value.sessions }) / Double(recent.count)
+            let tokensPerDay = Double(recent.reduce(0) { $0 + $1.value.tokens }) / Double(recent.count)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 10) {
+                    Text("Moyenne \(recent.count) j")
+                        .font(theme.font(size: 8, weight: .medium))
+                        .foregroundStyle(theme.textTertiary)
+                    metric("sessions/j", formatted(sessionsPerDay))
+                    metric("tokens/j", formatTokens(Int(tokensPerDay)))
+                }
+                Chart(recent, id: \.key) { point in
+                    BarMark(
+                        x: .value("Day", String(point.key.suffix(5))),
+                        y: .value("Sessions", point.value.sessions)
+                    )
+                    .foregroundStyle(theme.accentPrimary.opacity(0.7))
+                    .cornerRadius(2)
+                }
+                .frame(height: 46)
+            }
+        }
+    }
+
+    /// Family icon: the DeepSeek whale asset when present, else an SF Symbol.
+    @ViewBuilder
+    private func familyIcon(_ family: String, size: CGFloat) -> some View {
+        if let asset = ModelFamilyVisual.iconAssetName(for: family),
+           let image = NSImage(named: asset) {
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFit()
+                .frame(width: size, height: size)
+        } else {
+            Image(systemName: ModelFamilyVisual.symbolIcon(for: family))
+                .font(theme.font(size: size * 0.8))
+                .foregroundStyle(ModelFamilyVisual.color(for: family))
+        }
+    }
+
+    private func familyRow(_ family: String, usage: RouterModelUsage, total: Int) -> some View {
+        HStack(spacing: 6) {
+            familyIcon(family, size: 12)
+            Text(ModelFamilyVisual.displayName(for: family))
+                .font(theme.font(size: 9, weight: .medium))
+                .foregroundStyle(theme.textSecondary)
+                .lineLimit(1)
+                .frame(width: 86, alignment: .leading)
+            GeometryReader { geometry in
+                RoundedRectangle(cornerRadius: 2)
+                    .fill(ModelFamilyVisual.color(for: family))
+                    .frame(width: max(3, geometry.size.width * CGFloat(usage.totalTokens) / CGFloat(total)))
+            }
+            .frame(height: 4)
+            Text(formatTokens(usage.totalTokens))
+                .font(theme.font(size: 9, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(theme.textPrimary)
+                .frame(minWidth: 48, alignment: .trailing)
+            Text("\(usage.messages) msg")
+                .font(theme.font(size: 8))
+                .foregroundStyle(theme.textTertiary)
+                .frame(minWidth: 48, alignment: .trailing)
+        }
+    }
+
+    /// Camembert of the family split (CORTEX_BIBLE §15: "tasks by model" is a
+    /// separate pie from "spend by provider").
+    @ViewBuilder
+    private func familyPie(_ families: [(key: String, value: RouterModelUsage)]) -> some View {
+        let data = families
+            .map { (family: $0.key, tokens: $0.value.totalTokens) }
+            .filter { $0.tokens > 0 }
+        if data.count >= 2 {
+            Chart(data, id: \.family) { point in
+                SectorMark(
+                    angle: .value("Tokens", point.tokens),
+                    innerRadius: .ratio(0.55),
+                    angularInset: 1
+                )
+                .cornerRadius(2)
+                .foregroundStyle(ModelFamilyVisual.color(for: point.family))
+            }
+            .chartLegend(position: .bottom, spacing: 6)
+            .frame(height: 120)
+            .padding(.top, 4)
+        }
+    }
+
+    private func backendRow(_ name: String, usage: RouterModelUsage, total: Int,
+                            spend: Double?, estimated: Bool) -> some View {
         HStack(spacing: 6) {
             Circle().fill(backendColor(name)).frame(width: 6, height: 6)
             Text(name)
@@ -213,6 +388,20 @@ struct GlobalUsagePanelView: View {
                 .font(theme.font(size: 8))
                 .foregroundStyle(theme.textTertiary)
                 .frame(minWidth: 48, alignment: .trailing)
+            // Spend beside the token count: the metered cost when the provider
+            // ledger has one, else the benchmark estimate from the pricing SSOT
+            // (v7.4, bible R41 — an unknown price is not zero). "≈" flags an
+            // estimate so a guess never reads as a billed figure.
+            if hasSpendByBackend {
+                Text(spend.map { estimated ? "≈$\(formatted($0))" : "$\(formatted($0))" } ?? "—")
+                    .font(theme.font(size: 8, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(estimated ? theme.textTertiary : theme.textSecondary)
+                    .frame(minWidth: 56, alignment: .trailing)
+                    .help(estimated
+                          ? "Benchmark estimate (SSOT prices) — not billed by the provider"
+                          : "Cost recorded by the provider")
+            }
         }
     }
 
@@ -267,14 +456,23 @@ struct GlobalUsagePanelView: View {
     private func anomalyLabel(_ flag: String) -> String {
         switch flag {
         case "partial": return "source partielle"
-        case "large_context": return "contexte énorme"
-        case "high_fresh_ratio": return "ratio fresh élevé"
+        case "large_context": return "huge context"
+        case "high_fresh_ratio": return "high fresh ratio"
         default: return flag
         }
     }
 
     private func backendColor(_ backend: String) -> Color {
         let value = backend.lowercased()
+        // Most specific compound backends first, so "claude-llm" / "qwen-natif"
+        // never fall through to the bare "claude" / "qwen" branch.
+        if value.contains("opencode") { return .indigo }
+        if value.contains("commandcode") { return .brown }
+        if value.contains("ollama") { return .purple }
+        if value.contains("zai") { return .pink }
+        if value.contains("bailian") { return .teal }
+        if value.contains("claude-llm") { return .mint }
+        if value.contains("qwen-natif") || value.contains("qwen_natif") { return .teal }
         if value.contains("local") { return .purple }
         if value.contains("qwen") { return .teal }
         if value.contains("minimax") { return .orange }
@@ -287,12 +485,12 @@ struct GlobalUsagePanelView: View {
 
     private func freshnessLabel(_ usage: RouterUsageSnapshot) -> String {
         if usage.isStale {
-            return usage.refreshError.map { "périmé · \($0)" } ?? "données périmées"
+            return usage.refreshError.map { "périmé · \($0)" } ?? "stale data"
         }
         let age = max(usage.cacheAgeSeconds ?? 0, Date().timeIntervalSince(usage.generatedAt))
-        if age < 60 { return "mis à jour à l’instant" }
-        if age < 3600 { return "mis à jour il y a \(Int(age / 60)) min" }
-        return "mis à jour il y a \(Int(age / 3600)) h"
+        if age < 60 { return "updated just now" }
+        if age < 3600 { return "updated \(Int(age / 60)) min ago" }
+        return "updated \(Int(age / 3600)) h ago"
     }
 
     private func badge(_ label: String, color: Color, icon: String) -> some View {
@@ -342,7 +540,7 @@ struct GlobalUsagePanelView: View {
     }
 
     private func formattedCoverage(_ value: Double) -> String {
-        value < 10 ? String(format: "%.1f%% tarifés", value) : "\(Int(value.rounded()))% tarifés"
+        value < 10 ? String(format: "%.1f%% billed", value) : "\(Int(value.rounded()))% tarifés"
     }
 
     private func formatTokens(_ value: Int) -> String {

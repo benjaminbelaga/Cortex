@@ -262,6 +262,7 @@ public actor LLMRouterSnapshotClient: RouterQuotaSnapshotProviding {
                     windows: accountWindows,
                     present: account.present,
                     error: account.error,
+                    errorClass: account.errorClass,
                     source: account.source,
                     active: account.active,
                     stale: account.stale,
@@ -272,6 +273,7 @@ public actor LLMRouterSnapshotClient: RouterQuotaSnapshotProviding {
                 providerId: provider.providerId,
                 windows: windows,
                 error: provider.error,
+                errorClass: provider.errorClass,
                 source: provider.source,
                 capturedAt: Date(timeIntervalSince1970: provider.capturedAt),
                 accounts: accounts,
@@ -302,7 +304,8 @@ public actor LLMRouterSnapshotClient: RouterQuotaSnapshotProviding {
                         projectedRemainingAtResetPercent: forecast.projectedRemainingAtResetPercent,
                         severity: forecast.severity
                     )
-                }
+                },
+                family: provider.family
             )
         }
 
@@ -313,7 +316,8 @@ public actor LLMRouterSnapshotClient: RouterQuotaSnapshotProviding {
             generatedAt: generatedAt,
             providers: providers,
             usage: try wire.usage.map { try mapUsage($0, anomalies: wire.usageAnomalies ?? []) },
-            costEstimate: wire.costEstimate.map(mapCost)
+            costEstimate: wire.costEstimate.map(mapCost),
+            routeNow: try wire.routeNow.map(mapRouteNow)
         )
     }
 
@@ -369,6 +373,7 @@ private struct SnapshotWire: Decodable {
     let usage: UsageWire?
     let costEstimate: CostEstimateWire?
     let usageAnomalies: [UsageAnomalyWire]?
+    let routeNow: RouteNowWire?
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion = "schema_version"
@@ -377,6 +382,7 @@ private struct SnapshotWire: Decodable {
         case usage
         case costEstimate = "cost_estimate"
         case usageAnomalies = "usage_anomalies"
+        case routeNow = "route_now"
     }
 }
 
@@ -393,6 +399,7 @@ private struct UsageWire: Decodable {
     let refreshError: String?
     let w24: UsageWindowWire?
     let w7: UsageWindowWire?
+    let daily: [String: DailyUsageWire]?
 
     enum CodingKeys: String, CodingKey {
         case generatedAt = "generated_at"
@@ -404,18 +411,33 @@ private struct UsageWire: Decodable {
         case refreshError = "refresh_error"
         case w24 = "24h"
         case w7 = "7d"
+        case daily
+    }
+}
+
+private struct DailyUsageWire: Decodable {
+    let sessions: Int?
+    let tokens: Int?
+    let byFamily: [String: Int]?
+
+    enum CodingKeys: String, CodingKey {
+        case sessions
+        case tokens
+        case byFamily = "by_family"
     }
 }
 
 private struct UsageWindowWire: Decodable {
     let byModel: [String: ModelUsageWire]
     let byBackend: [String: ModelUsageWire]
+    let byFamily: [String: ModelUsageWire]?
     let sessionsByHarness: [String: Int]
     let totals: ModelUsageWire
 
     enum CodingKeys: String, CodingKey {
         case byModel = "by_model"
         case byBackend = "by_backend"
+        case byFamily = "by_family"
         case sessionsByHarness = "sessions_by_harness"
         case totals
     }
@@ -498,6 +520,13 @@ private struct CostWindowWire: Decodable {
     let totalEur: Double?
     let eurPerMtok: Double?
     let eurPerSession: Double?
+    let recordedUsd: Double?
+    let byBackendRecorded: [String: Double]?
+    let byBackendSpend: [String: Double]?
+    let spendUsd: Double?
+    let estimatedBackends: [String]?
+    let byBackendSpendEur: [String: Double]?
+    let spendEur: Double?
 
     enum CodingKeys: String, CodingKey {
         case verified
@@ -512,6 +541,13 @@ private struct CostWindowWire: Decodable {
         case totalEur = "total_eur"
         case eurPerMtok = "eur_per_mtok"
         case eurPerSession = "eur_per_session"
+        case recordedUsd = "recorded_usd"
+        case byBackendRecorded = "by_backend_recorded"
+        case byBackendSpend = "by_backend_spend"
+        case spendUsd = "spend_usd"
+        case estimatedBackends = "estimated_backends"
+        case byBackendSpendEur = "by_backend_spend_eur"
+        case spendEur = "spend_eur"
     }
 }
 
@@ -556,6 +592,13 @@ private func mapUsage(_ wire: UsageWire, anomalies: [UsageAnomalyWire]) throws -
         refreshError: wire.refreshError,
         last24h: wire.w24.map(mapUsageWindow),
         last7d: wire.w7.map(mapUsageWindow),
+        daily: (wire.daily ?? [:]).mapValues {
+            RouterDailyUsage(
+                sessions: $0.sessions ?? 0,
+                tokens: $0.tokens ?? 0,
+                byFamily: $0.byFamily ?? [:]
+            )
+        },
         anomalies: anomalies
     )
 }
@@ -575,6 +618,7 @@ private func mapUsageWindow(_ wire: UsageWindowWire) -> RouterUsageWindow {
     return RouterUsageWindow(
         byModel: models(wire.byModel),
         byBackend: models(wire.byBackend),
+        byFamily: models(wire.byFamily ?? [:]),
         sessionsByHarness: wire.sessionsByHarness,
         totals: RouterModelUsage(
             inputTokens: wire.totals.inputTokens ?? 0,
@@ -601,7 +645,14 @@ private func mapCost(_ wire: CostEstimateWire) -> RouterCostEstimate {
                 byModelEur: $0.byModelEur ?? [:],
                 totalEur: $0.totalEur,
                 eurPerMtok: $0.eurPerMtok,
-                eurPerSession: $0.eurPerSession
+                eurPerSession: $0.eurPerSession,
+                recordedUsd: $0.recordedUsd,
+                byBackendRecordedUsd: $0.byBackendRecorded ?? [:],
+                byBackendSpendUsd: $0.byBackendSpend ?? $0.byBackendRecorded ?? [:],
+                spendUsd: $0.spendUsd,
+                estimatedBackends: $0.estimatedBackends ?? [],
+                byBackendSpendEur: $0.byBackendSpendEur ?? [:],
+                spendEur: $0.spendEur
             )
         }
     }
@@ -616,10 +667,129 @@ private func mapCost(_ wire: CostEstimateWire) -> RouterCostEstimate {
     )
 }
 
+// MARK: - route_now (Contract B, v7.2)
+
+private struct RouteNowWire: Decodable {
+    let generatedAt: String
+    let profiles: [String: RecommendationWire]
+
+    enum CodingKeys: String, CodingKey {
+        case generatedAt = "generated_at"
+        case profiles
+    }
+}
+
+private struct RecommendationWire: Decodable {
+    let decisionId: String
+    let provider: String
+    let account: String?
+    let model: String
+    let score: Double
+    let bindingWindow: RouteWindowWire?
+    let timeMultiplier: Double?
+    let timeState: String?
+    let nextBetterSlot: String?
+    let promoExpiry: String?
+    let liveSessions: Int?
+    let reasons: [String]?
+    let excluded: [RouteExclusionWire]?
+    let alternatives: [RouteAlternativeWire]?
+
+    enum CodingKeys: String, CodingKey {
+        case decisionId = "decision_id"
+        case provider, account, model, score, reasons, excluded, alternatives
+        case bindingWindow = "binding_window"
+        case timeMultiplier = "time_multiplier"
+        case timeState = "time_state"
+        case nextBetterSlot = "next_better_slot"
+        case promoExpiry = "promo_expiry"
+        case liveSessions = "live_sessions"
+    }
+}
+
+private struct RouteWindowWire: Decodable {
+    let kind: String
+    let remainingPct: Int
+    let resetsAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case kind
+        case remainingPct = "remaining_pct"
+        case resetsAt = "resets_at"
+    }
+}
+
+private struct RouteExclusionWire: Decodable {
+    let provider: String
+    let account: String?
+    let reason: String
+}
+
+private struct RouteAlternativeWire: Decodable {
+    let provider: String
+    let account: String?
+    let model: String
+    let score: Double
+    /// Fraction d'headroom restante (0…1) ; `null` = quota inconnu (jamais 0).
+    let quotaHeadroomPct: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case provider, account, model, score
+        case quotaHeadroomPct = "quota_headroom_pct"
+    }
+}
+
+private func mapRouteNow(_ wire: RouteNowWire) throws -> RouterRouteNow {
+    func date(_ raw: String, field: String) throws -> Date {
+        do {
+            return try Date.ISO8601FormatStyle().parse(raw)
+        } catch {
+            throw RouterQuotaIssue("route_now.\(field) is not a valid ISO-8601 date")
+        }
+    }
+
+    let generatedAt = try date(wire.generatedAt, field: "generated_at")
+    var profiles: [String: RouterRecommendation] = [:]
+    for (key, rec) in wire.profiles {
+        let bindingWindow: RouterRouteWindow? = try rec.bindingWindow.map { w in
+            RouterRouteWindow(
+                kind: w.kind,
+                remainingPct: w.remainingPct,
+                resetsAt: try w.resetsAt.map { try date($0, field: "profiles.\(key).binding_window.resets_at") }
+            )
+        }
+        profiles[key] = RouterRecommendation(
+            decisionId: rec.decisionId,
+            provider: rec.provider,
+            account: rec.account,
+            model: rec.model,
+            score: rec.score,
+            bindingWindow: bindingWindow,
+            timeMultiplier: rec.timeMultiplier ?? 1.0,
+            timeState: rec.timeState ?? "normal",
+            nextBetterSlot: try rec.nextBetterSlot.map { try date($0, field: "profiles.\(key).next_better_slot") },
+            promoExpiry: rec.promoExpiry,
+            liveSessions: rec.liveSessions,
+            reasons: rec.reasons ?? [],
+            excluded: (rec.excluded ?? []).map {
+                RouterRouteExclusion(provider: $0.provider, account: $0.account, reason: $0.reason)
+            },
+            alternatives: (rec.alternatives ?? []).map {
+                RouterRouteAlternative(
+                    provider: $0.provider, account: $0.account, model: $0.model,
+                    score: $0.score, quotaHeadroomPct: $0.quotaHeadroomPct
+                )
+            }
+        )
+    }
+    return RouterRouteNow(generatedAt: generatedAt, profiles: profiles)
+}
+
 private struct ProviderWire: Decodable {
     let providerId: String
     let windows: [WindowWire]
     let error: String?
+    let errorClass: String?
     let source: String?
     let grade: String?
     let capturedAt: Double
@@ -638,10 +808,15 @@ private struct ProviderWire: Decodable {
     let credentialExpiresAt: String?
     let expiryCandidates: [String]
     let forecast: ForecastWire?
+    /// Catalog family from providers.yaml (SSOT), e.g. "deepseek"/"zai"/"opencode".
+    /// Lets Cortex learn the available model families from the router instead of
+    /// a hardcoded enum.
+    let family: String?
 
     enum CodingKeys: String, CodingKey {
         case providerId = "provider_id"
-        case windows, error, source, grade
+        case windows, error, source, grade, family
+        case errorClass = "error_class"
         case capturedAt = "captured_at"
         case manual, accounts, warnings
         case effectiveHeadroom = "effective_headroom"
@@ -663,6 +838,7 @@ private struct ProviderWire: Decodable {
         providerId = try container.decode(String.self, forKey: .providerId)
         windows = try container.decode([WindowWire].self, forKey: .windows)
         error = try container.decodeRequiredIfPresent(String.self, forKey: .error)
+        errorClass = try container.decodeIfPresent(String.self, forKey: .errorClass)
         source = try container.decodeRequiredIfPresent(String.self, forKey: .source)
         grade = try container.decodeRequiredIfPresent(String.self, forKey: .grade)
         capturedAt = try container.decode(Double.self, forKey: .capturedAt)
@@ -681,6 +857,7 @@ private struct ProviderWire: Decodable {
         credentialExpiresAt = try container.decodeIfPresent(String.self, forKey: .credentialExpiresAt)
         expiryCandidates = try container.decodeIfPresent([String].self, forKey: .expiryCandidates) ?? []
         forecast = try container.decodeIfPresent(ForecastWire.self, forKey: .forecast)
+        family = try container.decodeIfPresent(String.self, forKey: .family)
     }
 }
 
@@ -713,6 +890,7 @@ private struct AccountWire: Decodable {
     let windows: [WindowWire]
     let present: Bool
     let error: String?
+    let errorClass: String?
     let source: String?
     let active: Bool
     let stale: Bool
@@ -723,6 +901,7 @@ private struct AccountWire: Decodable {
         case accountId = "account_id"
         case identity
         case authState = "auth_state"
+        case errorClass = "error_class"
     }
 
     init(from decoder: Decoder) throws {
@@ -733,6 +912,7 @@ private struct AccountWire: Decodable {
         windows = try container.decode([WindowWire].self, forKey: .windows)
         present = try container.decode(Bool.self, forKey: .present)
         error = try container.decodeRequiredIfPresent(String.self, forKey: .error)
+        errorClass = try container.decodeIfPresent(String.self, forKey: .errorClass)
         source = try container.decodeRequiredIfPresent(String.self, forKey: .source)
         active = try container.decode(Bool.self, forKey: .active)
         stale = try container.decode(Bool.self, forKey: .stale)

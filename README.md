@@ -1,15 +1,16 @@
 # Cortex
 
 > **Project identity.** Cortex is Benjamin Belaga's open-source macOS quota monitor,
-> derived from the upstream [ClaudeBar](https://github.com/tddworks/ClaudeBar) architecture.
-> The application bundle ships as **Cortex.app** on disk and the menu-bar item
-> shows the **Cortex** label, while the underlying codebase keeps upstream's
-> target name (`ClaudeBar`) and class names for mergeability with
-> `upstream/main`. The bundle ID is `fr.yoyaku.cortex` (migrated from
-> upstream's in E4, with non-destructive Keychain/UserDefaults migration). The
-> source never ships provider credentials; local accounts remain in macOS Keychain.
+> built on an upstream open-source codebase (MIT — see [`NOTICE.md`](NOTICE.md) for
+> attribution and the reconciliation reference). The application bundle ships as
+> **Cortex.app** on disk and the menu-bar item shows the **Cortex** label, while the
+> underlying codebase keeps the upstream internal target name (`Cortex`) and class
+> names for mergeability with `upstream/main`. The bundle ID is `fr.yoyaku.cortex`
+> (migrated from upstream's in E4, with non-destructive Keychain/UserDefaults
+> migration). The source never ships provider credentials; local accounts remain in
+> macOS Keychain.
 >
-> **Coming from upstream ClaudeBar.** E4 renamed the bundle id from
+> **Coming from the upstream app.** E4 renamed the bundle id from
 > `com.tddworks.claudebar` to `fr.yoyaku.cortex`. On first launch Cortex copies
 > the Keychain items and UserDefaults keys it needs into the new namespace and
 > leaves the old ones untouched (an explicit new value always wins). macOS
@@ -68,7 +69,7 @@ Every quota is tracked in real time and color-coded based on remaining capacity:
 
 ## Touch Bar Integration
 
-ClaudeBar features native, system-wide Touch Bar integration for MacBook Pro models equipped with an Apple Touch Bar (including M1/M2 and Intel). This runs 100% natively inside ClaudeBar—requiring **zero third-party apps** (no BetterTouchTool or MTMR required) and **no special accessibility permissions**.
+Cortex features native, system-wide Touch Bar integration for MacBook Pro models equipped with an Apple Touch Bar (including M1/M2 and Intel). This runs 100% natively inside Cortex—requiring **zero third-party apps** (no BetterTouchTool or MTMR required) and **no special accessibility permissions**.
 
 ### Key Touch Bar Features
 
@@ -89,7 +90,7 @@ ClaudeBar features native, system-wide Touch Bar integration for MacBook Pro mod
 
 ## MacBook Notch Live Activity
 
-ClaudeBar can render Claude Code's session and quota state directly in your MacBook notch (Settings > General > Notch Live Activity):
+Cortex can render Claude Code's session and quota state directly in your MacBook notch (Settings > General > Notch Live Activity):
 
 - **Idle Mode**: Displays your selected provider's most depleted quota at a glance.
 - **Active Session Mode**: Displays repository name, elapsed time, and the number of active subagents fanned out.
@@ -134,7 +135,7 @@ ClaudeBar can render Claude Code's session and quota state directly in your MacB
 
 Kimi supports two probe modes, configurable in **Settings > Kimi Configuration**:
 - **CLI Mode (Recommended)**: Launches interactive `kimi` and executes `/usage`. Requires `uv tool install kimi-cli` or `pip install kimi-cli`. No Full Disk Access required.
-- **API Mode**: Calls Kimi Connect-RPC directly using browser cookie auth. Requires **Full Disk Access** for ClaudeBar in **System Settings > Privacy & Security > Full Disk Access** (or set `KIMI_AUTH_TOKEN`).
+- **API Mode**: Calls Kimi Connect-RPC directly using browser cookie auth. Requires **Full Disk Access** for Cortex in **System Settings > Privacy & Security > Full Disk Access** (or set `KIMI_AUTH_TOKEN`).
 </details>
 
 <details>
@@ -184,13 +185,13 @@ Publishing quota state to your iPhone is optional and off by default. It is conf
 1. Get [Notify!](https://getnotifyapp.com). It runs on Mac, on iOS, and on any device through web push.
 2. **For the Live Activity, open Notify! once on the iPhone or iPad you are publishing to.** One cannot be started until that device has registered a push-to-start credential, and only opening the app produces one. Skip this step if you only want the widgets, which are polled rather than pushed, and skip it for a Mac or browser ID, which cannot show a Live Activity at all.
 3. In Notify!, copy your device ID and device token.
-4. Put them in the **Device ID** and **Token** fields in ClaudeBar's Notify! settings pane and press **Save Link**. Pasting a whole notification URL into the Device ID field works too, ClaudeBar splits it across both. **Verify Device** confirms the pair against Notify! and names the phone it belongs to. Then turn **Publish to Notify!** on.
+4. Put them in the **Device ID** and **Token** fields in Cortex's Notify! settings pane and press **Save Link**. Pasting a whole notification URL into the Device ID field works too, Cortex splits it across both. **Verify Device** confirms the pair against Notify! and names the phone it belongs to. Then turn **Publish to Notify!** on.
 
-The Live Activity needs an iPhone or iPad ID. Notify! also issues IDs for Macs and browsers, and those keep both widgets perfectly well, but Notify! cannot start a Live Activity on one, so ClaudeBar disables just that switch and says why. A group ID receives notifications but owns no Lock Screen or Home Screen of its own, so it gets none of the three.
+The Live Activity needs an iPhone or iPad ID. Notify! also issues IDs for Macs and browsers, and those keep both widgets perfectly well, but Notify! cannot start a Live Activity on one, so Cortex disables just that switch and says why. A group ID receives notifications but owns no Lock Screen or Home Screen of its own, so it gets none of the three.
 
-All three surfaces can be turned off separately, and you can choose which quota the gauge shows. The Home Screen widget shows the same thing as the Live Activity, and the difference is that it stays: a Live Activity appears while something is happening and then goes away, while the Home Screen widget sits where you put it and always shows the latest state. It needs a recent Notify! app, where you turn it on under **Settings > Home Screen Widgets**, and you place it yourself through iOS's own widget picker. Notify! can also switch the surface off at its own end while it is still rolling out; ClaudeBar treats that as "not yet", pauses just that widget, and carries on publishing the other two.
+All three surfaces can be turned off separately, and you can choose which quota the gauge shows. The Home Screen widget shows the same thing as the Live Activity, and the difference is that it stays: a Live Activity appears while something is happening and then goes away, while the Home Screen widget sits where you put it and always shows the latest state. It needs a recent Notify! app, where you turn it on under **Settings > Home Screen Widgets**, and you place it yourself through iOS's own widget picker. Notify! can also switch the surface off at its own end while it is still rolling out; Cortex treats that as "not yet", pauses just that widget, and carries on publishing the other two.
 
-Note that this sends provider names, quota window labels and remaining percentages to a third-party service. The device token is stored in the Keychain, not in `~/.claudebar/settings.json`. A build you compile yourself is ad-hoc signed and the Keychain refuses it, so on those the token falls back to ClaudeBar's app credentials and the pane says so.
+Note that this sends provider names, quota window labels and remaining percentages to a third-party service. The device token is stored in the Keychain, not in `~/.claudebar/settings.json`. A build you compile yourself is ad-hoc signed and the Keychain refuses it, so on those the token falls back to Cortex's app credentials and the pane says so.
 
 Full details: [docs/features/notify.md](docs/features/notify.md).
 
@@ -207,13 +208,13 @@ brew install tuist
 
 # Install dependencies and build
 tuist install
-tuist build ClaudeBar -C Release
+tuist build Cortex -C Release
 ```
 
 > [!NOTE]
 > No Homebrew cask and no signed release exist yet — see
-> [docs/cortex-release-plan.md](docs/cortex-release-plan.md) for the release
-> checklist. A self-compiled build is ad-hoc signed.
+> [docs/release/RELEASE_SETUP.md](docs/release/RELEASE_SETUP.md) for the
+> release checklist. A self-compiled build is ad-hoc signed.
 
 ## Usage
 
@@ -221,16 +222,26 @@ After building, open the generated Xcode workspace and run the app:
 
 ```bash
 tuist generate
-open ClaudeBar.xcworkspace
+open Cortex.xcworkspace
 ```
 
 Then press `Cmd+R` in Xcode to run. The app will appear in your menu bar. Click to view quota details for each provider.
 
-### Works with native providers or an optional router
+### Built for a YOYAKU machine — and usable without one
 
-Cortex uses native provider probes by default. An optional local router can be
-enabled explicitly for installations that already have one; fresh installs do
-not assume a router, aliases or shared credentials.
+Cortex is developed on a machine with `llm-router` serving shared quota
+snapshots. Two behaviors reflect that origin and stay inert elsewhere:
+
+- **Curated defaults**: niche native providers and pay-as-you-go connectors
+  are hidden until explicitly enabled from the `+` catalogue. Nothing is
+  ever deleted — re-enabling is one click.
+- **Legacy alias binding** (`default`/`webmaster`/`tech` → router aliases):
+  runs only when the precise pre-migration signature is detected
+  (`integration.legacyAliasBinding`, default off for fresh installs).
+
+A fresh install without llm-router gets native Claude/Codex rows via the
+autonomous probes (see `RouterSourceModeMigration` for the exact
+fresh-install defaults).
 
 ## Development
 
@@ -247,7 +258,7 @@ tuist install
 
 # Generate Xcode project and open
 tuist generate
-open ClaudeBar.xcworkspace
+open Cortex.xcworkspace
 ```
 
 ### Build & Test
@@ -263,7 +274,7 @@ tuist test
 tuist test --result-bundle-path TestResults.xcresult -- -enableCodeCoverage YES
 
 # Build release configuration
-tuist build ClaudeBar -C Release
+tuist build Cortex -C Release
 ```
 
 ### SwiftUI Previews
@@ -274,7 +285,7 @@ After opening in Xcode, SwiftUI previews will work with `Cmd+Option+Return`. The
 
 > **Full documentation:** [docs/architecture/ARCHITECTURE.md](docs/architecture/ARCHITECTURE.md)
 
-ClaudeBar uses a **layered architecture** with `QuotaMonitor` as the single source of truth:
+Cortex uses a **layered architecture** with `QuotaMonitor` as the single source of truth:
 
 | Layer | Purpose |
 |-------|---------|
@@ -292,7 +303,7 @@ ClaudeBar uses a **layered architecture** with `QuotaMonitor` as the single sour
 
 ## Import Terminal Theme
 
-Match ClaudeBar's appearance to your terminal. Import any `.itermcolors` file:
+Match Cortex's appearance to your terminal. Import any `.itermcolors` file:
 
 1. Open **Settings** (gear icon)
 2. Click **Import .itermcolors**
@@ -320,7 +331,7 @@ Tell Claude Code: "I want to add a new provider for [ProviderName]"
 
 The skill guides you through: Parsing Tests → Probe Tests → Implementation → Registration.
 
-See `docs/cortex-release-plan.md` for the provider checklist and `AntigravityUsageProbe` as a reference implementation.
+See `.claude/skills/add-provider/SKILL.md` for details and `AntigravityUsageProbe` as a reference implementation.
 
 ## Dependencies
 
@@ -330,10 +341,10 @@ See `docs/cortex-release-plan.md` for the provider checklist and `AntigravityUsa
 
 ## Releasing
 
-Releases are manual and bound to an exact `main` commit through the release
-workflow. Public CI never receives provider credentials.
+Releases are automated on the zero-cost YOYAKU macOS runner and are bound to an
+exact `main` commit through `gha-safe`.
 
-**For the release checklist, see [docs/cortex-release-plan.md](docs/cortex-release-plan.md).**
+**For detailed setup instructions, see [docs/release/RELEASE_SETUP.md](docs/release/RELEASE_SETUP.md).**
 
 ### Release Workflow
 
@@ -347,11 +358,11 @@ Version is set in `Sources/App/Info.plist` and flows through to Sparkle auto-upd
 
 ### Quick Start
 
-1. **Configure the release authority** in the repository's protected environment:
+1. **Configure the release authority** (see [full guide](docs/release/RELEASE_SETUP.md)):
 
    - GitHub secret `SPARKLE_EDDSA_PRIVATE_KEY`
    - Developer ID identity in the trusted runner's login Keychain
-   - a private notarytool Keychain profile on the trusted release runner
+   - notarytool Keychain profile `YOYAKU-NOTARY`
 
 2. **Verify your certificate**:
    ```bash
@@ -361,7 +372,7 @@ Version is set in `Sources/App/Info.plist` and flows through to Sparkle auto-upd
 3. **Create a release from the exact checked-in version on `main`**:
    ```bash
    RELEASE_SHA="$(git rev-parse main)"
-   gha-safe dispatch --repo benjaminbelaga/Cortex --workflow release.yml \
+   gha-safe dispatch --repo yoyaku-group/Cortex --workflow release.yml \
      --ref main --expected-sha "$RELEASE_SHA" --apply
    ```
 

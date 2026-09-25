@@ -1,12 +1,12 @@
 import Foundation
 import Domain
 
-/// Writes ClaudeBar's quota state to the Notify! gateway.
+/// Writes Cortex's quota state to the Notify! gateway.
 ///
 /// The gateway has no notion of a tile or widget "type": the fields present in the JSON body
 /// decide how the thing draws, and an absent field is left alone by the gateway's merge. So this
-/// client sends only the fields ClaudeBar actually drives and never mentions the rest, which is
-/// what keeps a ClaudeBar update from stomping something the user configured elsewhere.
+/// client sends only the fields Cortex actually drives and never mentions the rest, which is
+/// what keeps a Cortex update from stomping something the user configured elsewhere.
 ///
 /// Routes used:
 /// - `POST /live-activity/{deviceId|activityId}?token=` for the Lock Screen tile
@@ -54,7 +54,7 @@ public struct NotifyGatewayClient: NotifyPublishing, Sendable {
     /// Starts the tile when `activityId` is nil, otherwise updates that exact tile.
     ///
     /// A start addresses the device id and carries `"new": true`. That flag matters twice over.
-    /// It tells the gateway to start a tile of ClaudeBar's own instead of taking over whichever
+    /// It tells the gateway to start a tile of Cortex's own instead of taking over whichever
     /// tile the user last started from some other script, and it is the documented override for
     /// the sticky dismissal 410, so a tile the user swiped away can be replaced by a fresh one.
     ///
@@ -69,7 +69,7 @@ public struct NotifyGatewayClient: NotifyPublishing, Sendable {
         // which answers a start aimed at one with a 400 saying the target device cannot show Live
         // Activities at all, and a group owns no Lock Screen to start one on. So the point of
         // stopping here is not the saved request. It is which sentence the user ends up reading: a
-        // 400 coming back from a server reads as ClaudeBar failing at something it should have
+        // 400 coming back from a server reads as Cortex failing at something it should have
         // managed, while the link's own reason reads as the thing that is actually true about
         // their device, and it names the fix, which is to paste the link from their phone.
         guard link.supportsLiveActivity else {
@@ -107,12 +107,12 @@ public struct NotifyGatewayClient: NotifyPublishing, Sendable {
         let data = try await send(request, route: route, accepting: [200])
 
         guard let decoded = try? JSONDecoder().decode(LiveActivityWriteResponse.self, from: data) else {
-            AppLog.network.error("Notify!: \(route) answered a body ClaudeBar could not read")
+            AppLog.network.error("Notify!: \(route) answered a body Cortex could not read")
             throw NotifyPublishError.malformedResponse
         }
 
         // `pushed: false` is a success. The content is stored and delivers the moment the device
-        // reports a usable tile token again, so treating it as an error would make ClaudeBar
+        // reports a usable tile token again, so treating it as an error would make Cortex
         // restart a tile that is already waiting to appear.
         if decoded.pushed == false {
             AppLog.network.debug("Notify!: tile content stored, no reachable tile token right now")
@@ -184,7 +184,7 @@ public struct NotifyGatewayClient: NotifyPublishing, Sendable {
 
         guard let decoded = try? JSONDecoder().decode(WidgetWriteResponse.self, from: data),
               let identifier = decoded.widgetId ?? widgetId else {
-            AppLog.network.error("Notify!: \(route) answered a body ClaudeBar could not read")
+            AppLog.network.error("Notify!: \(route) answered a body Cortex could not read")
             throw NotifyPublishError.malformedResponse
         }
         return identifier
@@ -256,19 +256,19 @@ public struct NotifyGatewayClient: NotifyPublishing, Sendable {
         } catch NotifyPublishError.unexpectedStatus(503) {
             // The server side kill switch for Home Screen widgets. While it is off, creates and
             // updates are refused and reads and deletes are deliberately left open so an already
-            // placed tile keeps rendering. Nothing is wrong with ClaudeBar, the credentials or
+            // placed tile keeps rendering. Nothing is wrong with Cortex, the credentials or
             // the content, so this must not reach the user reading like a failure, and the remedy
             // is to wait for the day the surface is switched on.
             //
             // The gateway's own sentence does not survive `unexpectedStatus`, which carries a
             // status code and nothing else, and that costs nothing: an empty message picks the
-            // error's own "switched off at the moment, ClaudeBar will try again later" wording,
+            // error's own "switched off at the moment, Cortex will try again later" wording,
             // which is the sentence to put in front of a user however the server phrased it.
             throw NotifyPublishError.surfaceSwitchedOff("")
         } catch NotifyPublishError.liveActivityUnavailable(let message) {
             // A 409, which the shared mapping reads as a Live Activity problem because that is
             // what it means on the route it was written for. Here it means the device dialect
-            // found several screen widgets and cannot tell which one was meant. ClaudeBar creates
+            // found several screen widgets and cannot tell which one was meant. Cortex creates
             // its own with `new` and addresses it by `SW…` id afterwards, so it should never see
             // this, but telling somebody to open the Notify! app about their Live Activities
             // would be a wrong answer to a question about a Home Screen widget.
@@ -277,7 +277,7 @@ public struct NotifyGatewayClient: NotifyPublishing, Sendable {
 
         guard let decoded = try? JSONDecoder().decode(ScreenWidgetWriteResponse.self, from: data),
               let identifier = decoded.screenWidgetId ?? screenWidgetId else {
-            AppLog.network.error("Notify!: \(route) answered a body ClaudeBar could not read")
+            AppLog.network.error("Notify!: \(route) answered a body Cortex could not read")
             throw NotifyPublishError.malformedResponse
         }
         return identifier
@@ -350,7 +350,7 @@ public struct NotifyGatewayClient: NotifyPublishing, Sendable {
         }
 
         guard let decoded = try? JSONDecoder().decode(LinkResponse.self, from: data) else {
-            AppLog.network.error("Notify!: GET \(Self.linkRoute) answered a body ClaudeBar could not read")
+            AppLog.network.error("Notify!: GET \(Self.linkRoute) answered a body Cortex could not read")
             throw NotifyPublishError.malformedResponse
         }
 
@@ -358,7 +358,7 @@ public struct NotifyGatewayClient: NotifyPublishing, Sendable {
         // so a group link has to be rejected here rather than failing later with a puzzling 400.
         guard decoded.type == "device" else {
             throw NotifyPublishError.invalidPayload(
-                "That link points at a Notify! group. ClaudeBar needs a device link, not a group."
+                "That link points at a Notify! group. Cortex needs a device link, not a group."
             )
         }
 
@@ -379,7 +379,7 @@ public struct NotifyGatewayClient: NotifyPublishing, Sendable {
     /// debug level only, which never reaches the log file on disk.
     /// `expected` names statuses that are a refusal rather than a fault: they
     /// still throw, but they are logged at info, because writing "error" into
-    /// the file a user attaches to a bug report for something ClaudeBar then
+    /// the file a user attaches to a bug report for something Cortex then
     /// tells them is perfectly normal is how a log stops being trusted. The
     /// Home Screen widget's 503 kill switch is the only one so far.
     private func send(
@@ -462,7 +462,7 @@ public struct NotifyGatewayClient: NotifyPublishing, Sendable {
         do {
             return try JSONSerialization.data(withJSONObject: body)
         } catch {
-            throw NotifyPublishError.invalidPayload("ClaudeBar could not encode this update.")
+            throw NotifyPublishError.invalidPayload("Cortex could not encode this update.")
         }
     }
 
@@ -474,14 +474,14 @@ public struct NotifyGatewayClient: NotifyPublishing, Sendable {
     ///
     /// `status`, `endsIn`, `steps`, `step` and `button` are deliberately never mentioned. Those
     /// are the fields the "leave it alone" rule is actually for: an absent field is left alone by
-    /// the gateway's merge, so staying silent about them is what lets a ClaudeBar update share a
+    /// the gateway's merge, so staying silent about them is what lets a Cortex update share a
     /// tile with whatever else the user set up.
     ///
     /// `metrics` has no query spelling at all: the gateway reads it from the JSON body only.
     static func tileBody(_ tile: NotifyTile) -> [String: Any] {
         var body: [String: Any] = ["title": tile.title]
 
-        // Every field ClaudeBar drives is stated on every write, as an explicit
+        // Every field Cortex drives is stated on every write, as an explicit
         // null when it has no value. The gateway merges rather than replaces, so
         // omitting a field it already holds freezes the old value instead of
         // clearing it: a reset countdown would keep ticking beside a quota that
@@ -509,7 +509,7 @@ public struct NotifyGatewayClient: NotifyPublishing, Sendable {
     /// The widget's content fields, stating a null for anything the Domain type left nil.
     ///
     /// The widget is the surface where this matters most. A tile is short lived and gets restarted,
-    /// but the widget ClaudeBar creates lives under its `WG…` id until the user removes it, so any
+    /// but the widget Cortex creates lives under its `WG…` id until the user removes it, so any
     /// field left unstated survives forever. A gauge showing a credit balance has no percentage and
     /// no percent sign, and saying so is the only way to take the previous ring off the screen.
     ///
@@ -587,7 +587,7 @@ public struct NotifyGatewayClient: NotifyPublishing, Sendable {
     ///
     /// The body's own number wins because the gateway computes it from the backoff ladder it is
     /// actually enforcing. The `Retry-After` header is the HTTP fallback, and only its numeric
-    /// form is read: the HTTP date form would need a clock ClaudeBar cannot trust to agree with
+    /// form is read: the HTTP date form would need a clock Cortex cannot trust to agree with
     /// the server's. With neither present, 30 minutes is the ladder's first rung and so the safest
     /// guess available.
     static func retryAfter(bodySeconds: Double?, header: String?) -> TimeInterval {
@@ -624,19 +624,19 @@ private struct LiveActivityWriteResponse: Decodable {
 }
 
 /// The `Widget` object a create (201) and an update (200) both answer with. Only the id is read:
-/// the echoed content is what ClaudeBar just sent.
+/// the echoed content is what Cortex just sent.
 private struct WidgetWriteResponse: Decodable {
     let widgetId: String?
 }
 
 /// The `ScreenWidget` object, answered by a create (201) and an update (200) alike. Only the id is
-/// read, for the reason the widget's is: the rest of the object is the content ClaudeBar just sent
-/// back again, plus a `staleAt` the phone owns and ClaudeBar has no decision to make about.
+/// read, for the reason the widget's is: the rest of the object is the content Cortex just sent
+/// back again, plus a `staleAt` the phone owns and Cortex has no decision to make about.
 private struct ScreenWidgetWriteResponse: Decodable {
     let screenWidgetId: String?
 }
 
-/// `GET /link`, which answers flat snake_case. Only the four fields ClaudeBar needs are read, and
+/// `GET /link`, which answers flat snake_case. Only the four fields Cortex needs are read, and
 /// none of those four has an underscore in it, so no key mapping is required.
 private struct LinkResponse: Decodable {
     let type: String?

@@ -5,7 +5,7 @@ import Infrastructure
 
 // MARK: - Native Touch Bar Driver
 
-/// Manages native macOS NSTouchBar presentation for ClaudeBar when the dropdown or settings window is open.
+/// Manages native macOS NSTouchBar presentation for Cortex when the dropdown or settings window is open.
 @MainActor
 public final class NativeTouchBarDriver: NSObject, NSTouchBarDelegate {
     public static let shared = NativeTouchBarDriver()
@@ -150,7 +150,7 @@ public struct TouchBarActiveProviderBadge: View {
             }
             return name
         }
-        return "ClaudeBar"
+        return "Cortex"
     }
 
     private var statusColor: Color {
@@ -238,7 +238,7 @@ public struct TouchBarProviderItem: View {
 }
 
 /// SwiftUI declarative Touch Bar content.
-public struct ClaudeBarNativeTouchBar: View {
+public struct CortexNativeTouchBar: View {
     let monitor: QuotaMonitor
     @State private var settings = AppSettings.shared
 

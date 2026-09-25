@@ -30,16 +30,31 @@ enum AccountConnectRunner {
         let message: String
     }
 
-    static func connect(provider: Provider, alias: String, identity: String?) async -> Result {
-        let sequence = connectCommand(provider: provider, alias: alias, identity: identity)
+    static func connect(
+        provider: Provider,
+        alias: String,
+        identity: String?,
+        profileOverride: String? = nil
+    ) async -> Result {
+        let sequence = connectCommand(provider: provider, alias: alias, identity: identity, profileOverride: profileOverride)
         let launch = await TerminalCommandLauncher.open(
             sequence,
-            successMessage: "Terminal ouvert — login et vérification en cours"
+            successMessage: "Terminal open — login and verification in progress"
         )
         return Result(succeeded: launch.launched, message: launch.message)
     }
 
-    static func connectCommand(provider: Provider, alias: String, identity: String?) -> String {
+    /// `profileOverride` reuses the auth home already declared in the account's
+    /// settings (e.g. `~/.claude-tech`) instead of minting a new
+    /// `~/.claude-accounts/<slug>` — a router seat reconnected in a fresh
+    /// profile would register an auth home the app never reads (defect
+    /// observed 2026-09-22 on the TECH/WEBMASTER seats).
+    static func connectCommand(
+        provider: Provider,
+        alias: String,
+        identity: String?,
+        profileOverride: String? = nil
+    ) -> String {
         let normalizedAlias = alias.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
         let slug = String(
             normalizedAlias.lowercased().map { $0.isLetter || $0.isNumber ? $0 : "-" }
@@ -56,24 +71,28 @@ enum AccountConnectRunner {
         let loginEmail = identityArg ?? "''"
         let verifiedIdentity = identityArg ?? "''"
 
+        let override = profileOverride.flatMap { value -> String? in
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : shellQuote(trimmed)
+        }
         switch provider {
         case .claude:
-            let profile = "$HOME/.claude-accounts/\(safeSlug)"
-            return "mkdir -p \"\(profile)\""
-                + " && (CLAUDE_CONFIG_DIR=\"\(profile)\" claude auth status 2>/dev/null | grep -q '\\\"loggedIn\\\": true'"
-                + " || CLAUDE_CONFIG_DIR=\"\(profile)\" claude auth login --claudeai --email \(loginEmail) )"
-                + " && CLAUDE_CONFIG_DIR=\"\(profile)\" cswap add --alias \(aliasArg)"
+            let profile = override ?? "\"$HOME/.claude-accounts/\(safeSlug)\""
+            return "mkdir -p \(profile)"
+                + " && (CLAUDE_CONFIG_DIR=\(profile) claude auth status 2>/dev/null | grep -q '\\\"loggedIn\\\": true'"
+                + " || CLAUDE_CONFIG_DIR=\(profile) claude auth login --claudeai --email \(loginEmail) )"
+                + " && CLAUDE_CONFIG_DIR=\(profile) cswap add --alias \(aliasArg)"
                 + " && llm-router account add claude --alias \(aliasArg)\(identityFlag)"
                 + " --auth-state connected --launcher-profile \(aliasArg)"
-                + " --auth-home \"\(profile)\" --verified-identity \(verifiedIdentity)"
+                + " --auth-home \(profile) --verified-identity \(verifiedIdentity)"
                 + " && cswap list --token-status"
         case .codex:
-            let profile = "$HOME/.codex-accounts/\(safeSlug)"
-            return "mkdir -p \"\(profile)\" && chmod 700 \"\(profile)\""
-                + " && CODEX_HOME=\"\(profile)\" codex login"
-                + " && (test ! -f \"\(profile)/auth.json\" || chmod 600 \"\(profile)/auth.json\")"
+            let profile = override ?? "\"$HOME/.codex-accounts/\(safeSlug)\""
+            return "mkdir -p \(profile) && chmod 700 \(profile)"
+                + " && CODEX_HOME=\(profile) codex login"
+                + " && (test ! -f \(profile)/auth.json || chmod 600 \(profile)/auth.json)"
                 + " && llm-router account add codex --alias \(aliasArg)\(identityFlag)"
-                + " --auth-state connected --codex-home \"\(profile)\""
+                + " --auth-state connected --codex-home \(profile)"
         }
     }
 

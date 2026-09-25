@@ -1,6 +1,6 @@
 # User Behaviors Catalog
 
-All observable user-facing behaviors in ClaudeBar, organized by feature area.
+All observable user-facing behaviors in Cortex, organized by feature area.
 This catalog drives the **Outside-In (Double Loop)** test strategy:
 
 - **Outer loop (BDD)**: Each behavior → Given/When/Then acceptance scenarios

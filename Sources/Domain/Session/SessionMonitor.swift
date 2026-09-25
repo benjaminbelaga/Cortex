@@ -56,7 +56,7 @@ public final class SessionMonitor {
     /// Keeps fork and compaction events for the timeline. Probe-origin
     /// events never qualify (issue #172).
     private func recordIfNotable(_ event: SessionEvent) {
-        guard !event.isClaudeBarProbe else { return }
+        guard !event.isCortexProbe else { return }
         let notable: Bool
         switch event.eventName {
         case .preCompact, .postCompact:

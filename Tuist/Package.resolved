@@ -76,7 +76,7 @@
     {
       "identity" : "sweetcookiekit",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/steipete/SweetCookieKit.git",
+      "location" : "https://github.com/steipete/SweetCookieKit",
       "state" : {
         "revision" : "aa9fbefd7d4fb6335a3cd71fd6210f9a35535185",
         "version" : "0.5.3"
@@ -274,7 +274,7 @@
     {
       "identity" : "swift-subprocess",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/swiftlang/swift-subprocess.git",
+      "location" : "https://github.com/swiftlang/swift-subprocess",
       "state" : {
         "revision" : "b3937ab85dd32f6e9435914599c1519074769c1a",
         "version" : "1.0.0"

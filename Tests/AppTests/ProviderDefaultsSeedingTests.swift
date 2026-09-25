@@ -1,9 +1,9 @@
 import Testing
 import Foundation
-@testable import ClaudeBar
+@testable import Cortex
 @testable import Infrastructure
 
-/// Pins `ClaudeBarApp.seedCuratedProviderDefaultsIfNeeded`: the optional
+/// Pins `CortexApp.seedCuratedProviderDefaultsIfNeeded`: the optional
 /// pay-as-you-go / credentialed connectors (Qwen API, AWS Bedrock, Local) are
 /// disabled on a fresh install, an explicit stored preference (true or false) is
 /// never clobbered, and a manual re-enable survives a simulated restart.
@@ -18,14 +18,14 @@ struct ProviderDefaultsSeedingTests {
         return (JSONSettingsRepository(store: store), dir)
     }
 
-    private let optionalConnectors = ["qwen-api", "bedrock", "local"]
+    private let optionalConnectors = ["bedrock", "local"]
 
     @Test("Absent preference is seeded to disabled for optional connectors")
     func absentSeededDisabled() {
         let (repo, dir) = makeRepository()
         defer { try? FileManager.default.removeItem(at: dir) }
 
-        ClaudeBarApp.seedCuratedProviderDefaultsIfNeeded(settingsRepository: repo)
+        CortexApp.seedCuratedProviderDefaultsIfNeeded(settingsRepository: repo)
 
         for id in optionalConnectors {
             #expect(repo.isEnabled(forProvider: id, defaultValue: true) == false)
@@ -40,7 +40,7 @@ struct ProviderDefaultsSeedingTests {
         defer { try? FileManager.default.removeItem(at: dir) }
 
         repo.setEnabled(true, forProvider: "bedrock")
-        ClaudeBarApp.seedCuratedProviderDefaultsIfNeeded(settingsRepository: repo)
+        CortexApp.seedCuratedProviderDefaultsIfNeeded(settingsRepository: repo)
 
         #expect(repo.isEnabled(forProvider: "bedrock", defaultValue: false) == true)
     }
@@ -50,10 +50,10 @@ struct ProviderDefaultsSeedingTests {
         let (repo, dir) = makeRepository()
         defer { try? FileManager.default.removeItem(at: dir) }
 
-        repo.setEnabled(false, forProvider: "qwen-api")
-        ClaudeBarApp.seedCuratedProviderDefaultsIfNeeded(settingsRepository: repo)
+        repo.setEnabled(false, forProvider: "local")
+        CortexApp.seedCuratedProviderDefaultsIfNeeded(settingsRepository: repo)
 
-        #expect(repo.isEnabled(forProvider: "qwen-api", defaultValue: true) == false)
+        #expect(repo.isEnabled(forProvider: "local", defaultValue: true) == false)
     }
 
     @Test("Manual re-enable after seeding survives a re-seed (restart)")
@@ -61,9 +61,9 @@ struct ProviderDefaultsSeedingTests {
         let (repo, dir) = makeRepository()
         defer { try? FileManager.default.removeItem(at: dir) }
 
-        ClaudeBarApp.seedCuratedProviderDefaultsIfNeeded(settingsRepository: repo)
+        CortexApp.seedCuratedProviderDefaultsIfNeeded(settingsRepository: repo)
         repo.setEnabled(true, forProvider: "local") // user opts in via the catalog
-        ClaudeBarApp.seedCuratedProviderDefaultsIfNeeded(settingsRepository: repo) // restart
+        CortexApp.seedCuratedProviderDefaultsIfNeeded(settingsRepository: repo) // restart
 
         #expect(repo.isEnabled(forProvider: "local", defaultValue: false) == true)
     }
@@ -73,7 +73,7 @@ struct ProviderDefaultsSeedingTests {
         let (repo, dir) = makeRepository()
         defer { try? FileManager.default.removeItem(at: dir) }
 
-        ClaudeBarApp.seedCuratedProviderDefaultsIfNeeded(settingsRepository: repo)
+        CortexApp.seedCuratedProviderDefaultsIfNeeded(settingsRepository: repo)
 
         for id in ["omp", "kiro", "ampcode", "grok", "cursor", "mistral", "deepseek", "vercel-gateway"] {
             #expect(repo.isEnabled(forProvider: id, defaultValue: true) == false)
@@ -87,7 +87,7 @@ struct ProviderDefaultsSeedingTests {
         let (repo, dir) = makeRepository()
         defer { try? FileManager.default.removeItem(at: dir) }
 
-        ClaudeBarApp.seedCuratedProviderDefaultsIfNeeded(settingsRepository: repo)
+        CortexApp.seedCuratedProviderDefaultsIfNeeded(settingsRepository: repo)
 
         for id in ["opencode-go", "commandcode"] {
             #expect(repo.isEnabled(forProvider: id, defaultValue: true) == true)

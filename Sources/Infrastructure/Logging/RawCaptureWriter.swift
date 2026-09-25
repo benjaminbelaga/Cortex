@@ -3,7 +3,7 @@ import Foundation
 /// Dumps raw probe payloads to disk when a parse fails, so the exact bytes
 /// that broke the parser can be inspected after the fact.
 ///
-/// Captures land in `~/Library/Application Support/ClaudeBar/Diagnostics/`
+/// Captures land in `~/Library/Application Support/Cortex/Diagnostics/`
 /// as `<kind>-<ISO timestamp>.txt` (colons replaced so the name is
 /// filesystem-safe). Only the newest `keepLast` captures per kind are kept —
 /// this is a diagnostic ring buffer, not a log. Use sparingly: one file per

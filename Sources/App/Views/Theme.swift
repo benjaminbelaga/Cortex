@@ -65,7 +65,7 @@ extension EnvironmentValues {
     }
 }
 
-// MARK: - ClaudeBar App Theme
+// MARK: - Cortex App Theme
 // Adaptive purple-pink gradients with glassmorphism
 // Distinct aesthetics for light and dark modes
 
@@ -668,6 +668,10 @@ extension AppTheme {
             return scheme == .dark
                 ? Color(white: 0.92)
                 : Color(white: 0.12)
+        case "ollama":
+            return scheme == .dark
+                ? Color(white: 0.92)
+                : Color(white: 0.10)
         case "commandcode":
             return scheme == .dark
                 ? Color(red: 0.83, green: 1.0, blue: 0.29)
@@ -746,6 +750,10 @@ extension AppTheme {
             secondaryColor = scheme == .dark
                 ? Color(white: 0.60)
                 : Color(white: 0.40)
+        case "ollama":
+            secondaryColor = scheme == .dark
+                ? Color(white: 0.50)
+                : Color(white: 0.30)
         case "commandcode":
             secondaryColor = scheme == .dark
                 ? Color(red: 0.55, green: 0.75, blue: 0.12)
@@ -782,6 +790,7 @@ extension AppTheme {
         case "opencode-go": return "OpenCodeIcon"
         case "omp": return "OmpIcon"
         case "grok": return "GrokIcon"
+        case "ollama": return "OllamaIcon"
         case "commandcode": return "CommandCodeIcon"
         case "vercel-gateway": return "VercelIcon"
         default: return "QuestionIcon"
@@ -807,6 +816,7 @@ extension AppTheme {
         case "opencode-go": return "OpenCode Go"
         case "omp": return "Oh My Pi"
         case "grok": return "Grok"
+        case "ollama": return "Ollama Cloud"
         case "commandcode": return "Command Code"
         case "vercel-gateway": return "Vercel Gateway"
         default: return providerId.capitalized

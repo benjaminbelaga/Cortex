@@ -3,12 +3,12 @@ import Mockable
 
 /// Publishing quota state to a linked Notify! device.
 ///
-/// The Domain side of the feature: what ClaudeBar can ask for, in Domain value
+/// The Domain side of the feature: what Cortex can ask for, in Domain value
 /// types, with no idea that HTTP exists. `NotifyGatewayClient` in Infrastructure
 /// is the implementation.
 ///
 /// Both write methods take the handle of the thing they last wrote and return
-/// the handle to store next time. That is what keeps ClaudeBar from touching a
+/// the handle to store next time. That is what keeps Cortex from touching a
 /// tile or widget the user created for something else: a nil handle means
 /// "create your own", and every later write addresses that one by id.
 @Mockable

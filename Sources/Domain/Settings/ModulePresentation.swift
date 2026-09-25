@@ -12,8 +12,8 @@ public enum ModuleVisibility: String, Sendable, Equatable, CaseIterable, Codable
     public var displayLabel: String {
         switch self {
         case .automatic: "Automatique"
-        case .visible: "Afficher"
-        case .hidden: "Masquer"
+        case .visible: "Show"
+        case .hidden: "Hide"
         }
     }
 }
@@ -37,22 +37,22 @@ public enum FeatureModule: String, Sendable, CaseIterable, Identifiable {
         switch self {
         case .providers: "Quotas"
         case .sessions: "Sessions"
-        case .usageCosts: "Usage et coûts"
+        case .usageCosts: "Usage & costs"
         case .localRuntime: "Services IA locaux"
-        case .integrations: "Intégrations"
+        case .integrations: "Integrations"
         }
     }
 
     public var subtitle: String {
         switch self {
         case .providers:
-            "Barres de quota des outils suivis. Visible dès qu'un compte est configuré."
+            "Quota bars for tracked tools. Visible as soon as an account is configured."
         case .sessions:
-            "Sessions en cours et activité des 24 h. Visible dès qu'un outil est détecté, même sans quota."
+            "Live sessions and 24 h activity. Visible as soon as a tool is detected, even without quota."
         case .usageCosts:
-            "Résumé d'usage et estimation de dépense. Replié tant qu'aucune source de coût n'existe."
+            "Usage summary and cost estimate. Collapsed while no cost source exists."
         case .localRuntime:
-            "Moteurs locaux et serveurs MCP configurés. Détail avancé, masqué par défaut."
+            "Configured local engines and MCP servers. Advanced detail, hidden by default."
         case .integrations:
             "tmux, missions, hooks et notifications externes. Facultatif."
         }

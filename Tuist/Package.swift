@@ -22,7 +22,7 @@ let packageSettings = PackageSettings(
 #endif
 
 let package = Package(
-    name: "ClaudeBar",
+    name: "Cortex",
     dependencies: [
         // Add your own dependencies here:
         // .package(url: "https://github.com/Alamofire/Alamofire", from: "5.0.0"),

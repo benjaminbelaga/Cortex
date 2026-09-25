@@ -1,6 +1,6 @@
 import Foundation
 
-/// Turns quota readings into the tile and gauge ClaudeBar publishes to Notify!.
+/// Turns quota readings into the tile and gauge Cortex publishes to Notify!.
 ///
 /// This is the whole decision layer of the feature and it is deliberately pure:
 /// no clock of its own, no network, no settings lookups. What to show, in what
@@ -16,7 +16,7 @@ import Foundation
 /// 3. Labels drop the provider name when every reading comes from the same
 ///    provider, so a single provider tile reads "5h  7d" rather than
 ///    "Claude 5h  Claude 7d".
-/// 4. Percentages are remaining, not used. Every ClaudeBar surface reads that
+/// 4. Percentages are remaining, not used. Every Cortex surface reads that
 ///    way, and a full bar meaning a full quota is the only intuitive mapping
 ///    for a gauge.
 public struct NotifyPayloadBuilder: Sendable {
@@ -24,7 +24,7 @@ public struct NotifyPayloadBuilder: Sendable {
     /// current quota: the gateway treats a title as an identity, and a widget
     /// that renamed itself whenever the user switched provider would be
     /// unrecognizable in the phone's widget picker.
-    public static let defaultTitle = "ClaudeBar"
+    public static let defaultTitle = "Cortex"
 
     private let title: String
 

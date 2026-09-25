@@ -1,7 +1,9 @@
 self-hosted-runner:
   # Labels of self-hosted runner in array of strings.
   labels:
-    - cortex-release
+    - yoyaku-linux-ci
+    - yoyaku-macos-ci
+    - claudebar-ci
 
 # Configuration variables in array of strings defined in your repository or
 # organization. `null` means disabling configuration variables check.

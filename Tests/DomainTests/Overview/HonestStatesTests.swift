@@ -179,4 +179,21 @@ struct HonestStatesTests {
         let rows = [row(windows: [window(id: "w", percent: 0, scope: .weekly)])]
         #expect(OverviewBuilder.fleetSummary(rows: rows, filter: .session) == .unknown)
     }
+
+    @Test("headerLabel: unknown rows are surfaced, reconnect keeps its segment")
+    func headerLabelComposition() {
+        #expect(
+            FleetAvailabilitySummary.known(status: .healthy, usable: 5, needsAction: 4, unknownCount: 0)
+                .headerLabel == "5 available · 4 to reconnect"
+        )
+        #expect(
+            FleetAvailabilitySummary.known(status: .healthy, usable: 5, needsAction: 4, unknownCount: 2)
+                .headerLabel == "5 available · 4 to reconnect · 2 unknown"
+        )
+        #expect(
+            FleetAvailabilitySummary.known(status: .healthy, usable: 5, needsAction: 0, unknownCount: 0)
+                .headerLabel == "5 available"
+        )
+        #expect(FleetAvailabilitySummary.unknown.headerLabel == "Unknown state")
+    }
 }

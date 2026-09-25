@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import Domain
-@testable import ClaudeBar
+@testable import Cortex
 
 /// D tranche — every typed enrolment state and error renders a non-empty
 /// French label (a new enum case must fail here, never silently render an
@@ -74,21 +74,21 @@ struct CatalogStringsTests {
         ) ?? ""
         #expect(detail.contains("b***@e***.com"))
         #expect(!detail.contains("b@example.com"))
-        #expect(detail.contains("Rien n'a été enregistré"))
+        #expect(detail.contains("Nothing was saved"))
     }
 
     @Test("quotaPending reads as a valid state, not an error")
     func quotaPendingIsNotAnError() {
         let title = CatalogStrings.title(for: .quotaPending(descriptor()))
-        #expect(title.contains("Connecté"))
-        #expect(title.contains("attente"))
+        #expect(title.contains("Connected"))
+        #expect(title.contains("pending"))
         #expect(!title.lowercased().contains("échec"))
     }
 
     @Test("cancelled states that nothing was registered")
     func cancelledSaysNothingPersisted() {
         let detail = CatalogStrings.detail(for: .cancelled(descriptor())) ?? ""
-        #expect(detail.contains("Rien n'a été enregistré"))
+        #expect(detail.contains("Nothing was saved"))
     }
 
     @Test("terminal states are distinct — success never reuses a failure label")

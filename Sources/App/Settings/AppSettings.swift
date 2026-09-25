@@ -3,7 +3,7 @@ import Domain
 import Infrastructure
 import ServiceManagement
 
-/// Observable settings manager for ClaudeBar preferences.
+/// Observable settings manager for Cortex preferences.
 /// Thin `@Observable` wrapper around `AppSettingsRepository` for SwiftUI reactivity.
 /// All persistence is delegated to the repository (`~/.claudebar/settings.json`).
 @MainActor
@@ -253,6 +253,42 @@ public final class AppSettings {
         }
     }
 
+    /// Provider groups the user expanded in the overview (default: collapsed).
+    public var overviewExpandedGroups: Set<String> {
+        didSet {
+            repository.setOverviewExpandedGroups(overviewExpandedGroups)
+        }
+    }
+
+    /// Preferred model families per overview row id (display preference).
+    public var preferredModels: [String: [String]] {
+        didSet {
+            repository.setPreferredModels(preferredModels)
+        }
+    }
+
+    /// Provider-level preferred LLM (Settings → provider), shown once on the
+    /// provider's group header (display preference, never a routing guarantee).
+    public var providerPreferredModel: [String: String] {
+        didSet {
+            repository.setProviderPreferredModel(providerPreferredModel)
+        }
+    }
+
+    /// Selected "Priority" recommendation profile (plan / execute / flexible).
+    public var routeProfile: RouterRouteNow.Profile {
+        didSet {
+            repository.setRouteProfile(routeProfile)
+        }
+    }
+
+    /// Whether the "Priority" card is expanded (default: collapsed).
+    public var priorityCardExpanded: Bool {
+        didSet {
+            repository.setPriorityCardExpanded(priorityCardExpanded)
+        }
+    }
+
     /// What the menu-bar glyph shows (text / running cat / both).
     public var menuBarGlyphMode: MenuBarGlyphMode {
         didSet {
@@ -361,6 +397,13 @@ public final class AppSettings {
             guard !isInitializing else { return }
             do {
                 if launchAtLogin {
+                    // Only /Applications release builds: a Debug build that registers
+                    // becomes a second Cortex at every login (LoginItemPolicy).
+                    guard LoginItemPolicy.canRegister(bundlePath: Bundle.main.bundlePath,
+                                                      isDebugBuild: Self.isDebugBuild) else {
+                        launchAtLogin = false
+                        return
+                    }
                     try SMAppService.mainApp.register()
                 } else {
                     try SMAppService.mainApp.unregister()
@@ -374,6 +417,14 @@ public final class AppSettings {
     // MARK: - Internal
 
     private var isInitializing = true
+
+    static var isDebugBuild: Bool {
+        #if DEBUG
+        true
+        #else
+        false
+        #endif
+    }
 
     // MARK: - Initialization
 
@@ -401,6 +452,11 @@ public final class AppSettings {
         self.overviewModeEnabled = repository.overviewModeEnabled()
         self.overviewWindowFilter = repository.overviewWindowFilter()
         self.overviewSort = repository.overviewSort()
+        self.overviewExpandedGroups = repository.overviewExpandedGroups()
+        self.preferredModels = repository.preferredModels()
+        self.providerPreferredModel = repository.providerPreferredModel()
+        self.routeProfile = repository.routeProfile()
+        self.priorityCardExpanded = repository.priorityCardExpanded()
         self.menuBarGlyphMode = repository.menuBarGlyphMode()
         self.backgroundSyncEnabled = repository.backgroundSyncEnabled()
         self.backgroundSyncInterval = repository.backgroundSyncInterval()

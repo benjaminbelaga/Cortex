@@ -2,7 +2,7 @@ import Testing
 import Foundation
 import Domain
 import Infrastructure
-@testable import ClaudeBar
+@testable import Cortex
 
 /// Pins `RouterSourceModeMigration`: une machine avec registre llm-router garde
 /// la lecture partagée ; une machine vierge part en sondes natives et ne suit

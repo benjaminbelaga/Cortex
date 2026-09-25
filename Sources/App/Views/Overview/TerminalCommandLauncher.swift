@@ -30,14 +30,14 @@ enum TerminalCommandLauncher {
                     )?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                     AppLog.ui.error("terminal launcher failed rc=\(process.terminationStatus): \(detail)")
                     copyToClipboard(command)
-                    return Result(launched: false, message: "Terminal indisponible — commande copiée")
+                    return Result(launched: false, message: "Terminal unavailable — command copied")
                 }
                 AppLog.ui.info("terminal command launched; completion is receipt-driven")
                 return Result(launched: true, message: successMessage)
             } catch {
                 AppLog.ui.error("terminal launcher failed: \(error.localizedDescription)")
                 copyToClipboard(command)
-                return Result(launched: false, message: "Terminal indisponible — commande copiée")
+                return Result(launched: false, message: "Terminal unavailable — command copied")
             }
         }.value
     }

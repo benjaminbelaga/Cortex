@@ -1095,7 +1095,7 @@ public final class ClaudeUsageProbe: UsageProbe, @unchecked Sendable {
         let fm = FileManager.default
         let base = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first ?? fm.temporaryDirectory
         let dir = base
-            .appendingPathComponent("ClaudeBar", isDirectory: true)
+            .appendingPathComponent("Cortex", isDirectory: true)
             .appendingPathComponent("Probe", isDirectory: true)
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir

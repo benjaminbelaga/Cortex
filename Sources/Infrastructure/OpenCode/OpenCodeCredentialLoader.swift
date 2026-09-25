@@ -32,13 +32,30 @@ public struct OpenCodeCredentialLoader: Sendable {
 
     private let homeDirectory: String
     private let environment: [String: String]
+    /// Failover SSOT section this loader reads: `tier1` (OpenCode Go/Zen pool)
+    /// or `ollama_pool` (Ollama Cloud keys used by opencode's `ollama-cloud`).
+    public let section: String
+    /// Slot list when the SSOT section is absent.
+    public let defaultSlots: [String]
+    /// Prefix of new auth.json slots enrolled into this pool.
+    public let slotPrefix: String
 
     public init(
         homeDirectory: String = NSHomeDirectory(),
-        environment: [String: String] = ProcessInfo.processInfo.environment
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        section: String = "tier1"
     ) {
         self.homeDirectory = homeDirectory
         self.environment = environment
+        self.section = section
+        self.defaultSlots = section == "tier1" ? Self.entryKeys : ["ollama-cloud"]
+        self.slotPrefix = section == "tier1" ? "opencode-" : "ollama-cloud-"
+    }
+
+    /// The Ollama Cloud key pool (SSOT `ollama_pool`), rotated by the opencode
+    /// failover plugin behind the tier-2 fallback target `ollama-cloud`.
+    public static func ollamaCloud(homeDirectory: String = NSHomeDirectory()) -> OpenCodeCredentialLoader {
+        OpenCodeCredentialLoader(homeDirectory: homeDirectory, environment: [:], section: "ollama_pool")
     }
 
     /// Path to opencode's `auth.json`.
@@ -100,7 +117,7 @@ public struct OpenCodeCredentialLoader: Sendable {
     private func ssotAccountLabels() -> [String: String] {
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: ssotFilePath)),
               let ssot = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let tier1 = ssot["tier1"] as? [String: Any],
+              let tier1 = ssot[section] as? [String: Any],
               let accounts = tier1["accounts"] as? [[String: Any]] else { return [:] }
         var out: [String: String] = [:]
         for a in accounts {
@@ -115,9 +132,9 @@ public struct OpenCodeCredentialLoader: Sendable {
     private func ssotSlots() -> [String] {
         guard let data = try? Data(contentsOf: URL(fileURLWithPath: ssotFilePath)),
               let ssot = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let tier1 = ssot["tier1"] as? [String: Any],
+              let tier1 = ssot[section] as? [String: Any],
               let slots = tier1["slots"] as? [String], !slots.isEmpty else {
-            return Self.entryKeys
+            return defaultSlots
         }
         return slots
     }

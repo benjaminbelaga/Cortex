@@ -3,7 +3,7 @@ import Foundation
 import AppKit
 #endif
 
-/// File-based logger that writes to ~/Library/Logs/ClaudeBar/ClaudeBar.log
+/// File-based logger that writes to ~/Library/Logs/Cortex/Cortex.log
 /// Provides user-accessible logs for debugging and support.
 ///
 /// Thread-safety: All file operations are serialized on a dedicated dispatch queue.

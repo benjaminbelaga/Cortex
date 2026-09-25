@@ -44,7 +44,7 @@ final class NotchWindowDriver {
 
     /// Defers `start()` until the app has finished launching.
     ///
-    /// `ClaudeBarApp` builds this driver in `App.init()`, and starting there
+    /// `CortexApp` builds this driver in `App.init()`, and starting there
     /// would create an `NSWindow` and its `NSHostingView` before SwiftUI has
     /// built a single scene. Doing so left `MenuBarExtra`'s popover sized to
     /// roughly twice its content — 400x671 around 300pt of cards — for the

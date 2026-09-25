@@ -32,7 +32,7 @@ public struct CodexQuotaSummary: Sendable, Equatable {
 ///
 /// `hasGauges == false` ⇒ API-key plan (`"metered_api"`) — the user pays per
 /// token, so no 5h/7d windows exist. The UI sheet reads this to suppress the
-/// "fenêtres" rows; the row still shows "Connecté · quotas en attente" or
+/// "fenêtres" rows; the row still shows "Connected · quotas pending" or
 /// the cost column instead.
 public struct CodexAccountSnapshot: Sendable, Equatable {
     public let label: String

@@ -34,10 +34,39 @@ public final class JSONSettingsStore: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
 
-        var dict = readFileUnsafe()
-        let parts = key.split(separator: ".").map(String.init)
-        resolveWrite(dict: &dict, keyPath: parts, value: value)
-        writeFile(dict)
+        // Cross-process advisory lock (flock) around the whole read-modify-write,
+        // so a concurrent CLI writer can't interleave and lose a key. The NSLock
+        // above only serialises in-process; flock coordinates across processes.
+        withExclusiveFileLock {
+            var dict = readFileUnsafe()
+            let parts = key.split(separator: ".").map(String.init)
+            resolveWrite(dict: &dict, keyPath: parts, value: value)
+            writeFile(dict)
+        }
+    }
+
+    /// Runs `body` while holding an exclusive advisory lock on the settings file.
+    /// Fail-open: if the lock file cannot be opened, `body` still runs (a write
+    /// must never be silently dropped over a locking hiccup).
+    private func withExclusiveFileLock(_ body: () -> Void) {
+        let parentDir = fileURL.deletingLastPathComponent()
+        try? FileManager.default.createDirectory(at: parentDir, withIntermediateDirectories: true)
+        // Lock a sibling `.lock` file, never the data file itself: the atomic
+        // write replaces the data file's inode, which would drop a lock held on
+        // it. A stable side-channel inode keeps the lock meaningful.
+        let lockURL = fileURL.appendingPathExtension("lock")
+        let fd = open(lockURL.path, O_CREAT | O_RDWR, 0o644)
+        guard fd >= 0 else {
+            body()
+            return
+        }
+        defer { close(fd) }
+        if flock(fd, LOCK_EX) != 0 {
+            body()
+            return
+        }
+        defer { flock(fd, LOCK_UN) }
+        body()
     }
 
     /// Returns the full settings dictionary (for migration/debugging).

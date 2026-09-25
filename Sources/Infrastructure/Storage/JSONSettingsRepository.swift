@@ -31,6 +31,10 @@ public final class JSONSettingsRepository:
     private let credentials: UserDefaults
     private let secureCredentials: any CredentialRepository
 
+    /// The settings file backing this repository — used by live watchers
+    /// (e.g. `AccountUsageProvider`) so an external CLI write is picked up.
+    public var settingsFileURL: URL { store.fileURL }
+
     private var vercelCredentials: SecureCredentialMigration {
         SecureCredentialMigration(
             secureStore: secureCredentials,
@@ -230,6 +234,50 @@ public final class JSONSettingsRepository:
 
     public func setOverviewSort(_ sort: OverviewSort) {
         store.write(value: sort.rawValue, key: "app.overviewSort")
+    }
+
+    public func overviewExpandedGroups() -> Set<String> {
+        Set((store.read(key: "app.overviewExpandedGroups") as [String]?) ?? [])
+    }
+
+    public func setOverviewExpandedGroups(_ ids: Set<String>) {
+        store.write(value: ids.sorted(), key: "app.overviewExpandedGroups")
+    }
+
+    public func preferredModels() -> [String: [String]] {
+        (store.read(key: "app.preferredModels") as [String: [String]]?) ?? [:]
+    }
+
+    public func setPreferredModels(_ map: [String: [String]]) {
+        store.write(value: map.filter { !$0.value.isEmpty }, key: "app.preferredModels")
+    }
+
+    public func providerPreferredModel() -> [String: String] {
+        (store.read(key: "app.providerPreferredModel") as [String: String]?) ?? [:]
+    }
+
+    public func setProviderPreferredModel(_ map: [String: String]) {
+        store.write(value: map.filter { !$0.value.isEmpty }, key: "app.providerPreferredModel")
+    }
+
+    public func priorityCardExpanded() -> Bool {
+        store.read(key: "app.priorityCardExpanded") ?? false
+    }
+
+    public func setPriorityCardExpanded(_ expanded: Bool) {
+        store.write(value: expanded, key: "app.priorityCardExpanded")
+    }
+
+    public func routeProfile() -> RouterRouteNow.Profile {
+        guard let raw: String = store.read(key: "app.routeProfile"),
+              let profile = RouterRouteNow.Profile(rawValue: raw) else {
+            return .plan
+        }
+        return profile
+    }
+
+    public func setRouteProfile(_ profile: RouterRouteNow.Profile) {
+        store.write(value: profile.rawValue, key: "app.routeProfile")
     }
 
     public func menuBarGlyphMode() -> MenuBarGlyphMode {
@@ -671,7 +719,7 @@ public final class JSONSettingsRepository:
 
         // Prove it landed, rather than assume. `CredentialRepository.save` has no
         // way to report a refusal, and the Keychain does refuse: a locally built
-        // ClaudeBar is ad-hoc signed (`CODE_SIGN_IDENTITY` is "-"), so it has no
+        // Cortex is ad-hoc signed (`CODE_SIGN_IDENTITY` is "-"), so it has no
         // stable identity for a Keychain item's access control to name, and both
         // the read and the write come back errSecAuthFailed (-25293). A release
         // build signed with a Developer ID is unaffected. Without this check the

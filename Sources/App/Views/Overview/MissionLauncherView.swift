@@ -32,7 +32,7 @@ struct MissionLauncherView: View {
                 .buttonStyle(.plain)
             }
 
-            TextField("Que veux-tu lancer ?", text: $mission)
+            TextField("What do you want to launch?", text: $mission)
                 .textFieldStyle(.roundedBorder)
                 .focused($missionFocused)
                 .onSubmit { requestSuggestion() }
@@ -48,7 +48,7 @@ struct MissionLauncherView: View {
             }
 
             HStack(spacing: 6) {
-                loadChip(.light, label: "Légère", icon: "bolt")
+                loadChip(.light, label: "Light", icon: "bolt")
                 loadChip(.heavy, label: "Lourde", icon: "brain.head.profile")
                 Spacer()
                 Button {
@@ -110,7 +110,7 @@ struct MissionLauncherView: View {
                         Text(candidate.provider)
                             .font(theme.font(size: 10, weight: .bold))
                         if recommended {
-                            Text("RECOMMANDÉ")
+                            Text("RECOMMENDED")
                                 .font(theme.font(size: 7, weight: .bold))
                                 .foregroundStyle(theme.accentPrimary)
                         }
@@ -133,7 +133,7 @@ struct MissionLauncherView: View {
                 .disabled(repoPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
 
-            Button(expandedCandidate == candidate.id ? "Masquer pourquoi" : "Pourquoi") {
+            Button(expandedCandidate == candidate.id ? "Hide why" : "Pourquoi") {
                 expandedCandidate = expandedCandidate == candidate.id ? nil : candidate.id
             }
             .buttonStyle(.plain)

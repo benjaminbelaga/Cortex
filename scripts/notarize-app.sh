@@ -5,7 +5,7 @@
 # Usage: ./scripts/notarize-app.sh <app-bundle> <api-key-path> <key-id> <issuer-id>
 #
 # Example:
-#   ./scripts/notarize-app.sh ClaudeBar.app ~/AuthKey_ABC123.p8 ABC123 12345678-1234-1234-1234-123456789012
+#   ./scripts/notarize-app.sh Cortex.app ~/AuthKey_ABC123.p8 ABC123 12345678-1234-1234-1234-123456789012
 #
 # Environment variables (alternative to arguments):
 #   NOTARYTOOL_PROFILE              - Keychain profile on a trusted runner

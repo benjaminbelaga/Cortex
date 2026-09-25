@@ -64,6 +64,17 @@ private struct ProviderListRow: View {
         return "Updated \(relative)"
     }
 
+    /// Multi-account providers surface their roster size + how many have a live
+    /// reading ("3 comptes · 1 dispo") so the card is glanceable without drilling.
+    private var accountSummary: String? {
+        guard provider.isEnabled,
+              let multi = provider as? any MultiAccountProvider,
+              multi.accounts.count > 1 else { return nil }
+        let total = multi.accounts.count
+        let available = multi.accounts.filter { multi.accountSnapshots[$0.accountId] != nil }.count
+        return "\(total) compte\(total > 1 ? "s" : "") · \(available) dispo"
+    }
+
     var body: some View {
         Button(action: onSelect) {
             HStack(spacing: 12) {
@@ -77,6 +88,12 @@ private struct ProviderListRow: View {
                     Text(statusText)
                         .font(.system(size: 10, weight: .medium, design: theme.fontDesign))
                         .foregroundStyle(theme.textTertiary)
+
+                    if let accountSummary {
+                        Text(accountSummary)
+                            .font(.system(size: 10, weight: .semibold, design: theme.fontDesign))
+                            .foregroundStyle(theme.textSecondary)
+                    }
                 }
 
                 Spacer()
@@ -186,7 +203,7 @@ private struct ProviderDetailView: View {
                 if provider.isEnabled {
                     if ["claude", "codex", "qwen"].contains(provider.id) {
                         SettingsCard {
-                            Text("Source des quotas").font(.headline)
+                            Text("Quota source").font(.headline)
                             Picker("Source", selection: Binding(
                                 get: { provider is RouterBackedProvider ? QuotaSourceMode.router : .autonomous },
                                 set: { mode in Task { await catalog.setSource(providerId: provider.id, mode: mode) } }
@@ -197,11 +214,12 @@ private struct ProviderDetailView: View {
                         }
                     }
                     if let multi = provider as? any MultiAccountProvider,
-                       ["claude", "codex", "opencode-go", "commandcode"].contains(provider.id) {
+                       ProviderCatalog.addableAccountIDs.contains(provider.id) {
                         AccountManagementCard(provider: multi, monitor: monitor)
                     }
                     if provider.id == "qwen" { qwenConfiguration }
                     configCard
+                    preferredModelCard
 
                     SettingsCard {
                         SettingsFieldLabel(text: "CUSTOM WEB CARD")
@@ -233,10 +251,10 @@ private struct ProviderDetailView: View {
                 }.onChange(of: consoleSite) { _, site in
                     consoleRegion = site == "domestic" ? "cn-beijing" : "ap-southeast-1"
                 }
-                TextField("Région", text: $consoleRegion)
+                TextField("Region", text: $consoleRegion)
                 Text("Connexion : bl auth login --console --console-site \(consoleSite) --config \(bailianProfile)")
                     .font(.caption).textSelection(.enabled)
-                Button("Enregistrer et lire les quotas") {
+                Button("Save and read quotas") {
                     Task { await catalog.configureQwen(profile: bailianProfile, site: consoleSite, region: consoleRegion) }
                 }
                 if let error = catalog.proposalError { Text(error).font(.caption).foregroundStyle(theme.statusWarning) }
@@ -268,6 +286,46 @@ private struct ProviderDetailView: View {
             .contentShape(.rect)
         }
         .buttonStyle(.plain)
+    }
+
+    /// Provider-level preferred LLM (Ben 2026-09-23): chosen once here, shown
+    /// ONCE on the provider's overview header — never repeated per account row.
+    /// A display preference only; routing stays llm-router's decision (bible §6).
+    private var preferredModelCard: some View {
+        SettingsCard {
+            VStack(alignment: .leading, spacing: 6) {
+                SettingsFieldLabel(text: "PREFERRED MODEL")
+                Text("The LLM logo shown once next to this provider in the overview. A display preference — routing is still decided by llm-router.")
+                    .font(.system(size: 11, weight: .medium, design: theme.fontDesign))
+                    .foregroundStyle(theme.textTertiary)
+                    .padding(.bottom, 4)
+                ForEach(ModelFamily.allCases) { family in
+                    let selected = AppSettings.shared.providerPreferredModel[provider.id] == family.rawValue
+                    Button {
+                        if selected {
+                            AppSettings.shared.providerPreferredModel.removeValue(forKey: provider.id)
+                        } else {
+                            AppSettings.shared.providerPreferredModel[provider.id] = family.rawValue
+                        }
+                    } label: {
+                        HStack(spacing: 8) {
+                            ModelFamilyLogo(family: family, size: 16)
+                            Text(family.displayName)
+                                .font(.system(size: 12, weight: .medium, design: theme.fontDesign))
+                                .foregroundStyle(theme.textPrimary)
+                            Spacer(minLength: 16)
+                            Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                                .font(.system(size: 12))
+                                .foregroundStyle(selected ? theme.accentPrimary : theme.textTertiary)
+                        }
+                        .contentShape(Rectangle())
+                        .padding(.vertical, 3)
+                        .padding(.horizontal, 4)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
     }
 
     /// The provider-specific config card, when one exists.
@@ -310,7 +368,7 @@ private struct ProviderDetailView: View {
 }
 
 /// Read-only status for quota identities owned by llm-router. Credential and
-/// roster mutations happen in their canonical CLIs; ClaudeBar is a consumer.
+/// roster mutations happen in their canonical CLIs; Cortex is a consumer.
 private struct RouterProviderConfigCard: View {
     let provider: RouterBackedProvider
 
@@ -366,7 +424,7 @@ private struct RouterProviderConfigCard: View {
                     }
                 }
 
-                Text("Manage credentials with the provider CLI; llm-router publishes aliases, freshness, and quota windows to ClaudeBar.")
+                Text("Manage credentials with the provider CLI; llm-router publishes aliases, freshness, and quota windows to Cortex.")
                     .font(.system(size: 10, design: theme.fontDesign))
                     .foregroundStyle(theme.textTertiary)
             }

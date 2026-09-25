@@ -2,7 +2,7 @@ import Foundation
 import Testing
 import Domain
 import Infrastructure
-@testable import ClaudeBar
+@testable import Cortex
 
 @Suite("API account enrolment") @MainActor
 struct APIAccountEnrolmentTests {
@@ -18,7 +18,7 @@ struct APIAccountEnrolmentTests {
         func authenticatedEmail(forProvider: String, profilePath: String) async -> String? { nil }
     }
 
-    private func fixture(reject: Bool = false, invalid: Bool = false) -> (AccountCatalogModel, JSONSettingsRepository, Credentials, URL) {
+    private func fixture(reject: Bool = false, invalid: Bool = false, identity: String? = nil) -> (AccountCatalogModel, JSONSettingsRepository, Credentials, URL) {
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathComponent("settings.json")
         let credentials = Credentials()
         credentials.rejectWrites = reject
@@ -32,9 +32,15 @@ struct APIAccountEnrolmentTests {
             probeAPIKey: { provider, _ in
                 if invalid { throw ProbeError.authenticationRequired }
                 return UsageSnapshot(providerId: provider,
-                    quotas: [.init(percentRemaining: 70, quotaType: .session, providerId: provider)], capturedAt: Date())
+                    quotas: [.init(percentRemaining: 70, quotaType: .session, providerId: provider)], capturedAt: Date(),
+                    accountEmail: identity)
             }, activateIntegration: { settings.setEnabled(true, forProvider: $0) })
         return (model, settings, credentials, url)
+    }
+
+    private func poolKeys(_ url: URL) -> [String] {
+        CommandCodeCredentialLoader(homeDirectory: url.deletingLastPathComponent().path, environment: [:])
+            .loadPool().map(\.key)
     }
 
     @Test func twoAccountsSurviveReloadWithoutPlaintextKeys() async throws {
@@ -45,12 +51,42 @@ struct APIAccountEnrolmentTests {
         let accounts = restored.accounts(forProvider: "commandcode")
         #expect(accounts.map(\.label) == ["Personal", "Work"])
         #expect(Set(accounts.map(\.accountId)).count == 2)
-        #expect(credentials.values.count == 2)
+        // Command Code keys live in the CLI failover pool, never the Keychain.
+        #expect(poolKeys(url) == ["fixture-personal", "fixture-work"])
+        #expect(credentials.values.isEmpty)
         #expect(settings.isEnabled(forProvider: "commandcode"))
         let json = try String(contentsOf: url, encoding: .utf8)
         #expect(!json.contains("fixture-personal"))
         #expect(!json.contains("fixture-work"))
         #expect(model.addedAccountLabel == "Work")
+    }
+
+    @Test func sameKeyTwiceIsRefused() async {
+        let (model, settings, _, url) = fixture()
+        await model.addAPIAccount(providerId: "commandcode", label: "Personal", apiKey: "fixture-personal")
+        await model.addAPIAccount(providerId: "commandcode", label: "Again", apiKey: "fixture-personal")
+        #expect(settings.accounts(forProvider: "commandcode").map(\.label) == ["Personal"])
+        #expect(poolKeys(url) == ["fixture-personal"])
+        #expect(model.proposalError?.contains("Personal") == true)
+    }
+
+    @Test func secondKeyOfSameIdentityIsRefused() async {
+        let (model, settings, _, url) = fixture(identity: "benjaminbelaga")
+        await model.addAPIAccount(providerId: "commandcode", label: "Personal", apiKey: "fixture-a")
+        await model.addAPIAccount(providerId: "commandcode", label: "Twin", apiKey: "fixture-b")
+        #expect(settings.accounts(forProvider: "commandcode").map(\.label) == ["Personal"])
+        #expect(poolKeys(url) == ["fixture-a"])
+    }
+
+    @Test func copyableKeyResolvesOnlyForStoredAccounts() async {
+        let (model, settings, _, _) = fixture()
+        await model.addAPIAccount(providerId: "commandcode", label: "Personal", apiKey: "fixture-personal")
+        let account = settings.accounts(forProvider: "commandcode").first
+        #expect(account != nil)
+        #expect(model.canCopyAPIKey(providerId: "commandcode", accountId: account?.accountId ?? "") == true)
+        #expect(model.apiKey(providerId: "commandcode", accountId: account?.accountId ?? "") == "fixture-personal")
+        #expect(model.canCopyAPIKey(providerId: "commandcode", accountId: "ghost") == false)
+        #expect(model.apiKey(providerId: "commandcode", accountId: "ghost") == nil)
     }
 
     @Test func invalidKeyCannotCreateAccount() async {
@@ -61,8 +97,12 @@ struct APIAccountEnrolmentTests {
         #expect(model.proposalError != nil)
     }
 
-    @Test func keychainFailureCannotCreateFalseSuccess() async {
-        let (model, settings, _, _) = fixture(reject: true)
+    @Test func keychainFailureCannotCreateFalseSuccess() async throws {
+        let (model, settings, _, url) = fixture(reject: true)
+        // Unreadable pool file = storage failure for the pooled providers.
+        let dir = url.deletingLastPathComponent().appendingPathComponent(".commandcode")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        try "{ not json".write(to: dir.appendingPathComponent("auth-pool.json"), atomically: true, encoding: .utf8)
         await model.addAPIAccount(providerId: "commandcode", label: "Unsaved", apiKey: "fixture-unsaved")
         #expect(settings.accounts(forProvider: "commandcode").isEmpty)
         #expect(model.addedAccountLabel == nil)

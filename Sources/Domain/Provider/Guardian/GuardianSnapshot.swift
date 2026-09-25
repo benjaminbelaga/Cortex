@@ -9,7 +9,7 @@ import Foundation
 /// for decoding the JSON payload into a `GuardianSnapshot`.
 ///
 /// `status` is a free string (green | yellow | red | blind) — the daemon's
-/// vocabulary, not ClaudeBar's. Views map it to colors via their own logic
+/// vocabulary, not Cortex's. Views map it to colors via their own logic
 /// (see `GuardianCardView.statusColor`).
 public struct GuardianSnapshot: Sendable, Equatable {
     public let status: String

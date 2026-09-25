@@ -14,7 +14,7 @@ What was missing was anything to *cause* a draw on a time basis. `StatusItemLabe
 |---|---|
 | Probe snapshot / settings / session-phase change | `currentLabelContent()` |
 | Background refresh tick | `restartMonitoring`'s stream consumer |
-| Claude Code hook event → `sessionMonitor.activeSession` mutation | `ClaudeBarApp.startHookServer` |
+| Claude Code hook event → `sessionMonitor.activeSession` mutation | `CortexApp.startHookServer` |
 | System wake | `NSWorkspace.didWakeNotification` |
 | Dropdown open/close | `reassertPresentation()` |
 

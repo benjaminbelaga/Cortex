@@ -39,6 +39,7 @@ struct CmuxSessionSourceTests {
         directory: String,
         title: String,
         processTitle: String? = nil,
+        statusEntries: [[String: Any]]? = nil,
         panels: [[String: Any]]
     ) -> [String: Any] {
         var object: [String: Any] = [
@@ -48,6 +49,7 @@ struct CmuxSessionSourceTests {
             "panels": panels,
         ]
         if let processTitle { object["processTitle"] = processTitle }
+        if let statusEntries { object["statusEntries"] = statusEntries }
         return object
     }
 
@@ -124,6 +126,65 @@ struct CmuxSessionSourceTests {
 
         #expect(report.observations.first?.activity == .unknown)
         #expect(SessionCounts.from(report.observations).open == 0)
+    }
+
+    @Test("Un workspace dont l'agent tourne (statut Running frais) est « en travail »")
+    func runningWorkspaceIsWorking() async throws {
+        let root = try makeTempDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let snapshot = root.appendingPathComponent("session-com.cmuxterm.app.json")
+        let now = Date()
+        try writeSnapshot(at: snapshot, workspaces: [
+            workspace(
+                id: "WS-1", directory: "/Users/test/run", title: "mission",
+                statusEntries: [[
+                    "key": "claude_code", "value": "Running",
+                    "timestamp": now.timeIntervalSince1970,
+                ]],
+                panels: [terminalPanel(surface: "S-1", title: "~", directory: "/Users/test/run")]
+            ),
+            workspace(
+                id: "WS-2", directory: "/Users/test/idle", title: "repos",
+                statusEntries: [[
+                    "key": "opencode", "value": "Idle",
+                    "timestamp": now.timeIntervalSince1970,
+                ]],
+                panels: [terminalPanel(surface: "S-2", title: "~", directory: "/Users/test/idle")]
+            ),
+        ])
+
+        let source = CmuxSessionSource(snapshotPath: snapshot.path)
+        let report = await source.collect(limit: 50, now: now)
+
+        #expect(report.observations.first { $0.id == "S-1" }?.activity == .working)
+        #expect(report.observations.first { $0.id == "S-2" }?.activity == .open)
+        let counts = SessionCounts.from(report.observations)
+        #expect(counts.working == 1)
+        #expect(counts.open == 1)
+    }
+
+    @Test("Un « Running » jamais effacé au-delà d'une heure ne gonfle plus « en travail »")
+    func staleRunningIsOpen() async throws {
+        let root = try makeTempDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let snapshot = root.appendingPathComponent("session-com.cmuxterm.app.json")
+        let now = Date()
+        try writeSnapshot(at: snapshot, workspaces: [
+            workspace(
+                id: "WS-1", directory: "/Users/test", title: "abandonné",
+                statusEntries: [[
+                    "key": "claude_code", "value": "Running",
+                    "timestamp": now.addingTimeInterval(-2 * 3_600).timeIntervalSince1970,
+                ]],
+                panels: [terminalPanel(surface: "S-1", title: "~", directory: "/Users/test")]
+            ),
+        ])
+
+        let source = CmuxSessionSource(snapshotPath: snapshot.path)
+        let report = await source.collect(limit: 50, now: now)
+
+        #expect(report.observations.first?.activity == .open)
+        #expect(SessionCounts.from(report.observations).working == 0)
     }
 
     @Test("Un pane vu dans deux workspaces n'est compté qu'une fois")

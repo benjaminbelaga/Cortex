@@ -89,7 +89,7 @@ public struct ClaudeCredentialLoader: Sendable {
     /// Decodes a password read back from `security find-generic-password -w`,
     /// undoing the macOS 26 hex encoding when present.
     ///
-    /// A payload written by an older ClaudeBar build comes back hex-encoded;
+    /// A payload written by an older Cortex build comes back hex-encoded;
     /// this keeps those users working instead of stranding them until their
     /// next `claude` login. Valid JSON always starts with `{`, which is not a
     /// hex digit, so an all-hex payload is unambiguously the encoded form.

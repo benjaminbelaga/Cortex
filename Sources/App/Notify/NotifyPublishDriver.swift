@@ -53,7 +53,7 @@ final class NotifyPublishDriver {
 
     /// While set, Home Screen tile writes are skipped: the gateway has that
     /// surface switched off server side. Separate from the tile's wait because
-    /// the two mean opposite things. Backoff is the gateway asking ClaudeBar to
+    /// the two mean opposite things. Backoff is the gateway asking Cortex to
     /// stop doing something; the kill switch is a feature Notify! has not
     /// started serving yet, and nothing on this Mac shortens it.
     private var screenTileSuppressedUntil: Date?
@@ -206,15 +206,15 @@ final class NotifyPublishDriver {
         guard !decision.publishesNothing else {
             // Every surface the payload carried is inside a wait the gateway
             // asked for, and the two waits are different news. A backoff is
-            // ClaudeBar being told to slow down, which the user can sometimes
+            // Cortex being told to slow down, which the user can sometimes
             // clear from their phone; the kill switch is a surface Notify! has
             // not started serving, where waiting is the only move either of us
             // has. The backoff is named first because it is the one with a
             // remedy.
             if tileSuppressedUntil != nil {
-                return "Notify! is still holding off Live Activity starts. ClaudeBar will retry on its own."
+                return "Notify! is still holding off Live Activity starts. Cortex will retry on its own."
             }
-            return "Notify! is not serving Home Screen widgets yet. ClaudeBar will try again later."
+            return "Notify! is not serving Home Screen widgets yet. Cortex will try again later."
         }
 
         return await startPublish(payload: payload, decision: decision, at: now).value
@@ -658,7 +658,7 @@ final class NotifyPublishDriver {
         case .surfaceSwitchedOff:
             // Not a failure, which is why it is the only branch here that logs
             // at info. Home Screen widgets ship behind a server side kill
-            // switch, so a ClaudeBar that can write them meets a gateway that is
+            // switch, so a Cortex that can write them meets a gateway that is
             // not serving them yet, and the remedy is entirely Notify!'s.
             // Backing off for hours rather than retrying every tick, because
             // nothing this app does moves that switch and asking once a minute
@@ -690,7 +690,7 @@ final class NotifyPublishDriver {
             )
 
         case .transportFailed:
-            // The one error whose text is not ClaudeBar's own. It carries a
+            // The one error whose text is not Cortex's own. It carries a
             // URLError's localized description, which is free to quote the URL
             // it failed on, and every URL in this feature has the device token
             // in its query string. The client already refuses to write that

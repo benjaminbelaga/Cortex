@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 import Domain
-@testable import ClaudeBar
+@testable import Cortex
 
 /// C4-3 contract tests (review critique 2026-09-16 §5): pins the SERVICE-level
 /// invariants — typed failure for a missing adapter, cancellation clearing the

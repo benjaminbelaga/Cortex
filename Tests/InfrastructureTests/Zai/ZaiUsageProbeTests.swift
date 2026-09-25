@@ -39,7 +39,7 @@ struct ZaiUsageProbeTests {
         {
           "name": "anthropic",
           "base_url": "https://api.z.ai/api/anthropic",
-          "api_key": "zai-fixture-key"
+          "api_key": "sk-zai-test-key-12345"
         }
       ]
     }
@@ -51,7 +51,7 @@ struct ZaiUsageProbeTests {
         {
           "name": "anthropic",
           "base_url": "https://api.anthropic.com",
-          "api_key": "anthropic-fixture-key"
+          "api_key": "sk-ant-test-key-12345"
         }
       ]
     }
@@ -185,7 +185,7 @@ struct ZaiUsageProbeTests {
         let apiKey = ZaiUsageProbe.extractAPIKey(from: config)
 
         // Then
-        #expect(apiKey == "zai-fixture-key")
+        #expect(apiKey == "sk-zai-test-key-12345")
     }
 
     @Test

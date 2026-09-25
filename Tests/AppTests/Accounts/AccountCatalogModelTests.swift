@@ -2,7 +2,7 @@ import Testing
 import Foundation
 import Domain
 import Infrastructure
-@testable import ClaudeBar
+@testable import Cortex
 
 /// D tranche — the catalogue façade: `follow`/`enrolNew` route through the
 /// verified `AccountEnrolmentService` (never a blind terminal launch), path
@@ -196,7 +196,7 @@ struct AccountCatalogModelTests {
         try await Task.sleep(for: .milliseconds(50))
 
         #expect(adapter.enrolCalls().count == 0, "no enrolment may start on a proposal failure")
-        #expect(model.proposalError?.contains("possède déjà") == true)
+        #expect(model.proposalError?.contains("already owns this folder") == true)
         #expect(model.states.isEmpty)
     }
 
@@ -225,16 +225,16 @@ struct AccountCatalogModelTests {
             homeDirectory: "/tmp"
         ) { activated.append($0) }
 
-        model.activate("qwen-api")
+        model.activate("local")
         model.activate("bedrock")
 
-        #expect(activated == ["qwen-api", "bedrock"])
+        #expect(activated == ["local", "bedrock"])
         // La section « connexions » EST le catalogue filtré — jamais une
         // seconde liste qui dériverait de lui (plan Cortex modulaire).
         let integrations = model.integrationDescriptors.map(\.id)
         #expect(integrations == ProviderCatalog.all.filter { $0.category == .integration }.map(\.id),
                 "only category .integration descriptors appear in the connections section")
-        #expect(integrations.contains("qwen-api") && integrations.contains("bedrock") && integrations.contains("local"))
+        #expect(integrations.contains("bedrock") && integrations.contains("local"))
     }
 
     @Test("isActiveIntegration reads the explicit isEnabled key (never silently on)")
@@ -244,7 +244,28 @@ struct AccountCatalogModelTests {
         let (model, _, _) = makeModel(settings: settings)
 
         #expect(model.isActiveIntegration("local"))
-        #expect(!model.isActiveIntegration("qwen-api"))
         #expect(!model.isActiveIntegration("bedrock"))
+    }
+
+    // MARK: - Reconnect alias matching
+
+    @Test("reconnect matches the router account id against local aliases, case-folded")
+    func reconnectMatchesRouterAccountIdAgainstLocalAliases() {
+        let accounts = [
+            ProviderAccountConfig(
+                accountId: "tech",
+                label: "Tech",
+                email: "tech@yoyaku.fr",
+                probeConfig: ["routerAlias": "TECH", "claudeConfigDir": "/Users/example/.claude-tech"]
+            ),
+            ProviderAccountConfig(accountId: "default", label: "Default", email: "webmaster@yoyaku.fr",
+                                  probeConfig: ["routerAlias": "WEBMASTER"]),
+        ]
+
+        #expect(AccountCatalogModel.matchAccount(alias: "claude-tech", providerId: "claude", accounts: accounts)?.accountId == "tech")
+        #expect(AccountCatalogModel.matchAccount(alias: "TECH", providerId: "claude", accounts: accounts)?.accountId == "tech")
+        #expect(AccountCatalogModel.matchAccount(alias: "tech", providerId: "claude", accounts: accounts)?.accountId == "tech")
+        #expect(AccountCatalogModel.matchAccount(alias: "claude-webmaster", providerId: "claude", accounts: accounts)?.accountId == "default")
+        #expect(AccountCatalogModel.matchAccount(alias: "claude-ghost", providerId: "claude", accounts: accounts) == nil)
     }
 }

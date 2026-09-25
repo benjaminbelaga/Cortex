@@ -162,7 +162,7 @@ public struct ClaudeAccountAdapter: AccountAdapter, Sendable {
         continuation.yield(.authRequired(descriptor, reason: .neverAuthenticated))
         continuation.yield(.loginInProgress(descriptor, stage: .launching))
         guard await launcher.launchLoginShell(profile: profilePath) else {
-            continuation.yield(.failed(descriptor, error: .underlying("Impossible d’ouvrir le terminal de connexion.")))
+            continuation.yield(.failed(descriptor, error: .underlying("Could not open the connection terminal.")))
             return
         }
         continuation.yield(.loginInProgress(descriptor, stage: .waitingForUser))
@@ -200,7 +200,7 @@ public struct ClaudeAccountAdapter: AccountAdapter, Sendable {
         continuation.yield(.authRequired(account, reason: .explicitReconnect))
         continuation.yield(.loginInProgress(account, stage: .launching))
         guard await launcher.launchReconnectShell(profile: profilePath) else {
-            continuation.yield(.failed(account, error: .underlying("Impossible d’ouvrir le terminal de connexion.")))
+            continuation.yield(.failed(account, error: .underlying("Could not open the connection terminal.")))
             return
         }
         continuation.yield(.loginInProgress(account, stage: .waitingForUser))

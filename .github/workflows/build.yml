@@ -1,7 +1,10 @@
 name: Build
 
 on:
-  # Manual by default: release builds require a maintainer-selected commit.
+  # Neutralised 2026-08-22 (Ben): these macOS-26 runs bill at 10x, gate no merge
+  # (0 required check on yoyaku-group/Cortex) and YOYAKU only needs the manual
+  # build-yoyaku.yml. dispatch-only kills the automatic macOS spend (~half the org
+  # Actions bill). Re-enable PR CI on the self-hosted macOS runner (plan Part 3).
   workflow_dispatch:
     inputs:
       expected_sha:
@@ -21,7 +24,10 @@ jobs:
     # code from a fork PR. Workflows are dispatch-only today; this stays as
     # defense-in-depth if pull_request triggers are ever re-enabled.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: [self-hosted, macos, arm64, cortex-ci]
+    # Runner label: claudebar-ci (PR #11, Runner SSOT precedence rule 2026-09-23).
+    # The registered runner on the MBP is claudebar-ci-1; the older yoyaku-macos-ci
+    # label has no online runner.
+    runs-on: [self-hosted, macos, arm64, claudebar-ci]
     timeout-minutes: 45
 
     concurrency:
@@ -72,7 +78,7 @@ jobs:
           ./scripts/fix-swiftterm-metal.sh
 
       - name: Build Debug
-        run: xcodebuild build -scheme ClaudeBar -workspace ClaudeBar.xcworkspace -destination 'platform=macOS,arch=arm64'
+        run: xcodebuild build -scheme Cortex -workspace Cortex.xcworkspace -destination 'platform=macOS,arch=arm64'
 
       - name: Build Release
-        run: xcodebuild build -scheme ClaudeBar -workspace ClaudeBar.xcworkspace -destination 'platform=macOS,arch=arm64' -configuration Release
+        run: xcodebuild build -scheme Cortex -workspace Cortex.xcworkspace -destination 'platform=macOS,arch=arm64' -configuration Release

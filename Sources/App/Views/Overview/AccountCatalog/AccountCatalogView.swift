@@ -1,13 +1,14 @@
+import AppKit
 import SwiftUI
 import Domain
 
 /// The `+` panel (D tranche): two honest entries.
 ///
-/// 1. "Ajouter un compte" — detected profiles (identity masked, origin path
+/// 1. "Add account" — detected profiles (identity masked, origin path
 ///    shown, read-back verified by the sweep) + new isolated accounts via the
 ///    official tool login. Every outcome is a typed `EnrolmentState`; the
 ///    panel NEVER reports success from a mere terminal launch.
-/// 2. "Ajouter une connexion" — optional integrations (qwen-api / bedrock /
+/// 2. "Add a connection" — optional integrations (qwen-api / bedrock /
 ///    local) with explicit activation, never silently enabled.
 ///
 /// Rendered inside the popover (no `.sheet` — those never render from an
@@ -21,8 +22,8 @@ struct AccountCatalogView: View {
     @State private var newLabel = ""
     @State private var expectedEmail = ""
 
-    private static let providers = ["claude", "codex", "opencode-go", "commandcode"]
-    private var usesAPIKey: Bool { ["opencode-go", "commandcode"].contains(model.selectedProvider) }
+    private static let providers = ProviderCatalog.addableAccountIDs
+    private var usesAPIKey: Bool { ProviderCatalog.apiKeyAccountIDs.contains(model.selectedProvider) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -58,17 +59,36 @@ struct AccountCatalogView: View {
             .pickerStyle(.segmented)
             .labelsHidden()
 
+            // Bordered fields: `.plain` rendered them invisible in the popover
+            // (only placeholders showed, nothing looked clickable).
             HStack(spacing: 6) {
-                TextField("Libellé (ex. STUDIO)", text: $newLabel)
-                    .textFieldStyle(.plain)
+                TextField("Label (e.g. STUDIO)", text: $newLabel)
+                    .textFieldStyle(.roundedBorder)
                 if usesAPIKey {
-                    SecureField("Clé API", text: $apiKey).textFieldStyle(.plain)
+                    SecureField("API key", text: $apiKey).textFieldStyle(.roundedBorder)
                 } else {
-                    TextField("Identité attendue (facultatif)", text: $expectedEmail)
-                        .textFieldStyle(.plain)
+                    TextField("Expected identity (optional)", text: $expectedEmail)
+                        .textFieldStyle(.roundedBorder)
                 }
             }
             .font(theme.font(size: 9))
+            // A menu-bar (LSUIElement) app does not own the keyboard until it
+            // is activated: without this, typing lands in the frontmost app.
+            .onAppear { NSApp.activate(ignoringOtherApps: true) }
+
+            if usesAPIKey {
+                Button {
+                    let fallback = newLabel
+                    Task { await model.addAPIAccountsFromPasteboard(providerId: model.selectedProvider, fallbackLabel: fallback) }
+                } label: {
+                    Label("Paste from clipboard (label + key, several possible)", systemImage: "doc.on.clipboard")
+                        .font(theme.font(size: 9, weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(model.isValidatingKey)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
 
             HStack(spacing: 6) {
                 Button {
@@ -80,7 +100,7 @@ struct AccountCatalogView: View {
                         model.enrolNew(providerId: model.selectedProvider, label: newLabel, expectedEmail: expectedEmail)
                     }
                 } label: {
-                    Text(model.isValidatingKey ? "Validation…" : "Ajouter ce compte")
+                    Text(model.isValidatingKey ? "Validation…" : "Add this account")
                         .font(theme.font(size: 9, weight: .semibold))
                 }
                 .buttonStyle(.borderedProminent)
@@ -104,11 +124,11 @@ struct AccountCatalogView: View {
                 .buttonStyle(.plain)
                 .foregroundStyle(theme.accentPrimary)
                 .disabled(model.isSearching)
-                .help("Balaye ~/.claude-accounts, ~/.codex-accounts et les dossiers plats — seuls les profils authentifiés remontent, identité masquée.")
+                .help("Scans ~/.claude-accounts, ~/.codex-accounts and flat folders — only authenticated profiles surface, identity masked.")
             }
 
             if let label = model.addedAccountLabel {
-                Label("\(label) ajouté · quotas vérifiés", systemImage: "checkmark.circle.fill")
+                Label("\(label) added · quotas verified", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(theme.statusHealthy)
             }
             if let error = model.proposalError {
@@ -131,7 +151,7 @@ struct AccountCatalogView: View {
                             .font(theme.font(size: 9))
                             .foregroundStyle(theme.textTertiary)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text(IdentityMasking.mask(proposal.email) ?? proposal.email ?? "Profil détecté")
+                            Text(IdentityMasking.mask(proposal.email) ?? proposal.email ?? "Profile detected")
                                 .font(theme.font(size: 9, weight: .semibold))
                                 .foregroundStyle(theme.textPrimary)
                             Text(proposal.canonicalPath)
@@ -165,7 +185,7 @@ struct AccountCatalogView: View {
                     model.cancel(uuid: uuid)
                 }
                 .contextMenu {
-                    Button("Effacer cette ligne") { model.forget(uuid: uuid) }
+                    Button("Clear this row") { model.forget(uuid: uuid) }
                 }
             }
         }

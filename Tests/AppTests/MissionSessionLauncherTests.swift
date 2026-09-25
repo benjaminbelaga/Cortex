@@ -1,5 +1,5 @@
 import Testing
-@testable import ClaudeBar
+@testable import Cortex
 @testable import Infrastructure
 
 @Suite("Mission session launcher")

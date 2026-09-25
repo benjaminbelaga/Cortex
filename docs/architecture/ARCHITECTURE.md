@@ -4,15 +4,15 @@ This document is the **single source of truth** for Cortex's architecture. All o
 
 ## Overview
 
-ClaudeBar follows a **layered architecture** with clear separation of concerns:
+Cortex follows a **layered architecture** with clear separation of concerns:
 
 - **Domain Layer** - Pure business logic, no external dependencies
 - **Infrastructure Layer** - Technical implementations (CLI, network, storage)
 - **App Layer** - SwiftUI views that consume domain directly
 
-The key UI principle is **QuotaMonitor as the in-process state owner**. An
-optional `llm-router` integration can provide a shared quota/catalog/routing
-source for Claude, Codex, Kimi, Qwen, GLM, MiniMax, Bedrock, and Local.
+The key UI principle is **QuotaMonitor as the in-process state owner**. In the
+YOYAKU distribution, `llm-router` is the upstream quota/catalog/routing SSOT for
+Claude, Codex, Kimi, Qwen, GLM, MiniMax, Bedrock, and Local.
 
 ## Architecture Diagram
 
@@ -20,7 +20,7 @@ source for Claude, Codex, Kimi, Qwen, GLM, MiniMax, Bedrock, and Local.
 ┌─────────────────────────────────────────────────────────────────────┐
 │                           APP LAYER                                  │
 │                                                                      │
-│  ClaudeBarApp                                                       │
+│  CortexApp                                                       │
 │  └── @State var monitor: QuotaMonitor  (injected to views)          │
 │                                                                      │
 │  Views (consume domain directly - NO AppState/ViewModel)            │
@@ -51,8 +51,8 @@ source for Claude, Codex, Kimi, Qwen, GLM, MiniMax, Bedrock, and Local.
 │  ├── isSyncing: Bool                                                │
 │  └── refresh() async throws -> UsageSnapshot                        │
 │                                                                      │
-│  RouterBackedProvider - first-class shared quota provider           │
-│  ├── one instance per stable ClaudeBar provider ID                  │
+│  RouterBackedProvider - first-class YOYAKU quota provider           │
+│  ├── one instance per stable Cortex provider ID                  │
 │  ├── MultiAccountProvider roster from llm-router aliases            │
 │  └── account warnings do not erase healthy account capacity         │
 │                                                                      │
@@ -75,7 +75,7 @@ source for Claude, Codex, Kimi, Qwen, GLM, MiniMax, Bedrock, and Local.
 ┌─────────────────────────────────────────────────────────────────────┐
 │                     INFRASTRUCTURE LAYER                             │
 │                                                                      │
-│  Shared router quota snapshot adapter                               │
+│  YOYAKU quota snapshot adapter                                      │
 │  ├── LLMRouterSnapshotClient - `status --format json-v2`            │
 │  ├── validates schema version + normalized 0...1 fractions          │
 │  ├── coalesces concurrent consumers into one subprocess             │
@@ -160,7 +160,7 @@ public final class QuotaMonitor {
 }
 ```
 
-For the optional routing catalog, the authority boundary is:
+For the YOYAKU routing catalog, the authority boundary is:
 
 ```
 provider APIs / credential CLIs
@@ -177,7 +177,7 @@ QuotaMonitor → SwiftUI
 
 Aliases are shared by `llm-router`; emails and local labels remain in
 `~/.claudebar/settings.json` and join only through explicit `routerAlias`
-metadata. ClaudeBar never mutates the upstream credential roster.
+metadata. Cortex never mutates the upstream credential roster.
 
 ### 3. Repository Pattern with ISP (Interface Segregation Principle)
 
@@ -374,7 +374,7 @@ Sources/
 │   └── Notifications/               # NotificationAlerter (implements QuotaAlerter)
 │
 └── App/                             # SwiftUI application
-    ├── ClaudeBarApp.swift           # Entry point, wires dependencies
+    ├── CortexApp.swift           # Entry point, wires dependencies
     ├── Views/                       # SwiftUI views
     ├── Settings/                    # AppSettings (theme, etc.)
     └── Resources/                   # Assets, Info.plist
@@ -399,8 +399,8 @@ Sources/
 ## Adding New Features
 
 For implementation guidance, see:
-- [Cortex release plan](../cortex-release-plan.md) - provider and release workflow
-- Existing probe tests and implementations - adding AI provider monitoring
+- [implement-feature skill](../.claude/skills/implement-feature/SKILL.md) - TDD workflow
+- [add-provider skill](../.claude/skills/add-provider/SKILL.md) - Adding AI providers
 
 ## Testing Strategy
 

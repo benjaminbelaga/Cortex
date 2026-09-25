@@ -12,7 +12,7 @@ public enum NotifyConstants {
     public static let defaultWidgetEnabled = true
 
     /// The Home Screen widget ships behind a server side kill switch, so a
-    /// ClaudeBar that supports it can meet a gateway that is not serving it yet.
+    /// Cortex that supports it can meet a gateway that is not serving it yet.
     /// On by default anyway: a 503 is handled as "not yet" rather than as an
     /// error, and leaving it off would mean nobody sees the surface on the day
     /// it is switched on.
@@ -22,8 +22,8 @@ public enum NotifyConstants {
 /// Settings for publishing quota state to a Notify! device.
 ///
 /// Standalone protocol rather than a `ProviderSettingsRepository` sub-protocol:
-/// Notify! is not a provider ClaudeBar reads a quota from, it is a destination
-/// ClaudeBar writes to, so none of the provider vocabulary (enable in the
+/// Notify! is not a provider Cortex reads a quota from, it is a destination
+/// Cortex writes to, so none of the provider vocabulary (enable in the
 /// popover, custom card URL, probe mode) applies. Mirrors
 /// `HookSettingsRepository`, the other feature that is a peer of the providers
 /// rather than one of them.
@@ -31,7 +31,7 @@ public enum NotifyConstants {
 /// The device token is a secret and goes to the Keychain-backed credential
 /// store, never to `~/.claudebar/settings.json`.
 public protocol NotifySettingsRepository: Sendable {
-    /// Whether ClaudeBar publishes to Notify! at all.
+    /// Whether Cortex publishes to Notify! at all.
     func isNotifyEnabled() -> Bool
     func setNotifyEnabled(_ enabled: Bool)
 
@@ -78,16 +78,16 @@ public protocol NotifySettingsRepository: Sendable {
     func notifyGaugeQuotaKey() -> String
     func setNotifyGaugeQuotaKey(_ quotaKey: String)
 
-    /// The handle of the Live Activity ClaudeBar started, so later updates
+    /// The handle of the Live Activity Cortex started, so later updates
     /// address that exact tile and never one the user started elsewhere.
     func notifyActivityId() -> String?
     func setNotifyActivityId(_ activityId: String?)
 
-    /// The handle of the widget ClaudeBar created, for the same reason.
+    /// The handle of the widget Cortex created, for the same reason.
     func notifyWidgetId() -> String?
     func setNotifyWidgetId(_ widgetId: String?)
 
-    /// The handle of the Home Screen widget ClaudeBar created.
+    /// The handle of the Home Screen widget Cortex created.
     func notifyScreenWidgetId() -> String?
     func setNotifyScreenWidgetId(_ screenWidgetId: String?)
 }

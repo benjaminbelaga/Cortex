@@ -13,6 +13,9 @@ public struct RouterUsageSnapshot: Sendable, Equatable {
     public let refreshError: String?
     public let last24h: RouterUsageWindow?
     public let last7d: RouterUsageWindow?
+    /// Daily series (last ~30d) of {date: {sessions, tokens, byFamily}} from the
+    /// external harnesses — the "usage monitor" (sessions/day, tokens/day).
+    public let daily: [String: RouterDailyUsage]
     /// Anomaly flags emitted by llm-router for the current snapshot (partial
     /// sources, large contexts, high fresh-input ratio). Surfaced in Cortex as
     /// warning badges alongside the usage totals.
@@ -28,6 +31,7 @@ public struct RouterUsageSnapshot: Sendable, Equatable {
         refreshError: String? = nil,
         last24h: RouterUsageWindow? = nil,
         last7d: RouterUsageWindow? = nil,
+        daily: [String: RouterDailyUsage] = [:],
         anomalies: [RouterUsageAnomaly] = []
     ) {
         self.generatedAt = generatedAt
@@ -39,7 +43,21 @@ public struct RouterUsageSnapshot: Sendable, Equatable {
         self.refreshError = refreshError
         self.last24h = last24h
         self.last7d = last7d
+        self.daily = daily
         self.anomalies = anomalies
+    }
+}
+
+/// One day of external-harness usage (llm-router `usage.daily[date]`).
+public struct RouterDailyUsage: Sendable, Equatable {
+    public let sessions: Int
+    public let tokens: Int
+    public let byFamily: [String: Int]
+
+    public init(sessions: Int = 0, tokens: Int = 0, byFamily: [String: Int] = [:]) {
+        self.sessions = sessions
+        self.tokens = tokens
+        self.byFamily = byFamily
     }
 }
 
@@ -75,17 +93,23 @@ public struct RouterUsageAnomaly: Sendable, Equatable, Identifiable {
 public struct RouterUsageWindow: Sendable, Equatable {
     public let byModel: [String: RouterModelUsage]
     public let byBackend: [String: RouterModelUsage]
+    /// Tokens attributed to the model FAMILY (the weights that ran), so a model
+    /// reached through several subscriptions reads as one family. Feeds the
+    /// "usage by model" pie (CORTEX_BIBLE §15), separate from `byBackend`.
+    public let byFamily: [String: RouterModelUsage]
     public let sessionsByHarness: [String: Int]
     public let totals: RouterModelUsage
 
     public init(
         byModel: [String: RouterModelUsage] = [:],
         byBackend: [String: RouterModelUsage] = [:],
+        byFamily: [String: RouterModelUsage] = [:],
         sessionsByHarness: [String: Int] = [:],
         totals: RouterModelUsage = RouterModelUsage()
     ) {
         self.byModel = byModel
         self.byBackend = byBackend
+        self.byFamily = byFamily
         self.sessionsByHarness = sessionsByHarness
         self.totals = totals
     }
@@ -165,6 +189,24 @@ public struct RouterCostWindow: Sendable, Equatable {
     public let totalEur: Double?
     public let eurPerMtok: Double?
     public let eurPerSession: Double?
+    /// Real recorded spend for this window (Contract B, v7.2) — what the router
+    /// actually metered, distinct from the theoretical grid × usage estimate.
+    /// nil when the router does not emit it (the "recorded cost" column hides).
+    public let recordedUsd: Double?
+    /// Recorded spend split by backend (`by_backend_recorded`), same window.
+    public let byBackendRecordedUsd: [String: Double]
+    /// Per-backend spend the user can always read (v7.4): the recorded figure
+    /// when the provider ledger has one, else the benchmark estimate from the
+    /// pricing SSOT (`by_backend_spend`). Bible R41 — an unknown price is not
+    /// zero, so no backend is left at "—" when it has a price.
+    public let byBackendSpendUsd: [String: Double]
+    /// Headline spend for the window (`spend_usd`) — recorded + benchmark
+    /// estimates, i.e. "combien j'ai dépensé".
+    public let spendUsd: Double?
+    /// Backends whose spend figure is a benchmark estimate, not a metered cost.
+    public let estimatedBackends: [String]
+    public let byBackendSpendEur: [String: Double]
+    public let spendEur: Double?
 
     public init(
         verified: Bool = false,
@@ -178,7 +220,14 @@ public struct RouterCostWindow: Sendable, Equatable {
         byModelEur: [String: Double] = [:],
         totalEur: Double? = nil,
         eurPerMtok: Double? = nil,
-        eurPerSession: Double? = nil
+        eurPerSession: Double? = nil,
+        recordedUsd: Double? = nil,
+        byBackendRecordedUsd: [String: Double] = [:],
+        byBackendSpendUsd: [String: Double] = [:],
+        spendUsd: Double? = nil,
+        estimatedBackends: [String] = [],
+        byBackendSpendEur: [String: Double] = [:],
+        spendEur: Double? = nil
     ) {
         self.verified = verified
         self.unverifiedModels = unverifiedModels
@@ -192,5 +241,12 @@ public struct RouterCostWindow: Sendable, Equatable {
         self.totalEur = totalEur
         self.eurPerMtok = eurPerMtok
         self.eurPerSession = eurPerSession
+        self.recordedUsd = recordedUsd
+        self.byBackendRecordedUsd = byBackendRecordedUsd
+        self.byBackendSpendUsd = byBackendSpendUsd
+        self.spendUsd = spendUsd
+        self.estimatedBackends = estimatedBackends
+        self.byBackendSpendEur = byBackendSpendEur
+        self.spendEur = spendEur
     }
 }

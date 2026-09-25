@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (Cortex fork — v7.4 spend fallback)
+
+- Spend column falls back to the benchmark estimate when the provider reports
+  no cost (`a1231e8`); llm-router gains the per-backend theoretical cost +
+  fallback (`0315c8a`, covered by `tests/test_v74_backend_spend.py`).
+
+### Added (Cortex fork — v7.3 provider pin + Priorité card)
+
+- Priorité card collapsed by default + per-provider preferred LLM (`766697f`):
+  the Settings choice reaches llm-router as a lock through the exported
+  roster, and the Priorité card resolves router ids through the single
+  `RouterProviderIdMap` table (`ab6a09e`, `d23a64d`).
+- llm-router: family pins become locks in the decision path (`b48d87f`,
+  `9aff6f6`); requirements R34–R38 documented in
+  `docs/claudebar-v2-design-requirements.md`.
+- Legacy `app.preferredModels` ⇄ `app.providerPreferredModel` merge stays a
+  documented backlog decision — the dual-read is intentional, no migration.
+
+### Added (Cortex fork — v7.2 route brain)
+
+- Unified route brain: 4 providers observed→active with exact model ids +
+  families, every account routable, real spend in the exported roster
+  (`3a18255`…`073d4f3`; llm-router `6ca8190`…`d465e6f`; `route.py` wrapper in
+  claude-config `3849cd58`).
+
+### Fixed (Cortex fork — RC gate 6 incident, 2026-09-21)
+
+- `StatusLineObserver` crashed the app at launch when the adapter was enabled
+  (SIGTRAP in `__DISPATCH_WAIT_FOR_QUEUE__`): the listener/connection
+  callbacks — invoked on the observer's serial queue — called `queue.sync`
+  against that same queue. State now mutates directly in the callbacks,
+  mirroring `HookHTTPServer`'s correct pattern; `latestObservation`'s key
+  lookup also moved inside its queue (was reading state off-queue).
+- `StatusLineObserver` HTTP handling: requests now accumulate until the
+  declared `Content-Length` is satisfied (1 MiB cap). A single `receive`
+  callback was treated as a whole request, and URLSession writes head and
+  body separately — proven live (`Unable to parse empty data`).
+- Regression: `StatusLineObserverLifecycleTests` (start reaches ready,
+  idempotence, Content-Length completeness, served POST lands) with a
+  deterministic raw-TCP test client.
+
 ### Changed (Cortex fork — E4 bundle id)
 
 - Bundle identifier `com.tddworks.claudebar` → `fr.yoyaku.cortex` for the app and

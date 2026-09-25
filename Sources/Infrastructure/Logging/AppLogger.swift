@@ -5,7 +5,7 @@ import OSLog
 ///
 /// This facade provides category-specific loggers that output to:
 /// 1. **OSLog** - For Console.app, live streaming, and development debugging
-/// 2. **File** - For user-accessible logs at ~/Library/Logs/ClaudeBar/ClaudeBar.log
+/// 2. **File** - For user-accessible logs at ~/Library/Logs/Cortex/Cortex.log
 ///
 /// ## Usage Examples
 ///
@@ -34,7 +34,7 @@ import OSLog
 ///
 /// **File logs (for users):**
 /// ```
-/// ~/Library/Logs/ClaudeBar/ClaudeBar.log
+/// ~/Library/Logs/Cortex/Cortex.log
 /// ```
 ///
 /// **OSLog (for developers):**

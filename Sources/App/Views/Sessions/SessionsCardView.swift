@@ -34,12 +34,12 @@ struct SessionsCardView: View {
                         .foregroundStyle(theme.textTertiary)
                 }
                 .buttonStyle(.plain)
-                .help(isExpanded ? "Réduire l'activité" : "Afficher les détails d'activité")
+                .help(isExpanded ? "Collapse activity" : "Show activity details")
                 if let liveClaude = tracker.liveClaude {
-                    Text("\(liveClaude) actives")
+                    Text("\(liveClaude) active")
                         .font(theme.font(size: 10))
                         .foregroundStyle(theme.textTertiary)
-                        .help("Processus Claude en cours d'exécution (source : Guardian) — ce n'est PAS le nombre de sessions tmux.")
+                        .help("Running Claude processes (source: Guardian) — this is NOT the tmux session count.")
                 }
             }
 
@@ -52,7 +52,7 @@ struct SessionsCardView: View {
             // "›S5", …) appears below the glyph when the LLMRuntimeInspector
             // surfaces a per-harness model id; otherwise the cell falls back
             // to the harness-only label. See
-            // ~/repos/ClaudeBar/Sources/Domain/Provider/ModelAbbreviation.swift
+            // ~/repos/Cortex/Sources/Domain/Provider/ModelAbbreviation.swift
             // and the same identity map in
             // ~/.tmux/scripts/agent-tmux-state.py (rules/81: one alphabet,
             // two surfaces).
@@ -67,6 +67,10 @@ struct SessionsCardView: View {
                             live: nil, day: tracker.counts24h?.qwen)
                 harnessCell("tmux", glyph: "tmux", providerId: nil,
                             live: nil, day: tmuxCount, windowLabel: "sessions")
+                // cmux voisine tmux (même rangée, même famille terminal) au lieu
+                // d'être reléguée plus bas — Ben, 2026-09-25.
+                harnessCell("cmux", glyph: "cmux", providerId: nil,
+                            live: nil, day: cmuxPaneCount, windowLabel: "panes")
             }
             .task {
                 // The tmux truth (default socket + configured extras),
@@ -75,8 +79,11 @@ struct SessionsCardView: View {
                     socketNames: settings.tmuxSocketNames
                 )
                 runtime = await LLMRuntimeInspector.read()
+                // Amorce la collecte cmux même replié : sa cellule du haut lit
+                // le même modèle que la section détaillée.
+                await sessionsActivity.refresh()
             }
-            .help("Nombre par outil = sessions ayant écrit un transcript sur les dernières 24h (un fichier .jsonl par session/dossier). Répartition par backend (Claude-GLM, Claude-MiniMax…) + usage local : roadmap.")
+            .help("Nombre par outil = sessions ayant écrit un transcript sur les dernières 24h (un fichier .jsonl par session/dossier). tmux = sessions tmux vivantes · cmux = panes terminaux cmux présents. Répartition par backend (Claude-GLM, Claude-MiniMax…) + usage local : roadmap.")
 
             // OpenCode : sessions RÉELLEMENT ouvertes (fichier de liveness + PID
             // vérifié) et historique local, backend observé compris. Rien n'est
@@ -97,7 +104,7 @@ struct SessionsCardView: View {
                     toolId: "commandcode",
                     label: "Command Code",
                     icon: "chevron.left.forwardslash.chevron.right",
-                    help: "Ouvertes = traceur vivant (aucun aujourd'hui) · en travail = transcript touché < 2 min · sur 24 h = historique local. Une activité trop ancienne reste « inconnue », jamais « fermée »."
+                    help: "Open = live tracker (none today) · working = transcript touched < 2 min · over 24 h = local history. Activity too old stays “unknown”, never “closed”."
                 )
                 .task { await activityRefreshLoop() }
             }
@@ -108,7 +115,7 @@ struct SessionsCardView: View {
                     toolId: "cmux",
                     label: "cmux",
                     icon: "rectangle.split.3x1",
-                    help: "Panes terminaux présents dans l'état de session cmux. Ouvert = état encore frais ; un état trop vieux pour prouver la vie reste « inconnu », jamais « fermé »."
+                    help: "Panes terminaux présents dans l'état de session cmux. En travail = un agent y tourne (statut Running frais < 1 h). Ouvert = état encore frais ; un état trop vieux pour prouver la vie reste « inconnu », jamais « fermé »."
                 )
                 .task { await activityRefreshLoop() }
             }
@@ -120,11 +127,11 @@ struct SessionsCardView: View {
                     runtimeMetric("hooks", value: runtime.configuredHooks, icon: "point.topleft.down.to.point.bottomright.curvepath")
                     runtimeMetric("skills", value: runtime.sharedSkills, icon: "books.vertical")
                     Spacer(minLength: 0)
-                    Text("SSOT partagé")
+                    Text("Shared SSOT")
                         .font(theme.font(size: 8, weight: .medium))
                         .foregroundStyle(theme.textTertiary)
                 }
-                .help("Missions actives : agentctl · hooks : ~/.claude/settings.json · skills : ~/.claude/skills. Cortex lit ces autorités sans dupliquer leur état.")
+                .help("Active missions: agentctl · hooks: ~/.claude/settings.json · skills: ~/.claude/skills. Cortex reads these authorities without duplicating their state.")
             }
 
             if isExpanded, !sessionMonitor.recentNotableEvents.isEmpty {
@@ -158,23 +165,11 @@ struct SessionsCardView: View {
         // Render the harness identity as a single Text line (e.g. "◆" or
         // "K" or the literal "tmux") so the cell matches the same alphabet
         // tmux uses in IDENTITY_GLYPH (BMP Plane 0, no Nerd Font PUA per
-        // anthropics/claude-code#49270). When the LLMRuntimeInspector later
-        // exposes per-harness model ids, look up
-        // ProviderVisualIdentityLookup.abbreviation(for: modelId) and prepend
-        // "›abbr" after the glyph. For now the abbreviation slot is reserved
-        // but unused (no model id source yet).
-        let abbr: String? = nil
-        return VStack(spacing: 3) {
-            HStack(spacing: 1) {
-                Text(glyph)
-                    .font(theme.font(size: 14, weight: .semibold))
-                    .foregroundStyle(day.map { _ in theme.textPrimary } ?? theme.textTertiary)
-                if let abbr {
-                    Text("›\(abbr)")
-                        .font(theme.font(size: 11, weight: .medium))
-                        .foregroundStyle(theme.textTertiary)
-                }
-            }
+        // anthropics/claude-code#49270).
+        VStack(spacing: 3) {
+            Text(glyph)
+                .font(theme.font(size: 14, weight: .semibold))
+                .foregroundStyle(day.map { _ in theme.textPrimary } ?? theme.textTertiary)
             Text(name)
                 .font(theme.font(size: 9))
                 .foregroundStyle(theme.textTertiary)
@@ -207,6 +202,12 @@ struct SessionsCardView: View {
     private var showsCmuxSessions: Bool {
         guard settings.moduleVisibility(.sessions) != .hidden else { return false }
         return settings.moduleVisibility(id: "cmux", fallback: .automatic) != .hidden
+    }
+
+    /// Panes terminaux cmux présents (ouverts ou en travail), lus par la source
+    /// de sessions — la cellule du haut et la section partagent ce chiffre.
+    private var cmuxPaneCount: Int {
+        sessionsActivity.observations(for: "cmux").count
     }
 
     /// Cadence partagée des sources d'activité : 30 s, jamais bloquante.
@@ -260,11 +261,11 @@ struct SessionsCardView: View {
     private func activitySummary(toolId: String) -> String {
         let counts = sessionsActivity.counts(for: toolId)
         var parts = [
-            "\(counts.open) ouvertes",
-            "\(counts.working) en travail",
-            "\(counts.recent) sur 24 h",
+            "\(counts.open) open",
+            "\(counts.working) working",
+            "\(counts.recent) over 24 h",
         ]
-        if counts.subagents > 0 { parts.append("+\(counts.subagents) sous-agents") }
+        if counts.subagents > 0 { parts.append("+\(counts.subagents) sub-agents") }
         return parts.joined(separator: " · ")
     }
 
@@ -282,7 +283,7 @@ struct SessionsCardView: View {
                     .font(theme.font(size: 9, weight: .medium))
                     .foregroundStyle(theme.textTertiary)
                     .monospacedDigit()
-                    .help("Ouvertes = processus vivant vérifié · en travail = activité < 2 min · sur 24 h = historique local. Les sous-agents sont comptés à part.")
+                    .help("Working = tracker or transcript rewritten < 2 min (wins over “open”) · open = live process verified at rest · over 24 h = local history. Sub-agents are counted separately.")
             }
 
             if let failure = sessionsActivity.failure(for: "opencode-go") {
@@ -306,11 +307,11 @@ struct SessionsCardView: View {
     private var openCodeSummary: String {
         let counts = sessionsActivity.counts(for: "opencode-go")
         var parts = [
-            "\(counts.open) ouvertes",
-            "\(counts.working) en travail",
-            "\(counts.recent) sur 24 h",
+            "\(counts.open) open",
+            "\(counts.working) working",
+            "\(counts.recent) over 24 h",
         ]
-        if counts.subagents > 0 { parts.append("+\(counts.subagents) sous-agents") }
+        if counts.subagents > 0 { parts.append("+\(counts.subagents) sub-agents") }
         return parts.joined(separator: " · ")
     }
 
@@ -371,7 +372,7 @@ struct SessionsCardView: View {
         case .preCompact:
             ("Compaction…", "arrow.down.circle")
         case .postCompact:
-            ("Compaction terminée", "checkmark.circle")
+            ("Compaction complete", "checkmark.circle")
         case .sessionStart where event.source == "fork":
             ("Session forked", "arrow.triangle.branch")
         default:

@@ -1,6 +1,6 @@
 # Extensions Feature
 
-User-built provider extensions for ClaudeBar. Drop a folder with a `manifest.json` and probe scripts into `~/.claudebar/extensions/` to add custom AI provider monitoring with your own data sources and card layouts.
+User-built provider extensions for Cortex. Drop a folder with a `manifest.json` and probe scripts into `~/.claudebar/extensions/` to add custom AI provider monitoring with your own data sources and card layouts.
 
 ---
 
@@ -48,7 +48,7 @@ curl -s -H "Authorization: Bearer $CLAUDEBAR_API_KEY" \
 PROBE
 chmod +x ~/.claudebar/extensions/my-provider/probe.sh
 
-# Restart ClaudeBar — extension appears as a provider
+# Restart Cortex — extension appears as a provider
 # Open Settings to configure the API key
 ```
 
@@ -72,7 +72,7 @@ chmod +x ~/.claudebar/extensions/my-provider/probe.sh
 
 ### Config Fields
 
-Declare user-configurable settings that appear in ClaudeBar's Settings UI. Values are injected into probe scripts as environment variables.
+Declare user-configurable settings that appear in Cortex's Settings UI. Values are injected into probe scripts as environment variables.
 
 | Field | Required | Description |
 |-------|----------|-------------|
@@ -330,7 +330,7 @@ Each probe runs independently on its own interval, so fast health checks don't w
 ## Architecture
 
 ```
-ClaudeBarApp.init()
+CortexApp.init()
 └── ExtensionRegistry.loadExtensions(into: monitor)
     └── ExtensionDirectoryScanner.scan(~/.claudebar/extensions/)
         └── For each valid manifest.json:
@@ -527,7 +527,7 @@ Tests/
 Run extension tests:
 
 ```bash
-xcodebuild test -scheme ClaudeBar-Workspace -workspace ClaudeBar.xcworkspace \
+xcodebuild test -scheme Cortex-Workspace -workspace Cortex.xcworkspace \
   -destination 'platform=macOS,arch=arm64' \
   -only-testing:DomainTests/ConfigFieldTests \
   -only-testing:DomainTests/ExtensionManifestTests \

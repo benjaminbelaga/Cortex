@@ -84,7 +84,8 @@ struct OpenCodeSessionSourceTests {
         pid: Int,
         sessionId: String,
         title: String,
-        parentId: String? = nil
+        parentId: String? = nil,
+        updatedAt: Date = Date()
     ) throws {
         var session: [String: Any] = [
             "id": sessionId,
@@ -98,7 +99,7 @@ struct OpenCodeSessionSourceTests {
             "session_id": sessionId,
             "pid": pid,
             "cwd": "/Users/test/live",
-            "timestamp": ISO8601DateFormatter().string(from: Date()),
+            "timestamp": ISO8601DateFormatter().string(from: updatedAt),
             "session": session,
         ]
         let data = try JSONSerialization.data(withJSONObject: payload)
@@ -107,8 +108,8 @@ struct OpenCodeSessionSourceTests {
 
     // MARK: - Tests
 
-    @Test("A live tracker with an alive PID is an open session carrying its observed backend")
-    func liveTrackerIsOpen() async throws {
+    @Test("A live tracker rewritten within 2 min is a working session carrying its observed backend")
+    func freshTrackerIsWorking() async throws {
         let dir = try makeTempDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }
         try writeTracker(in: dir, pid: 42, sessionId: "ses_live", title: "Correction POS")
@@ -122,12 +123,36 @@ struct OpenCodeSessionSourceTests {
 
         #expect(report.observations.count == 1)
         let observation = try #require(report.observations.first)
-        #expect(observation.activity == .open)
+        #expect(observation.activity == .working)
         #expect(observation.id == "ses_live")
         #expect(observation.title == "Correction POS")
         #expect(observation.model == "ollama-cloud/deepseek-v4.1-flash")
         // Une base absente est rapportée, sans effacer la session vivante.
         #expect(report.failure != nil)
+    }
+
+    @Test("A live tracker with no activity for over 2 min is open, not working")
+    func staleTrackerIsOpen() async throws {
+        let dir = try makeTempDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let now = Date()
+        try writeTracker(
+            in: dir, pid: 42, sessionId: "ses_idle", title: "Au repos",
+            updatedAt: now.addingTimeInterval(-30 * 60)
+        )
+
+        let source = OpenCodeSessionSource(
+            databasePath: dir.appendingPathComponent("absent.db").path,
+            trackerDirectory: dir.path,
+            processAlive: { $0 == 42 }
+        )
+        let report = await source.collect(limit: 50, now: now)
+
+        let observation = try #require(report.observations.first { $0.id == "ses_idle" })
+        #expect(observation.activity == .open)
+        let counts = SessionCounts.from(report.observations)
+        #expect(counts.open == 1)
+        #expect(counts.working == 0)
     }
 
     @Test("A dead PID is not an open session")
@@ -174,7 +199,7 @@ struct OpenCodeSessionSourceTests {
         #expect(report.observations.first { $0.id == "ses_old" }?.activity == .recent)
     }
 
-    @Test("A session seen in both signals appears once, as open, and subagents are flagged")
+    @Test("A session seen in both signals appears once, as working, and subagents are flagged")
     func deduplicationAndSubagents() async throws {
         let dir = try makeTempDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }
@@ -197,12 +222,13 @@ struct OpenCodeSessionSourceTests {
 
         #expect(report.observations.count == 2)
         let both = try #require(report.observations.first { $0.id == "ses_both" })
-        #expect(both.activity == .open)
+        #expect(both.activity == .working)    // traceur frais → en travail
         #expect(both.title == "Live title")   // le liveness, plus riche, gagne
         #expect(both.isSubagent == false)
 
         let counts = SessionCounts.from(report.observations)
-        #expect(counts.open == 1)             // le sous-agent n'est pas compté comme session
+        #expect(counts.working == 1)          // session fraîche, le sous-agent est compté à part
+        #expect(counts.open == 0)
         #expect(counts.subagents == 1)
     }
 

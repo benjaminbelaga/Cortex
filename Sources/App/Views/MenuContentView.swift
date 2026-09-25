@@ -131,7 +131,7 @@ struct MenuContentView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .background(TouchBarWindowAccessor())
         .touchBar {
-            ClaudeBarNativeTouchBar(monitor: monitor)
+            CortexNativeTouchBar(monitor: monitor)
         }
         .onReceive(NotificationCenter.default.publisher(for: .hookSettingsChanged)) { notification in
             let enabled = notification.userInfo?["enabled"] as? Bool ?? false
@@ -166,7 +166,7 @@ struct MenuContentView: View {
         .onChange(of: selectedProviderId) { _, newProviderId in
             // Refresh immediately when the user switches provider while the
             // dropdown is open. Periodic background refresh is owned by the
-            // app-lifetime loop in ClaudeBarApp, which restarts itself when the
+            // app-lifetime loop in CortexApp, which restarts itself when the
             // selected or menu-bar provider changes.
             Task {
                 await refresh(providerId: newProviderId)
@@ -335,7 +335,7 @@ struct MenuContentView: View {
     /// GLM, MiniMax or Local remained healthy.
     ///
     /// D: rebuilt on the typed `OverviewBuilder.fleetSummary` — a fleet with
-    /// no exploitable reading is `.unknown` (grey "État inconnu"), never the
+    /// no exploitable reading is `.unknown` (grey "Unknown state"), never the
     /// borrowed `.healthy` the old `else` branch fabricated.
     private var fleetSummary: FleetAvailabilitySummary {
         OverviewBuilder.fleetSummary(
@@ -357,12 +357,9 @@ struct MenuContentView: View {
         if settings.overviewModeEnabled {
             switch fleetSummary {
             case .unknown:
-                return (theme.textTertiary, "État inconnu")
-            case .known(let status, let usable, let needsAction, _):
-                let label = needsAction > 0
-                    ? "\(usable) disponibles · \(needsAction) à reconnecter"
-                    : "\(usable) disponibles"
-                return (theme.statusColor(for: status), label)
+                return (theme.textTertiary, fleetSummary.headerLabel)
+            case .known(let status, _, _, _):
+                return (theme.statusColor(for: status), fleetSummary.headerLabel)
             }
         }
         return (selectedProviderBadge.badgeColor(theme), statusText)
@@ -553,7 +550,14 @@ struct MenuContentView: View {
         // remaining % (or soonest reset), one-click Session 5h / Semaine / Tout
         // window selector, relative reset times only. providerSection remains
         // for the single-provider view.
-        OverviewDashboardView(providers: providers, settings: settings)
+        OverviewDashboardView(
+            providers: providers,
+            settings: settings,
+            onRemoveProvider: { id in
+                monitor.setProviderEnabled(id, enabled: false)
+                monitor.removeProvider(id: id)
+            }
+        )
             .opacity(animateIn ? 1 : 0)
             .animation(.easeOut(duration: 0.5).delay(0.2), value: animateIn)
     }
@@ -583,13 +587,13 @@ struct MenuContentView: View {
             Spacer()
 
             // A provider with no snapshot never borrows a green HEALTHY it
-            // has no data for (D): grey "Aucune donnée" until a real
+            // has no data for (D): grey "No data" until a real
             // reading lands.
             if let snapshot = provider.snapshot {
                 Text(provider.isSyncing ? "Syncing..." : snapshot.overallStatus.badgeText)
                     .badge(theme.statusColor(for: snapshot.overallStatus))
             } else {
-                Text(provider.isSyncing ? "Syncing..." : "Aucune donnée")
+                Text(provider.isSyncing ? "Syncing..." : "No data")
                     .badge(theme.textTertiary)
             }
         }
@@ -921,7 +925,7 @@ struct MenuContentView: View {
                 : selectedProvider?.isSyncing == true
             WrappedActionButton(
                 icon: isCurrentlyRefreshing ? "arrow.trianglehead.2.counterclockwise.rotate.90" : "arrow.clockwise",
-                label: isCurrentlyRefreshing ? "Actualisation" : "Actualiser",
+                label: isCurrentlyRefreshing ? "Refreshing" : "Refresh",
                 gradient: theme.accentGradient,
                 isLoading: isCurrentlyRefreshing
             ) {

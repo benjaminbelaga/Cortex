@@ -208,10 +208,10 @@ public struct ClaudeAPIUsageProbe: UsageProbe, @unchecked Sendable {
         let fromCache = cache.get()
         guard var credentials = fromCache ?? credentialLoader.loadCredentials() else {
             // Name both places we looked. On macOS `claude login` writes only
-            // the secure store, so an empty result usually means that lookup
-            // failed; `loadFromKeychain` records the diagnostic (#271).
+            // the Keychain, so "no credentials" almost always means the
+            // Keychain read failed — and `loadFromKeychain` logs why (#271).
             AppLog.probes.error(
-                "Claude API: no authentication material in \(credentialLoader.credentialsFilePath) or the Claude Code secure-store item"
+                "Claude API: no credentials in \(credentialLoader.credentialsFilePath) or the 'Claude Code-credentials' Keychain item"
             )
             throw ProbeError.authenticationRequired
         }
@@ -383,7 +383,7 @@ public struct ClaudeAPIUsageProbe: UsageProbe, @unchecked Sendable {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
-        request.setValue("ClaudeBar", forHTTPHeaderField: "User-Agent")
+        request.setValue("Cortex", forHTTPHeaderField: "User-Agent")
         request.timeoutInterval = timeout
 
         AppLog.probes.debug("Claude API: Fetching usage...")

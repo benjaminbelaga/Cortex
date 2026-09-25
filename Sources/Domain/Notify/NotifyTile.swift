@@ -25,7 +25,7 @@ public struct NotifyMetric: Sendable, Equatable, Hashable {
     }
 }
 
-/// The content of the Live Activity tile ClaudeBar keeps on the Lock Screen.
+/// The content of the Live Activity tile Cortex keeps on the Lock Screen.
 ///
 /// The gateway has no notion of a tile type: the fields present decide how the
 /// tile draws, so a title plus a progress bar plus a metrics row IS the metrics
@@ -44,7 +44,7 @@ public struct NotifyTile: Sendable, Equatable {
     /// Accent color as `#RRGGBB`, normally the worst quota status on show.
     public let tintHex: String?
 
-    /// The progress bar, 0 to 100. ClaudeBar sends quota remaining here, so a
+    /// The progress bar, 0 to 100. Cortex sends quota remaining here, so a
     /// full bar means a full quota.
     public let progress: Double?
 

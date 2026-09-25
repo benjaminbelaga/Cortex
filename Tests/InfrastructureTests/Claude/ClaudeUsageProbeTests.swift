@@ -204,7 +204,7 @@ struct ClaudeUsageProbeTests {
     func `probeWorkingDirectory creates and returns URL`() {
         let probe = ClaudeUsageProbe()
         let url = probe.probeWorkingDirectory()
-        #expect(url.path.contains("ClaudeBar/Probe"))
+        #expect(url.path.contains("Cortex/Probe"))
         #expect(FileManager.default.fileExists(atPath: url.path))
     }
 

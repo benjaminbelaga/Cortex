@@ -1,9 +1,9 @@
-# ClaudeBar on MacBook Touch Bar
+# Cortex on MacBook Touch Bar
 
-ClaudeBar features comprehensive Touch Bar integration designed specifically for MacBook Pro models equipped with an Apple Touch Bar (13-inch M1 / M2, 15 / 16-inch Intel models).
+Cortex features comprehensive Touch Bar integration designed specifically for MacBook Pro models equipped with an Apple Touch Bar (13-inch M1 / M2, 15 / 16-inch Intel models).
 
 It offers two integration modes:
-1. **Native Touch Bar (Primary & Recommended)**: Built directly into ClaudeBar using Swift and AppKit. Requires **zero third-party software**, operates system-wide across all applications, and features clean, centered live quota gauges with zero background CPU overhead.
+1. **Native Touch Bar (Primary & Recommended)**: Built directly into Cortex using Swift and AppKit. Requires **zero third-party software**, operates system-wide across all applications, and features clean, centered live quota gauges with zero background CPU overhead.
 2. **External Integration (Optional)**: Exported status integration via `~/.claudebar/status.json` for users who prefer configuring widgets in **BetterTouchTool (BTT)** or **MTMR**.
 
 ---
@@ -29,11 +29,11 @@ It offers two integration modes:
 
 ## 1. Native Touch Bar (Zero Setup)
 
-The native Touch Bar driver (`PersistentTouchBarDriver`) runs completely inside the ClaudeBar app process with no dependencies on external tools.
+The native Touch Bar driver (`PersistentTouchBarDriver`) runs completely inside the Cortex app process with no dependencies on external tools.
 
 ### System-Wide Persistence
 
-- **Modal Function Bar Presentation (`placement: 0`)**: ClaudeBar presents its Touch Bar interface at the macOS system-modal level. This keeps the widget visible at all times, regardless of which application or full-screen space is active.
+- **Modal Function Bar Presentation (`placement: 0`)**: Cortex presents its Touch Bar interface at the macOS system-modal level. This keeps the widget visible at all times, regardless of which application or full-screen space is active.
 - **Automatic Lifecycle Re-Assertion**: Automatically re-asserts itself when you switch applications (`NSWorkspace.didActivateApplicationNotification`) or unlock your Mac screen (`com.apple.screenIsUnlocked`).
 - **Preserves System Controls**: Intelligently suppresses intrusive dismiss/close buttons (`DFRSystemModalShowsCloseBoxWhenFrontMost(false)`) and uses an empty Escape replacement item, leaving your system Control Strip (volume, brightness, media controls) and Escape key completely functional.
 - **Zero Background CPU & Battery Efficient**: Redraws only when quota state updates; no animation timers or background event taps.
@@ -42,7 +42,7 @@ The native Touch Bar driver (`PersistentTouchBarDriver`) runs completely inside 
 
 ### Live Quota Gauges & Centered Layout
 
-ClaudeBar renders centered live quota gauges across the Touch Bar for your selected providers:
+Cortex renders centered live quota gauges across the Touch Bar for your selected providers:
 
 1. **Balanced Horizontal Centering**: Automatically centers the quota cell(s) along the Touch Bar for maximum clarity and aesthetic balance.
 2. **Authentic Rounded Provider Logos**: Renders official provider icons (14×14 pt with 3 pt rounded corners) loaded from `~/.claudebar/icons/<provider>.png`, the application asset catalog, or SF Symbols.
@@ -59,7 +59,7 @@ ClaudeBar renders centered live quota gauges across the Touch Bar for your selec
 
 ### Multi-Model & Pool Intelligence
 
-ClaudeBar understands multi-model and pooled quota structures:
+Cortex understands multi-model and pooled quota structures:
 - **Google Antigravity**: Intelligently splits the multi-model quota into distinct model pools (e.g. Claude weekly pool vs. Gemini pool), rendering distinct brand icons, labels, and individual reset countdowns.
 - **Primary & Secondary Quotas**: Follows your configuration under **Settings > Menu Bar** (e.g. Session Quota and Weekly Quota side-by-side separated by a subtle vertical divider `|`).
 
@@ -67,13 +67,13 @@ ClaudeBar understands multi-model and pooled quota structures:
 
 ### One-Tap Interactions
 
-- **Open ClaudeBar**: Tap directly anywhere on the quota gauges on the Touch Bar to immediately open the ClaudeBar popover window (`claudebar://open`).
+- **Open Cortex**: Tap directly anywhere on the quota gauges on the Touch Bar to immediately open the Cortex popover window (`claudebar://open`).
 
 ---
 
 ## 2. In-App Contextual Touch Bar
 
-When the ClaudeBar popover menu or Settings window is open, ClaudeBar also provides a contextual native Touch Bar (`ClaudeBarNativeTouchBar`):
+When the Cortex popover menu or Settings window is open, Cortex also provides a contextual native Touch Bar (`CortexNativeTouchBar`):
 
 - **Active Provider Badge**: Displays the currently selected AI provider and status.
 - **Provider Switcher**: Horizontal scrollable list of enabled providers; tap any provider to switch monitoring focus instantly.
@@ -86,7 +86,7 @@ When the ClaudeBar popover menu or Settings window is open, ClaudeBar also provi
 
 You can toggle the persistent Touch Bar on or off at any time:
 
-1. Open **ClaudeBar Settings** (`⌘,`).
+1. Open **Cortex Settings** (`⌘,`).
 2. Go to **General > Touch Bar**.
 3. Toggle the **Touch Bar** switch.
 
@@ -100,7 +100,7 @@ When disabled:
 
 ## 4. External Integration: BetterTouchTool & MTMR
 
-For users who want to embed ClaudeBar quotas into an existing custom Touch Bar layout in **BetterTouchTool (BTT)** or **MTMR**, ClaudeBar provides a headless background synchronization pipeline.
+For users who want to embed Cortex quotas into an existing custom Touch Bar layout in **BetterTouchTool (BTT)** or **MTMR**, Cortex provides a headless background synchronization pipeline.
 
 ### Status File Architecture (`status.json`)
 
@@ -147,13 +147,13 @@ BetterTouchTool can run shell scripts and format the widget background color and
 3. Select **All Apps** in the left sidebar.
 4. Click **+ (Add Widget)** and choose **"Shell Script / Task Widget"**.
 5. Configure the widget:
-   - **Widget Name**: `ClaudeBar Quota`
+   - **Widget Name**: `Cortex Quota`
    - **Execute every**: `10` seconds
    - **Script / Task**:
      ```bash
-     python3 /path/to/ClaudeBar/scripts/touchbar_status.py --btt
+     python3 /path/to/Cortex/scripts/touchbar_status.py --btt
      ```
-     *(Replace `/path/to/ClaudeBar` with your actual repository path)*
+     *(Replace `/path/to/Cortex` with your actual repository path)*
    - **Script Output Type**: Select **`JSON (text, background_color, font_color)`**
 6. **Assign Action**:
    - Set action to **"Open URL"**: `claudebar://open` (or `claudebar://refresh`)
@@ -180,7 +180,7 @@ BetterTouchTool can run shell scripts and format the widget background color and
   "refreshInterval": 10,
   "commandPath": "/usr/bin/python3",
   "shellArguments": [
-    "/path/to/ClaudeBar/scripts/touchbar_status.py",
+    "/path/to/Cortex/scripts/touchbar_status.py",
     "--mtmr"
   ],
   "actions": [
@@ -192,7 +192,7 @@ BetterTouchTool can run shell scripts and format the widget background color and
   ]
 }
 ```
-*(Replace `/path/to/ClaudeBar` with your actual repository path)*
+*(Replace `/path/to/Cortex` with your actual repository path)*
 
 4. Save the file. MTMR will reload automatically.
 
@@ -209,8 +209,8 @@ The companion script [`scripts/touchbar_status.py`](../../scripts/touchbar_statu
 | `--text` | Emits plain concise text (useful for SwiftBar, xbar, or tmux) |
 | `--json` | Outputs raw exported JSON status payload |
 | `--refresh` | Triggers immediate quota refresh via URL scheme |
-| `--open` | Opens the ClaudeBar popup menu |
-| `--settings` | Opens ClaudeBar Settings window |
+| `--open` | Opens the Cortex popup menu |
+| `--settings` | Opens Cortex Settings window |
 
 #### Provider Icons for External Tools
 Transparent PNG icons for all providers are located at:
@@ -221,11 +221,11 @@ Transparent PNG icons for all providers are located at:
 
 ## 5. URL Schemes
 
-ClaudeBar registers the `claudebar://` URL scheme, allowing triggers from Touch Bar widgets, Raycast, Alfred, or Terminal:
+Cortex registers the `claudebar://` URL scheme, allowing triggers from Touch Bar widgets, Raycast, Alfred, or Terminal:
 
 | URL Scheme | Action | CLI Example |
 |---|---|---|
-| `claudebar://open` | Toggles the ClaudeBar dropdown popover | `open claudebar://open` |
+| `claudebar://open` | Toggles the Cortex dropdown popover | `open claudebar://open` |
 | `claudebar://refresh` | Triggers an immediate quota refresh for all providers | `open claudebar://refresh` |
 | `claudebar://settings` | Opens the Settings window | `open claudebar://settings` |
 
@@ -238,10 +238,10 @@ ClaudeBar registers the `claudebar://` URL scheme, allowing triggers from Touch 
 2. **MacBook Touch Bar Settings**:
    - Open macOS **System Settings > Keyboard > Touch Bar Settings...**
    - Ensure **Touch Bar shows** is set to **App Controls** or **Expanded Control Strip**.
-3. **Restart the App**: In rare cases where another app captures exclusive modal presentation, quitting and re-launching ClaudeBar restores the system-modal session.
+3. **Restart the App**: In rare cases where another app captures exclusive modal presentation, quitting and re-launching Cortex restores the system-modal session.
 
-### "ClaudeBar: Offline" in External Scripts
-- Make sure ClaudeBar is running in your menu bar.
+### "Cortex: Offline" in External Scripts
+- Make sure Cortex is running in your menu bar.
 - Verify that `~/.claudebar/status.json` exists and is updated.
 - Run the helper script directly in Terminal to inspect the output:
   ```bash

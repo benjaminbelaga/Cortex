@@ -28,6 +28,8 @@ public enum OverviewBuilder {
                         .lastGroupErrors[account.displayName]
                     let authState = (provider as? any AccountStateReporting)?
                         .accountAuthStates[account.accountId] ?? .unknown
+                    let errorClass = (provider as? any AccountErrorClassReporting)?
+                        .accountErrorClasses[account.accountId]
                     guard let snapshot = multi.accountSnapshots[account.accountId] else {
                         // Missing/expired expected accounts stay visible as
                         // warnings; they must not become fake healthy rows.
@@ -42,6 +44,7 @@ public enum OverviewBuilder {
                             errorMessage: accountError
                                 ?? refreshState.errorMessage
                                 ?? provider.lastError?.localizedDescription,
+                            errorClass: errorClass,
                             authState: authState,
                             resource: resource
                         )
@@ -55,6 +58,7 @@ public enum OverviewBuilder {
                         snapshot: snapshot,
                         isSyncing: refreshState == .refreshing,
                         errorMessage: accountError ?? refreshState.errorMessage,
+                        errorClass: errorClass,
                         authState: authState,
                         resource: resource
                     )
@@ -72,6 +76,7 @@ public enum OverviewBuilder {
                         accountLabel: nil,
                         windows: [],
                         isSyncing: true,
+                        errorMessage: provider.lastError?.localizedDescription,
                         resource: resource
                     )]
                 }
@@ -205,6 +210,7 @@ public enum OverviewBuilder {
         snapshot: UsageSnapshot,
         isSyncing: Bool = false,
         errorMessage: String? = nil,
+        errorClass: String? = nil,
         authState: AccountAuthState = .unknown,
         resource: RouterProviderQuota? = nil
     ) -> ProviderSnapshot {
@@ -217,6 +223,7 @@ public enum OverviewBuilder {
             windows: snapshot.quotas.map(windowSnapshot(rowId: rowId)),
             isSyncing: isSyncing,
             errorMessage: errorMessage,
+            errorClass: errorClass,
             authState: authState,
             capturedAt: snapshot.capturedAt,
             resource: resource
@@ -229,7 +236,7 @@ public enum OverviewBuilder {
     /// stale windows never color the glyph (a stale 0 % is not an
     /// exhaustion), rows without a reading count as unknown, and a fleet
     /// with no exploitable measurement answers `.unknown` — grey dot,
-    /// "État inconnu" — instead of borrowing a green it has no data for.
+    /// "Unknown state" — instead of borrowing a green it has no data for.
     public static func fleetSummary(
         rows: [ProviderSnapshot],
         filter: OverviewWindowFilter
@@ -291,16 +298,45 @@ public enum OverviewBuilder {
     /// Sorts rows by the selected mode, using each row's worst window that
     /// matches the filter. Rows without matching windows sink to the bottom
     /// (they are still listed — never hidden).
+    ///
+    /// Accounts of the same provider travel as ONE group (Ben 2026-09-22:
+    /// "il faut qu'ils soient l'un à côté de l'autre") — the group sorts by its
+    /// most critical member, so a provider still floats up by severity while
+    /// its accounts stay adjacent in account order.
     public static func sort(
         _ snapshots: [ProviderSnapshot],
         by mode: OverviewSort,
         filter: OverviewWindowFilter
     ) -> [ProviderSnapshot] {
-        snapshots.sorted { lhs, rhs in
-            let lhsKey = sortKey(lhs, mode: mode, filter: filter)
-            let rhsKey = sortKey(rhs, mode: mode, filter: filter)
-            return lhsKey < rhsKey
+        var groupOrder: [String] = []
+        var groups: [String: [(offset: Int, snapshot: ProviderSnapshot)]] = [:]
+        for (offset, snapshot) in snapshots.enumerated() {
+            if groups[snapshot.providerId] == nil { groupOrder.append(snapshot.providerId) }
+            groups[snapshot.providerId, default: []].append((offset, snapshot))
         }
+        let sortedGroups = groupOrder
+            .map { ($0, groups[$0] ?? []) }
+            .sorted { lhs, rhs in
+                let lhsKey = groupKey(lhs.1, mode: mode, filter: filter)
+                let rhsKey = groupKey(rhs.1, mode: mode, filter: filter)
+                if lhsKey != rhsKey { return lhsKey < rhsKey }
+                return (lhs.1.first?.offset ?? 0) < (rhs.1.first?.offset ?? 0)
+            }
+        return sortedGroups.flatMap { $0.1.map { $0.snapshot } }
+    }
+
+    /// The most critical member key of one provider group.
+    private static func groupKey(
+        _ members: [(offset: Int, snapshot: ProviderSnapshot)],
+        mode: OverviewSort,
+        filter: OverviewWindowFilter
+    ) -> (rank: Int, value: Double) {
+        var best: (rank: Int, value: Double)?
+        for member in members {
+            let key = sortKey(member.snapshot, mode: mode, filter: filter)
+            if best == nil || key < best! { best = key }
+        }
+        return best ?? (1, 0)
     }
 
     /// Comparable sort key: nil sorts after every real value.

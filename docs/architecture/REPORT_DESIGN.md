@@ -1,6 +1,6 @@
 # Report Card Architecture
 
-This document describes ClaudeBar's report card system — analytics cards that parse local data sources, aggregate metrics, and display comparisons within the existing provider UI.
+This document describes Cortex's report card system — analytics cards that parse local data sources, aggregate metrics, and display comparisons within the existing provider UI.
 
 ## Overview
 
@@ -94,7 +94,7 @@ Since each data source is provider-specific (e.g., `~/.claude/projects/` is Clau
 │  │  card + delta)   │  │         {Name}CardView(...)           │  │
 │  └──────────────────┘  └──────────────────────────────────────┘  │
 │                                                                    │
-│  Sources/App/ClaudeBarApp.swift                                   │
+│  Sources/App/CortexApp.swift                                   │
 │  └── {Provider}Provider(..., {name}Analyzer: Analyzer())         │
 └──────────────────────────────────────────────────────────────────┘
 ```
@@ -244,4 +244,4 @@ Analyzer tests use temp directories with test JSONL content — no real `~/.clau
 
 - [Architecture Overview](ARCHITECTURE.md) — Layered architecture and QuotaMonitor
 - [Theme Design](THEME_DESIGN.md) — Card styling tokens and theme system
-- See the repository contribution guide for the report workflow and test conventions.
+- [add-report skill](../../.claude/skills/add-report/SKILL.md) — Step-by-step guide for adding new reports

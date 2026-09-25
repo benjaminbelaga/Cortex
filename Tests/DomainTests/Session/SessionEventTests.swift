@@ -59,36 +59,36 @@ struct SessionEventTests {
     }
 
     @Test
-    func `event from probe working directory is flagged as ClaudeBar probe`() {
+    func `event from probe working directory is flagged as Cortex probe`() {
         let event = SessionEvent(
             sessionId: "probe-1",
             eventName: .sessionEnd,
-            cwd: "/Users/test/Library/Application Support/ClaudeBar/Probe"
+            cwd: "/Users/test/Library/Application Support/Cortex/Probe"
         )
 
-        #expect(event.isClaudeBarProbe)
+        #expect(event.isCortexProbe)
     }
 
     @Test
-    func `event with trailing slash on probe directory is flagged as ClaudeBar probe`() {
+    func `event with trailing slash on probe directory is flagged as Cortex probe`() {
         let event = SessionEvent(
             sessionId: "probe-2",
             eventName: .sessionStart,
-            cwd: "/Users/test/Library/Application Support/ClaudeBar/Probe/"
+            cwd: "/Users/test/Library/Application Support/Cortex/Probe/"
         )
 
-        #expect(event.isClaudeBarProbe)
+        #expect(event.isCortexProbe)
     }
 
     @Test
-    func `event from a real project directory is not flagged as ClaudeBar probe`() {
+    func `event from a real project directory is not flagged as Cortex probe`() {
         let event = SessionEvent(
             sessionId: "real-1",
             eventName: .sessionEnd,
             cwd: "/Users/test/code/my-project"
         )
 
-        #expect(!event.isClaudeBarProbe)
+        #expect(!event.isCortexProbe)
     }
 
     @Test
@@ -99,7 +99,7 @@ struct SessionEventTests {
             cwd: "/Users/test/code/Probe"
         )
 
-        #expect(!event.isClaudeBarProbe)
+        #expect(!event.isCortexProbe)
     }
 
     @Test

@@ -1,7 +1,7 @@
 import ProjectDescription
 
 let project = Project(
-    name: "ClaudeBar",
+    name: "Cortex",
     options: .options(
         defaultKnownRegions: ["en"],
         developmentRegion: "en"
@@ -83,7 +83,7 @@ let project = Project(
 
         // MARK: - Main Application
         .target(
-            name: "ClaudeBar",
+            name: "Cortex",
             destinations: .macOS,
             product: .app,
             bundleId: "fr.yoyaku.cortex",
@@ -109,24 +109,31 @@ let project = Project(
                     "CODE_SIGN_IDENTITY": "-",
                     "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
                     // Rebrand → "Cortex" (Ben 2026-08-24). The Tuist target keeps
-                    // its internal name "ClaudeBar" (so schemes / Package.swift /
-                    // CI / `tuist build ClaudeBar` are untouched), but the shipped
+                    // its internal name "Cortex" (so schemes / Package.swift /
+                    // CI / `tuist build Cortex` are untouched), but the shipped
                     // product is Cortex.app. Bundle id migrated to fr.yoyaku.cortex
                     // in E4 with non-destructive Keychain/UserDefaults migration
                     // (KeychainServiceMigrator + UserDefaults domain copy);
                     // feed/key rotation happens with the Sparkle keypair (T4 Ben gesture).
                     "PRODUCT_NAME": "Cortex",
-                    // Keep the Swift module name "ClaudeBar" (PRODUCT_NAME would
-                    // otherwise rename it too) so `@testable import ClaudeBar` in
+                    // Keep the Swift module name "Cortex" (PRODUCT_NAME would
+                    // otherwise rename it too) so `@testable import Cortex` in
                     // AppTests and the workspace/scheme identity stay untouched.
                     // Module name is compile-time only, invisible to users.
-                    "PRODUCT_MODULE_NAME": "ClaudeBar",
+                    "PRODUCT_MODULE_NAME": "Cortex",
                 ],
                 debug: [
                     "SWIFT_ACTIVE_COMPILATION_CONDITIONS": "DEBUG ENABLE_SPARKLE",
                 ],
                 release: [
                     "SWIFT_ACTIVE_COMPILATION_CONDITIONS": "ENABLE_SPARKLE",
+                    // Stable signing for the installed app (Ben 2026-09-23): an
+                    // ad-hoc signature pins Keychain trust to the binary cdhash,
+                    // so every rebuild re-prompted for every stored key. A
+                    // team certificate keeps the designated requirement stable.
+                    "CODE_SIGN_IDENTITY": "Developer ID Application",
+                    "DEVELOPMENT_TEAM": "YZYJJPX484",
+                    "CODE_SIGN_STYLE": "Manual",
                 ]
             )
         ),
@@ -192,14 +199,14 @@ let project = Project(
             deploymentTargets: .macOS("15.0"),
             sources: ["Tests/AppTests/**"],
             dependencies: [
-                .target(name: "ClaudeBar"),
+                .target(name: "Cortex"),
                 .target(name: "Domain"),
                 .target(name: "Infrastructure"),
             ],
             settings: .settings(
                 base: [
                     "SWIFT_ACTIVE_COMPILATION_CONDITIONS": "MOCKING",
-                    // The app target keeps its internal name "ClaudeBar" but ships
+                    // The app target keeps its internal name "Cortex" but ships
                     // as Cortex.app (PRODUCT_NAME=Cortex), so the auto-derived test
                     // host leaf (target name) points at a non-existent executable.
                     // Pin it to the real Cortex executable.
@@ -237,9 +244,9 @@ let project = Project(
     ],
     schemes: [
         .scheme(
-            name: "ClaudeBar",
+            name: "Cortex",
             shared: true,
-            buildAction: .buildAction(targets: ["ClaudeBar"]),
+            buildAction: .buildAction(targets: ["Cortex"]),
             testAction: .targets(
                 [
                     .testableTarget(target: .target("AcceptanceTests")),
@@ -249,9 +256,9 @@ let project = Project(
                 ],
                 configuration: .debug
             ),
-            runAction: .runAction(configuration: .debug, executable: .target("ClaudeBar")),
+            runAction: .runAction(configuration: .debug, executable: .target("Cortex")),
             archiveAction: .archiveAction(configuration: .release),
-            profileAction: .profileAction(configuration: .release, executable: .target("ClaudeBar")),
+            profileAction: .profileAction(configuration: .release, executable: .target("Cortex")),
             analyzeAction: .analyzeAction(configuration: .debug)
         ),
     ]

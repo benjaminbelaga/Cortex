@@ -82,7 +82,7 @@ private struct Fixture {
 
     init(directories: [String]) throws {
         root = FileManager.default.temporaryDirectory
-            .appendingPathComponent("ClaudeBarDiscoveryTests-")
+            .appendingPathComponent("CortexDiscoveryTests-")
             .appendingPathComponent(UUID().uuidString)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         for directory in directories {

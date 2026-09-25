@@ -110,3 +110,19 @@ public enum UserDefaultsDomainMigrator {
         }
     }
 }
+
+/// Test-only kill-switch for the launch-time legacy migrators (RC gate
+/// enabler, `docs/release/RC-GATES.md` gates 5/6/8). When the environment
+/// advertises `CORTEX_SKIP_LEGACY_MIGRATORS=1`, the app skips both migrations
+/// before any read — so app-side gates can run under an isolated HOME without
+/// a system prompt on the real login keychain. Default behavior (variable
+/// absent, or any other value) is unchanged.
+public enum LegacyMigratorGate {
+    public static let skipEnvVar = "CORTEX_SKIP_LEGACY_MIGRATORS"
+
+    public static func shouldSkip(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Bool {
+        environment[skipEnvVar] == "1"
+    }
+}

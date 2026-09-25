@@ -8,7 +8,7 @@ import Testing
 /// lecture perd ses derniers quotas" — a roster account whose collection
 /// failed must KEEP its previous reading (flagged stale, original capture
 /// date), a standby account keeps its reading instead of dropping to
-/// "En veille" alone, and the reconnect affordance reads a typed
+/// "Standby" alone, and the reconnect affordance reads a typed
 /// `AccountAuthState`, never a message-string heuristic.
 @Suite("RouterBackedProvider retention & auth states")
 @MainActor
@@ -87,7 +87,7 @@ struct RouterRetentionTests {
                 "veille must keep the reading, not drop it")
         #expect(standby?.quotas.first?.isStale == true,
                 "the router only refreshes the active seat — the standby reading is old")
-        #expect(provider.lastGroupErrors["PERSONAL"]?.contains("En veille") == true)
+        #expect(provider.lastGroupErrors["PERSONAL"]?.contains("Standby") == true)
     }
 
     @Test("typed auth states map the router's own present/auth_state fields")

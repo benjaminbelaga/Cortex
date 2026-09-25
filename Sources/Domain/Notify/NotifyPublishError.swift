@@ -64,7 +64,7 @@ public enum NotifyPublishError: Error, Sendable, Equatable, LocalizedError {
                 ? "This device cannot show a Live Activity yet. Open the Notify! app once on the device."
                 : reason
         case .tileGone:
-            "The Live Activity was dismissed on the device. ClaudeBar will start a new one."
+            "The Live Activity was dismissed on the device. Cortex will start a new one."
         case .backoff(let retryAfter, let openingTheAppMayHelp):
             openingTheAppMayHelp
                 ? "Notify! is waiting \(Self.minutes(retryAfter)) before another Live Activity. Opening the Notify! app on the device may clear it sooner."
@@ -72,17 +72,17 @@ public enum NotifyPublishError: Error, Sendable, Equatable, LocalizedError {
         case .invalidPayload(let message):
             message.isEmpty ? "Notify! rejected the content of this update." : message
         case .deliveryUnconfirmed:
-            "Notify! could not confirm the Live Activity started. ClaudeBar will check again on the next update."
+            "Notify! could not confirm the Live Activity started. Cortex will check again on the next update."
         case .transportFailed(let message):
             "Could not reach Notify!: \(message)"
         case .surfaceSwitchedOff(let message):
             message.isEmpty
-                ? "Notify! has this widget switched off at the moment. ClaudeBar will try again later."
+                ? "Notify! has this widget switched off at the moment. Cortex will try again later."
                 : message
         case .unexpectedStatus(let code):
             "Notify! answered with HTTP \(code)."
         case .malformedResponse:
-            "Notify! sent a response ClaudeBar could not read."
+            "Notify! sent a response Cortex could not read."
         }
     }
 

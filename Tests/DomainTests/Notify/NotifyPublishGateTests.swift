@@ -16,8 +16,8 @@ struct NotifyPublishGateTests {
     /// turned that surface off.
     private func payload(tile body: String?, gauge value: String?) -> NotifyPayload {
         NotifyPayload(
-            tile: body.flatMap { NotifyTile(title: "ClaudeBar", body: $0, progress: 42) },
-            gauge: value.flatMap { NotifyGauge(title: "ClaudeBar", value: $0, progress: 42) }
+            tile: body.flatMap { NotifyTile(title: "Cortex", body: $0, progress: 42) },
+            gauge: value.flatMap { NotifyGauge(title: "Cortex", value: $0, progress: 42) }
         )
     }
 
@@ -25,9 +25,9 @@ struct NotifyPublishGateTests {
     /// tile value on both surfaces, so this builds them from one body too.
     private func payload(tile body: String?, gauge value: String?, screenTile screenBody: String?) -> NotifyPayload {
         NotifyPayload(
-            tile: body.flatMap { NotifyTile(title: "ClaudeBar", body: $0, progress: 42) },
-            gauge: value.flatMap { NotifyGauge(title: "ClaudeBar", value: $0, progress: 42) },
-            screenTile: screenBody.flatMap { NotifyTile(title: "ClaudeBar", body: $0, progress: 42) }
+            tile: body.flatMap { NotifyTile(title: "Cortex", body: $0, progress: 42) },
+            gauge: value.flatMap { NotifyGauge(title: "Cortex", value: $0, progress: 42) },
+            screenTile: screenBody.flatMap { NotifyTile(title: "Cortex", body: $0, progress: 42) }
         )
     }
 
@@ -350,8 +350,8 @@ struct NotifyPublishGateTests {
 
     private func payload(tileTrailing: String, gaugeValue: String) -> NotifyPayload {
         NotifyPayload(
-            tile: NotifyTile(title: "ClaudeBar", progress: 42, trailing: tileTrailing),
-            gauge: NotifyGauge(title: "ClaudeBar", value: gaugeValue, unit: "%", progress: 42)
+            tile: NotifyTile(title: "Cortex", progress: 42, trailing: tileTrailing),
+            gauge: NotifyGauge(title: "Cortex", value: gaugeValue, unit: "%", progress: 42)
         )
     }
 

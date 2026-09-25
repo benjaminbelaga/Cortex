@@ -961,7 +961,7 @@ struct OmpUsageProbeParsingTests {
     @Test
     func `same email and organization keeps upstream unreported account visible`() throws {
         // omp's org gate normally absorbs this identity into the same-org
-        // report. If it still reaches ClaudeBar, preserve omp's decision to
+        // report. If it still reaches Cortex, preserve omp's decision to
         // surface the failed fetch instead of second-guessing it by email.
         let json = """
         { "reports": [ {

@@ -45,7 +45,7 @@ public struct RouterSourceModeMigration: Sendable {
     /// Idempotent. Sur une machine sans routeur, coupe le SUIVI des lignes
     /// strictement routeur **si et seulement si** la clé `isEnabled` est
     /// absente (un choix explicite, vrai ou faux, est préservé — même contrat
-    /// que `ClaudeBarApp.seedCuratedProviderDefaultsIfNeeded`).
+    /// que `CortexApp.seedCuratedProviderDefaultsIfNeeded`).
     public static func applyFreshInstallDefaultsIfNeeded(
         settingsRepository: any ProviderSettingsRepository,
         registryPresent: Bool

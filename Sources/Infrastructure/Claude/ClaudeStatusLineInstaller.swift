@@ -209,7 +209,7 @@ public enum ClaudeStatusLineInstaller {
         )
         let script = """
         #!/bin/bash
-        # cortex-statusline.sh — installed by ClaudeBar. Marker: \(shimMarker)
+        # cortex-statusline.sh — installed by Cortex. Marker: \(shimMarker)
         # Relays Claude's statusline JSON to the user's original command AND
         # POSTs the same payload to the Cortex StatusLineObserver (localhost-only).
         # Best-effort: a Cortex outage never breaks the shell renderer.

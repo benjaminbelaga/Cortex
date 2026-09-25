@@ -5,7 +5,7 @@
 # Usage: ./scripts/create-icns.sh <source-png> <output-icns>
 #
 # Example:
-#   ./scripts/create-icns.sh Sources/Media.xcassets/AppIcon.appiconset/ClaudeBar.png AppIcon.icns
+#   ./scripts/create-icns.sh Sources/Media.xcassets/AppIcon.appiconset/Cortex.png AppIcon.icns
 #
 
 set -e

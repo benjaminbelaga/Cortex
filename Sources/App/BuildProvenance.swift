@@ -11,11 +11,11 @@ struct BuildProvenance: Equatable {
     }
 
     init(infoDictionary: [String: Any]) {
-        gitSHA = infoDictionary["ClaudeBarGitSHA"] as? String ?? "unknown"
-        builtAtUTC = infoDictionary["ClaudeBarBuildUTC"] as? String ?? "unknown"
-        isDirty = (infoDictionary["ClaudeBarGitDirty"] as? NSNumber)?.boolValue
-            ?? (infoDictionary["ClaudeBarGitDirty"] as? Bool)
-            ?? (infoDictionary["ClaudeBarGitDirty"] as? String).map { $0 != "false" }
+        gitSHA = infoDictionary["CortexGitSHA"] as? String ?? "unknown"
+        builtAtUTC = infoDictionary["CortexBuildUTC"] as? String ?? "unknown"
+        isDirty = (infoDictionary["CortexGitDirty"] as? NSNumber)?.boolValue
+            ?? (infoDictionary["CortexGitDirty"] as? Bool)
+            ?? (infoDictionary["CortexGitDirty"] as? String).map { $0 != "false" }
             ?? true
     }
 

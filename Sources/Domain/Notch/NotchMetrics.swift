@@ -27,7 +27,7 @@ public struct NotchMetrics: Sendable, Equatable {
     /// The notch at rest, before any activity widens it.
     public let closedSize: CGSize
 
-    /// Whether this display has a real cutout. False means ClaudeBar draws a
+    /// Whether this display has a real cutout. False means Cortex draws a
     /// virtual notch at top centre — roughly half of installs.
     public let isPhysicalNotch: Bool
 

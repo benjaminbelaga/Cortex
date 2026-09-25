@@ -1,6 +1,6 @@
 # Notch Live Activity
 
-ClaudeBar renders session and quota state into the MacBook notch — a Dynamic Island for Claude Code, built on the hook stream and `QuotaMonitor` that already exist.
+Cortex renders session and quota state into the MacBook notch — a Dynamic Island for Claude Code, built on the hook stream and `QuotaMonitor` that already exist.
 
 **Mockup:** [`docs/mockups/notch-live-activity.html`](../mockups/notch-live-activity.html)
 
@@ -8,7 +8,7 @@ ClaudeBar renders session and quota state into the MacBook notch — a Dynamic I
 
 ## The problem
 
-ClaudeBar already knows everything worth knowing about a running session. `SessionMonitor` consumes a live hook stream (`SessionStart`, `UserPromptSubmit`, `SubagentStart/Stop`, `TaskCompleted`, `Stop`, `SessionEnd`) and maintains a rich `ClaudeSession` with `phase`, `activeSubagentCount`, `completedTaskCount`, and elapsed time. `QuotaMonitor` holds every provider's remaining quota and reset window.
+Cortex already knows everything worth knowing about a running session. `SessionMonitor` consumes a live hook stream (`SessionStart`, `UserPromptSubmit`, `SubagentStart/Stop`, `TaskCompleted`, `Stop`, `SessionEnd`) and maintains a rich `ClaudeSession` with `phase`, `activeSubagentCount`, `completedTaskCount`, and elapsed time. `QuotaMonitor` holds every provider's remaining quota and reset window.
 
 All of it is delivered through two surfaces that are wrong for ambient state:
 
@@ -28,7 +28,7 @@ The notch is that surface, available today. It is the only region of the screen 
 
 ## Behavior
 
-Eight states, seven of which read from data ClaudeBar already has. The notch is **collapsed and invisible** by default and only claims space when it has something to say.
+Eight states, seven of which read from data Cortex already has. The notch is **collapsed and invisible** by default and only claims space when it has something to say.
 
 | State | Fires on | Reads | Dismissal |
 |---|---|---|---|
@@ -62,7 +62,7 @@ static let hookEvents = [
 case notification = "Notification"                     // ← new
 ```
 
-`ClaudeSession` gains a `.awaitingInput` phase, and `SessionEvent.isClaudeBarProbe` already filters ClaudeBar's own `<AppSupport>/ClaudeBar/Probe` runs so background quota probing does not light the notch.
+`ClaudeSession` gains a `.awaitingInput` phase, and `SessionEvent.isCortexProbe` already filters Cortex's own `<AppSupport>/Cortex/Probe` runs so background quota probing does not light the notch.
 
 ---
 
@@ -146,7 +146,7 @@ enum NotchState {
 
 `NotchModel` then resolves which content wins and derives the window size and corner radii from it. `NotchContentRegistry` is a flat catalogue of descriptors with priorities — `nowPlaying`, `download.active`, `focus.on`, `screen.recording`, `airdrop`.
 
-**This maps exactly onto ClaudeBar's problem.** Session activity, quota alerts and permission prompts are three independent sources competing for one strip of glass, and the `showLiveActivity` / `showTemporaryNotification(duration:)` split *is* the "attention states persist, Done flashes for four seconds" rule from the state table above. That distinction is Apple's Dynamic Island semantics, and both were arrived at independently.
+**This maps exactly onto Cortex's problem.** Session activity, quota alerts and permission prompts are three independent sources competing for one strip of glass, and the `showLiveActivity` / `showTemporaryNotification(duration:)` split *is* the "attention states persist, Done flashes for four seconds" rule from the state table above. That distinction is Apple's Dynamic Island semantics, and both were arrived at independently.
 
 *Panel setup* is clean and reusable:
 
@@ -164,13 +164,13 @@ window.acceptsMouseMovedEvents = true
 
 Both projects converged on `.mainMenu + 3` and that exact `collectionBehavior` set. Treat it as the community-settled answer.
 
-**Where it differs, and why we side with boring.notch:** `OverlayPanelWindow` overrides `canBecomeKey`/`canBecomeMain`/`isKeyWindow` to `true`, so the notch takes keyboard focus — which then requires `GlobalClickMonitor` and a 151-line `AppDelegate+OutsideClick` to dismiss it again. boring.notch returns `false` for both and never steals focus. ClaudeBar's notch has no text entry, so `false` is right: **the notch must never pull focus from the terminal the user is working in.**
+**Where it differs, and why we side with boring.notch:** `OverlayPanelWindow` overrides `canBecomeKey`/`canBecomeMain`/`isKeyWindow` to `true`, so the notch takes keyboard focus — which then requires `GlobalClickMonitor` and a 151-line `AppDelegate+OutsideClick` to dismiss it again. boring.notch returns `false` for both and never steals focus. Cortex's notch has no text entry, so `false` is right: **the notch must never pull focus from the terminal the user is working in.**
 
 DynamicNotch also uses SkyLight and `CGShieldingWindowLevel()` for lock-screen presence. Same exclusion as above.
 
 ### Comparison
 
-| | boring.notch | DynamicNotch | **ClaudeBar** |
+| | boring.notch | DynamicNotch | **Cortex** |
 |---|---|---|---|
 | Window | `NSPanel` `.mainMenu + 3` | `NSPanel` `.mainMenu + 3` | same |
 | Canvas | fixed 640 × 210 | fixed 1000 × 1000 | fixed, ~640 × 280 |
@@ -191,11 +191,11 @@ Declining `CGSSpace` and SkyLight costs two capabilities: the notch will not dra
 
 That is the right trade for this app, for three reasons that do not apply to either reference project:
 
-1. **`Sources/App/entitlements.mas.plist` exists.** ClaudeBar ships to the Mac App Store. `dlopen` into a PrivateFramework is a review rejection.
+1. **`Sources/App/entitlements.mas.plist` exists.** Cortex ships to the Mac App Store. `dlopen` into a PrivateFramework is a review rejection.
 2. **Sparkle auto-updates raise the cost of breakage.** A private-API change in a macOS point release becomes a support burden across every installed copy.
-3. **The use case does not need it.** ClaudeBar's user is in a terminal and an editor, not a fullscreen game. `.fullScreenAuxiliary` covers auxiliary presentation over the *current* fullscreen space, which is the case that actually occurs.
+3. **The use case does not need it.** Cortex's user is in a terminal and an editor, not a fullscreen game. `.fullScreenAuxiliary` covers auxiliary presentation over the *current* fullscreen space, which is the case that actually occurs.
 
-Both reference apps are HUD replacements whose entire premise requires always-on-top-of-everything. ClaudeBar's notch is a second view onto a menu bar app's existing state. Different premise, different budget for risk.
+Both reference apps are HUD replacements whose entire premise requires always-on-top-of-everything. Cortex's notch is a second view onto a menu bar app's existing state. Different premise, different budget for risk.
 
 ---
 
@@ -243,7 +243,7 @@ Rules under test, no mocks required:
 - a 95% quota alert outranks a working session, but not a blocked one
 - `Done` expires at `now > completedAt + 4s` and yields to the next activity
 - an ended session with no successor resolves to `nil` → notch hidden
-- ClaudeBar's own probe session never produces an activity
+- Cortex's own probe session never produces an activity
 
 ### Screen handling
 
@@ -256,13 +256,13 @@ struct NotchMetrics {
 }
 ```
 
-On a display with no notch, the closed height falls back to menu bar height (`screen.frame.maxY - screen.visibleFrame.maxY`) and ClaudeBar draws a virtual notch at top centre — roughly half of installs are on external displays or non-notch Macs, so this is a primary path, not a fallback.
+On a display with no notch, the closed height falls back to menu bar height (`screen.frame.maxY - screen.visibleFrame.maxY`) and Cortex draws a virtual notch at top centre — roughly half of installs are on external displays or non-notch Macs, so this is a primary path, not a fallback.
 
 `NSApplication.didChangeScreenParametersNotification` drives re-measurement and repositioning.
 
 ### Theming
 
-Both reference apps force `NSAppearance(named: .darkAqua)`. ClaudeBar splits it:
+Both reference apps force `NSAppearance(named: .darkAqua)`. Cortex splits it:
 
 - **the notch region itself is always black** — it is simulating physical glass; a light-themed notch is incoherent
 - **the expanded panel themes normally** through `AppThemeProvider`, using `cardGradient` / `glassBorder` / `statusColor(for:)` like every other surface

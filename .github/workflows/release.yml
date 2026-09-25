@@ -23,14 +23,14 @@ concurrency:
 
 env:
   APP_NAME: Cortex
-  PROJECT_NAME: ClaudeBar
+  PROJECT_NAME: Cortex
   BUNDLE_ID: fr.yoyaku.cortex
-  NOTARYTOOL_PROFILE: CORTEX-NOTARY
+  NOTARYTOOL_PROFILE: YOYAKU-NOTARY
 
 jobs:
   release:
     name: Build, sign, notarize, and release
-    runs-on: [self-hosted, macos, arm64, cortex-ci]
+    runs-on: [self-hosted, macos, arm64, claudebar-ci]
     timeout-minutes: 90
     environment:
       name: github-pages

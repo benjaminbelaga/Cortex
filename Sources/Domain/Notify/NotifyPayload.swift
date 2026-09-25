@@ -39,7 +39,7 @@ public struct NotifyGaugeSelection: Sendable, Equatable {
     public static let automatic = NotifyGaugeSelection()
 }
 
-/// Everything ClaudeBar wants standing on the phone right now.
+/// Everything Cortex wants standing on the phone right now.
 ///
 /// `Equatable` on purpose: the App driver hands each payload to
 /// `ObservationRenderSync`, which drops one identical to the last, so an

@@ -22,3 +22,4 @@ build/
 
 # Personal Claude Code settings (per-project, never commit)
 .claude/settings.local.json
+__pycache__/

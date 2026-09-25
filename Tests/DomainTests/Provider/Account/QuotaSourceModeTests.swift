@@ -87,7 +87,7 @@ struct QuotaSourceModeTests {
     @Test("Installed fresh: every provider defaults to `.autonomous`")
     func freshInstallDefaultsToAutonomous() {
         let resolver = QuotaSourceResolver()
-        for id in ["claude", "codex", "qwen-api", "bedrock", "local"] {
+        for id in ["claude", "codex", "bedrock", "local"] {
             let resolved = resolver.resolve(providerId: id, accounts: [], routerAvailable: true)
             #expect(resolved.configured == .autonomous)
             #expect(resolved.effective == .autonomous)

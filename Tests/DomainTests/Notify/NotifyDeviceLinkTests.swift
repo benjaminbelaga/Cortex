@@ -252,7 +252,7 @@ struct NotifyDeviceLinkTests {
         // the namespace. The gateway refuses a Live Activity start for a Mac or a
         // browser outright, naming them, but it is equally explicit that widgets
         // carry no device type gate and that legacy, WB and MC ids can all own
-        // one. Refusing a widget here would be ClaudeBar inventing a rule the
+        // one. Refusing a widget here would be Cortex inventing a rule the
         // service does not have.
         for kind in [NotifyDeviceKind.mac, .web] {
             #expect(kind.supportsLiveActivity == false)
@@ -282,7 +282,7 @@ struct NotifyDeviceLinkTests {
         // The gateway is explicit that screen widgets carry no device type gate
         // at all and that legacy, IO, WB and MC ids can each own one. Only the
         // iOS app draws them, but which device draws what is Notify!'s business
-        // rather than a rule for ClaudeBar to invent on the user's behalf.
+        // rather than a rule for Cortex to invent on the user's behalf.
         for kind in [NotifyDeviceKind.appDevice, .mac, .web, .unrecognized] {
             #expect(kind.supportsScreenWidget)
             #expect(kind.screenWidgetUnsupportedReason == nil)
@@ -301,7 +301,7 @@ struct NotifyDeviceLinkTests {
     @Test
     func `an id from a namespace nobody knows yet is allowed through`() {
         // Refusing an unknown shape would break the day Notify! mints a new
-        // namespace, and ClaudeBar would be wrong about a device it has never
+        // namespace, and Cortex would be wrong about a device it has never
         // heard of. Letting it through costs one request and lets the gateway,
         // the only party that can actually tell, decide.
         let kind = NotifyDeviceKind.kind(ofDeviceId: "XY9K4TR2ZQ7M1XPD")
@@ -354,7 +354,7 @@ struct NotifyDeviceLinkTests {
     @Test
     func `a Mac link carries a widget but not a Live Activity`() {
         // A Mac link is a real link and half the feature works on it. Only the
-        // Live Activity is refused, and by the gateway rather than by ClaudeBar:
+        // Live Activity is refused, and by the gateway rather than by Cortex:
         // it names a Mac of either generation and a web push browser as devices
         // that cannot show one at all.
         let link = NotifyDeviceLink(deviceId: "MC3F7Q2ZKM4H2QZ1", token: "s3cr3t")

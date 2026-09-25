@@ -56,8 +56,15 @@ public final class QuotaMonitor {
     /// Fabrique d'un provider à partir de son id de catalogue.
     public typealias ProviderFactory = @MainActor (String) -> (any AIProvider)?
 
+    /// Optional Contract A exporter (v7.2): writes the credential-free roster
+    /// llm-router reads back, after each completed overview refresh.
+    private let cortexExporter: (any CortexAccountsExporting)?
+
     /// Previous status for change detection
     private var previousStatuses: [String: QuotaStatus] = [:]
+    /// Last observed router time-tariff state per router-backed provider, so
+    /// peak/discount transitions alert once and never re-fire every refresh.
+    private var previousTimeStates: [String: String] = [:]
 
     /// Current monitoring task
     private var monitoringTask: Task<Void, Never>?
@@ -89,13 +96,15 @@ public final class QuotaMonitor {
         alerter: (any QuotaAlerter)? = nil,
         clock: any Clock,
         powerStateProvider: (any PowerStateProvider)? = nil,
-        providerFactory: ProviderFactory? = nil
+        providerFactory: ProviderFactory? = nil,
+        cortexExporter: (any CortexAccountsExporting)? = nil
     ) {
         self.providers = providers
         self.alerter = alerter
         self.clock = clock
         self.powerStateProvider = powerStateProvider
         self.providerFactory = providerFactory
+        self.cortexExporter = cortexExporter
         selectFirstEnabledIfNeeded()
     }
 
@@ -112,6 +121,11 @@ public final class QuotaMonitor {
                 }
             }
         }
+        // Contract A (v7.2): also publish the roster from the background loop,
+        // not only when the overview is open — llm-router must have Ben's full
+        // account picture even while the popover is closed (else it falls back
+        // to the native single/dual-account probes).
+        cortexExporter?.exportAfterRefresh(providers: providers.all)
     }
 
     /// Refreshes the overview's complete data set. Multi-account providers
@@ -161,6 +175,9 @@ public final class QuotaMonitor {
                 }
             }
         }
+        // Contract A (v7.2): publish the credential-free roster once the cycle
+        // has settled, so llm-router reads the freshest windows.
+        cortexExporter?.exportAfterRefresh(providers: providers.all)
     }
 
     /// Refreshes a single provider.
@@ -202,6 +219,20 @@ public final class QuotaMonitor {
                 previousStatus: previousStatus,
                 currentStatus: newStatus
             )
+        }
+
+        // Router time-tariff transitions (peak/discount, bible §15). Only
+        // router-backed providers report one; alert once per real flip, never
+        // on the first observation (previous == nil).
+        if let reporting = provider as? RouterTimeStateReporting,
+           let timeState = reporting.routerTimeState {
+            let previous = previousTimeStates[provider.id]
+            previousTimeStates[provider.id] = timeState.state
+            if let previous, previous != timeState.state, let alerter {
+                await alerter.alertTimeState(
+                    providerId: provider.id, previous: previous, current: timeState
+                )
+            }
         }
     }
 
@@ -339,6 +370,7 @@ public final class QuotaMonitor {
         let id = provider.id
         removeProvider(id: id)
         previousStatuses.removeValue(forKey: id)
+        previousTimeStates.removeValue(forKey: id)
         provider.isEnabled = true
         addProvider(provider)
         Task { await self.refresh(providerId: id, kind: .interactive) }
@@ -743,6 +775,11 @@ public final class QuotaMonitor {
                             await self.refreshSelected(kind: .background)
                         }
                     }
+                    // Contract A (v7.2): publish the full roster every background
+                    // tick (freshest-known windows for all providers), so
+                    // llm-router has Ben's complete account picture even when the
+                    // popover is closed — not just after an overview refresh.
+                    self.cortexExporter?.exportAfterRefresh(providers: self.providers.all)
                     continuation.yield(.refreshed)
 
                     // Compute the sleep each tick: the requested interval clamped
