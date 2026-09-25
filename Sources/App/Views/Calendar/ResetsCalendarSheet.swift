@@ -23,10 +23,19 @@ struct ResetsCalendarSheet: View {
     /// Destructive removal of the shown provider (or account) from Cortex.
     /// Never touches the underlying tool/CLI profile — only Cortex's tracking.
     var onRemove: (() -> Void)? = nil
+    /// Opens the provider's real web console (billing / usage / login). Lives
+    /// here, not on the footer's Dashboard button, which opens Cortex's own
+    /// window (Ben 2026-09-26).
+    var onOpenConsole: (() -> Void)? = nil
 
     @Environment(\.appTheme) private var theme
     @Environment(\.dismiss) private var dismiss
-    @State private var showRemoveConfirm = false
+    /// Inline two-step confirmation. A system `.confirmationDialog` is a modal
+    /// presentation that greys out and wedges an NSPopover-backed MenuBarExtra
+    /// (same class as the `.sheet` bug, Ben 2026-08-24). Symptoms reported
+    /// 2026-09-26: "Remove" did nothing and "Cancel" closed the whole block.
+    /// The destructive intent is confirmed in place, inside the sheet.
+    @State private var confirmingRemove = false
 
     private let windowStart: Date = Calendar.current.startOfDay(for: Date())
     private let windowEnd: Date = Calendar.current.startOfDay(for: Date()).addingTimeInterval(7 * 24 * 3600)
@@ -85,6 +94,11 @@ struct ResetsCalendarSheet: View {
             Text("Resets over 7 days · \(snapshot.windows.count) window\(snapshot.windows.count > 1 ? "s" : "")")
                 .font(theme.font(size: 10))
                 .foregroundStyle(theme.textTertiary)
+            if snapshot.windows.isEmpty {
+                Text("No quota data yet — open the console to connect this provider.")
+                    .font(theme.font(size: 10))
+                    .foregroundStyle(theme.textTertiary)
+            }
         }
     }
 
@@ -109,7 +123,7 @@ struct ResetsCalendarSheet: View {
                             .offset(x: geo.size.width * CGFloat(i) / 7, y: 0)
                     }
                 }
-                // "Aujourd'hui" left-edge marker.
+                // "Today" left-edge marker.
                 Rectangle()
                     .fill(theme.statusColor(for: .healthy))
                     .frame(width: 2)
@@ -122,43 +136,62 @@ struct ResetsCalendarSheet: View {
         let date = windowStart.addingTimeInterval(TimeInterval(offset) * 24 * 3600)
         let formatter = DateFormatter()
         formatter.dateFormat = "EEE d"
-        formatter.locale = Locale(identifier: "fr_FR")
+        formatter.locale = Locale(identifier: "en_US")
         return formatter.string(from: date)
     }
 
     // MARK: - Footer
 
     private var footer: some View {
-        HStack {
-            if let onAddAccountFromPasteboard {
-                Button {
-                    onAddAccountFromPasteboard()
-                } label: {
-                    Label("Add account (key from clipboard)", systemImage: "plus.circle")
+        VStack(alignment: .leading, spacing: 8) {
+            if confirmingRemove {
+                // Inline confirmation — never a system modal inside the popover.
+                Text("Remove \u{201C}\(snapshot.providerName)\u{201D} from Cortex? Only Cortex's tracking is removed — your tool profile and credentials stay intact.")
+                    .font(theme.font(size: 10))
+                    .foregroundStyle(theme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 8) {
+                    Spacer()
+                    Button("Keep") {
+                        withAnimation(.easeOut(duration: 0.12)) { confirmingRemove = false }
+                    }
+                    Button(role: .destructive) {
+                        confirmingRemove = false
+                        onRemove?()
+                    } label: {
+                        Label("Remove", systemImage: "trash")
+                    }
+                }
+            } else {
+                HStack {
+                    if let onAddAccountFromPasteboard {
+                        Button {
+                            onAddAccountFromPasteboard()
+                        } label: {
+                            Label("Add account (key from clipboard)", systemImage: "plus.circle")
+                        }
+                    }
+                    Spacer()
+                    if let onOpenConsole {
+                        Button {
+                            onOpenConsole()
+                        } label: {
+                            Label("Open console", systemImage: "arrow.up.right.square")
+                        }
+                    }
+                    if let onRemove {
+                        Button(role: .destructive) {
+                            withAnimation(.easeOut(duration: 0.12)) { confirmingRemove = true }
+                        } label: {
+                            Label("Remove from Cortex", systemImage: "trash")
+                        }
+                    }
+                    Button("Close") {
+                        if let onClose { onClose() } else { dismiss() }
+                    }
+                    .keyboardShortcut(.defaultAction)
                 }
             }
-            Spacer()
-            if let onRemove {
-                Button(role: .destructive) {
-                    showRemoveConfirm = true
-                } label: {
-                    Label("Remove from Cortex", systemImage: "trash")
-                }
-            }
-            Button("Close") {
-                if let onClose { onClose() } else { dismiss() }
-            }
-            .keyboardShortcut(.defaultAction)
-        }
-        .confirmationDialog(
-            "Remove this provider from Cortex?",
-            isPresented: $showRemoveConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("Remove", role: .destructive) { onRemove?() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Only Cortex's tracking is removed. Your tool profile and credentials stay intact.")
         }
     }
 }
@@ -217,13 +250,13 @@ private struct ResetsCalendarRow: View {
             if interval < 0 {
                 let formatter2 = DateFormatter()
                 formatter2.dateFormat = "EEE HH:mm"
-                formatter2.locale = Locale(identifier: "fr_FR")
+                formatter2.locale = Locale(identifier: "en_US")
                 return formatter2.string(from: resetsAt)
             }
             let days = Int(interval / 86400)
             let hours = Int((interval.truncatingRemainder(dividingBy: 86400)) / 3600)
             if days > 0 {
-                return "in \(days)j \(hours)h"
+                return "in \(days)d \(hours)h"
             } else if hours > 0 {
                 let minutes = Int((interval.truncatingRemainder(dividingBy: 3600)) / 60)
                 return "in \(hours)h \(minutes)m"
@@ -233,7 +266,7 @@ private struct ResetsCalendarRow: View {
             }
         } else {
             formatter.dateFormat = "EEE d HH:mm"
-            formatter.locale = Locale(identifier: "fr_FR")
+            formatter.locale = Locale(identifier: "en_US")
             return formatter.string(from: resetsAt)
         }
     }

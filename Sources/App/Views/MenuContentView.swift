@@ -907,15 +907,16 @@ struct MenuContentView: View {
                 .keyboardShortcut("n")
             }
 
-            // Dashboard Button
+            // Dashboard Button — opens *Cortex's* dashboard window, never the
+            // provider's billing page (Ben 2026-09-26: pressing Dashboard opened
+            // Claude Code's settings/billing). Per-provider web consoles live on
+            // the detail sheet's "Open console" button.
             WrappedActionButton(
-                icon: "safari.fill",
+                icon: "chart.bar.xaxis",
                 label: "Dashboard",
                 gradient: theme.accentGradient
             ) {
-                if let url = selectedProvider?.dashboardURL {
-                    NSWorkspace.shared.open(url)
-                }
+                openWindow(id: "dashboard")
             }
             .keyboardShortcut("d")
 

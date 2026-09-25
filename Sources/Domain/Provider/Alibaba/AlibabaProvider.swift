@@ -9,7 +9,7 @@ public final class AlibabaProvider: AIProvider {
     // MARK: - Identity
 
     public let id: String = "alibaba"
-    public let name: String = "Alibaba"
+    public let name: String = "Alibaba Token Plan"
     public let cliCommand: String = "alibaba-coding-plan"
 
     public var dashboardURL: URL? {

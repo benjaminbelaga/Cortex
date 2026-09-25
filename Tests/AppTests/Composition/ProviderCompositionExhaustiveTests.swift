@@ -129,6 +129,26 @@ struct ProviderCompositionExhaustiveTests {
         #expect(composition.makeProvider(id: "not-a-provider") == nil)
     }
 
+    @Test("A disabled non-optional provider is skipped — removal sticks across recomposition")
+    func disabledNonOptionalProviderIsSkipped() {
+        // Regression (Ben 2026-09-26): "Remove from Cortex" persists
+        // `providers.<id>.isEnabled = false`, but composition used to honour
+        // that flag only for optional connectors — so a removed first-class
+        // provider came back on the next recomposition ("je me retrouve avec ça
+        // beaucoup plus tard").
+        let (repo, dir) = makeRepository()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        #expect(ProviderCatalog.claude.isOptional == false)
+        repo.setEnabled(false, forProvider: "claude")
+        let composition = ProviderComposition(
+            routerSnapshotClient: StubSnapshotClient(),
+            settingsRepository: repo
+        )
+        let ids = composition.compose().map(\.id)
+        #expect(!ids.contains("claude"),
+                "a disabled provider must not be recomposed, got \(ids)")
+    }
+
     @Test("Descriptor runtime and supported modes cannot contradict each other")
     func descriptorRuntimeAndModesAreCoherent() {
         for descriptor in ProviderCatalog.all {

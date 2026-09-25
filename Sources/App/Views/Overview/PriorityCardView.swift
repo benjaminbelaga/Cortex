@@ -60,7 +60,7 @@ struct PriorityCardView: View {
                     if let rec = recommendation {
                         compactRecommendation(rec)
                     } else {
-                        Text("llm-router indisponible")
+                        Text("llm-router unavailable")
                             .font(theme.font(size: 10, weight: .medium))
                             .foregroundStyle(theme.textTertiary)
                     }
@@ -103,7 +103,7 @@ struct PriorityCardView: View {
             Image(systemName: "bolt.slash")
                 .font(theme.font(size: 10))
                 .foregroundStyle(theme.textTertiary)
-            Text("llm-router indisponible")
+            Text("llm-router unavailable")
                 .font(theme.font(size: 11, weight: .medium))
                 .foregroundStyle(theme.textTertiary)
             Spacer()

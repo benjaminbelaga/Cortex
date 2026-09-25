@@ -4,7 +4,7 @@ import Foundation
 ///
 /// Decoded from the `route_now` object llm-router adds to its json-v2 snapshot
 /// envelope. Cortex NEVER computes a recommendation locally: when this block is
-/// absent the "Priority" card shows "llm-router indisponible" instead.
+/// absent the "Priority" card shows "llm-router unavailable" instead.
 public struct RouterRouteNow: Sendable, Equatable {
     public let generatedAt: Date
     /// Keyed by profile: `plan`, `execute`, `flexible`.

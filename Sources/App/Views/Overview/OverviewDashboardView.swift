@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import Domain
 import Infrastructure
 
@@ -29,7 +30,7 @@ struct OverviewDashboardView: View {
 
     /// The router's `route_now` block, read from any router-backed provider's
     /// shared snapshot (all instances see the same one). nil → the "Priority"
-    /// card renders "llm-router indisponible", never a local computation.
+    /// card renders "llm-router unavailable", never a local computation.
     private var routeNow: RouterRouteNow? {
         providers.compactMap { ($0 as? RouterBackedProvider)?.quotaSnapshot }.first?.routeNow
     }
@@ -73,12 +74,27 @@ struct OverviewDashboardView: View {
                         } else {
                             onRemoveProvider?(detail.providerId)
                         }
-                    }
+                    },
+                    onOpenConsole: consoleURL(for: detail.providerId) == nil
+                        ? nil
+                        : { openConsole(providerId: detail.providerId) }
                 )
             } else {
                 overviewList
             }
         }
+    }
+
+    /// The provider's real web console (billing / usage / login), surfaced from
+    /// the detail sheet's "Open console" button — NOT from the footer's
+    /// Dashboard button, which opens Cortex's own window (Ben 2026-09-26).
+    private func consoleURL(for providerId: String) -> URL? {
+        providers.first(where: { $0.id == providerId })?.dashboardURL
+    }
+
+    private func openConsole(providerId: String) {
+        guard let url = consoleURL(for: providerId) else { return }
+        NSWorkspace.shared.open(url)
     }
 
     /// Back to the list with the account catalog open on this provider, then

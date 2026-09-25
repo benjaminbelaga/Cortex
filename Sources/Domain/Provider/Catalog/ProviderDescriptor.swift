@@ -167,7 +167,7 @@ public enum ProviderCatalog {
 
     public static let qwenPlan = ProviderDescriptor(
         id: "qwen",
-        name: "Alibaba Cloud Model Studio",
+        name: "Alibaba Token Plan",
         cliCommand: "qwen",
         dashboardURL: URL(string: "https://modelstudio.console.alibabacloud.com/ap-southeast-1/subscription/token-plan/personal"),
         supportedModes: [.autonomous, .router],

@@ -14,7 +14,7 @@ public struct RouterQuotaSnapshot: Sendable, Equatable {
     /// Theoretical-cost estimate (v6 Phase B) — optional, same reason.
     public let costEstimate: RouterCostEstimate?
     /// "Route right now" recommendation block (Contract B, v7.2) — optional:
-    /// a router without it makes the "Priority" card show "indisponible".
+    /// a router without it makes the "Priority" card show "unavailable".
     public let routeNow: RouterRouteNow?
 
     public init(

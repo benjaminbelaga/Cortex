@@ -540,7 +540,7 @@ struct GlobalUsagePanelView: View {
     }
 
     private func formattedCoverage(_ value: Double) -> String {
-        value < 10 ? String(format: "%.1f%% billed", value) : "\(Int(value.rounded()))% tarifés"
+        value < 10 ? String(format: "%.1f%% billed", value) : "\(Int(value.rounded()))% billed"
     }
 
     private func formatTokens(_ value: Int) -> String {

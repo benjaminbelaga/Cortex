@@ -96,9 +96,15 @@ public struct ProviderComposition {
     // MARK: - Suivi (gate)
 
     private func instantiateIfFollowed(descriptor: ProviderDescriptor) -> (any AIProvider)? {
-        if descriptor.isOptional, !isEnabled(id: descriptor.id) {
+        // Honour `providers.<id>.isEnabled == false` for ANY provider, not only
+        // optional connectors. This is what makes "Remove from Cortex" stick:
+        // the removal path persists the flag, and the next composition must skip
+        // the row instead of resurrecting it (Ben 2026-09-26: "je me retrouve
+        // avec ça beaucoup plus tard"). Default is `true`, so nothing changes
+        // until a provider is explicitly disabled (seeded roster or user action).
+        if !isEnabled(id: descriptor.id) {
             AppLog.providers.debug(
-                "Skipping optional provider \(descriptor.id) — isEnabled is false"
+                "Skipping provider \(descriptor.id) — isEnabled is false"
             )
             return nil
         }

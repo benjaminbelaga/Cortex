@@ -565,6 +565,26 @@ struct CortexApp: App {
         .windowStyle(.hiddenTitleBar)
         .defaultSize(width: 980, height: 660)
         .windowResizability(.contentMinSize)
+
+        // Standalone Cortex Dashboard window (popover footer → Dashboard).
+        // Ben 2026-09-26: Dashboard must open *Cortex*, not the selected
+        // provider's billing page. The per-provider web console moved to the
+        // detail sheet's "Open console" button.
+        Window("Cortex Dashboard", id: "dashboard") {
+            OverviewDashboardView(
+                providers: monitor.allProviders,
+                settings: settings,
+                onRemoveProvider: { id in
+                    monitor.setProviderEnabled(id, enabled: false)
+                    monitor.removeProvider(id: id)
+                }
+            )
+            .appThemeProvider(themeModeId: settings.themeMode)
+            .environment(accountCatalog)
+            .padding(16)
+        }
+        .defaultSize(width: 480, height: 720)
+        .windowResizability(.contentMinSize)
     }
 
 }

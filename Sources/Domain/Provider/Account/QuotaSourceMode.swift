@@ -17,7 +17,7 @@ public enum QuotaSourceMode: String, Sendable, Equatable, Codable, CaseIterable 
 /// A concrete mode decision for a provider, after the resolver has consulted the
 /// configured preference AND the live router availability. `degradedTo` is non-nil
 /// ONLY when the configured mode was `.router` and the router was unavailable
-/// — that is the state the UI shows as "Router indisponible · relevé natif".
+/// — that is the state the UI shows as "Router unavailable · native probe".
 public struct QuotaSourceModeResolution: Sendable, Equatable {
     public let providerId: String
     public let configured: QuotaSourceMode

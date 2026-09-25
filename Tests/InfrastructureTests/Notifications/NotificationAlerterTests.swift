@@ -52,7 +52,8 @@ struct NotificationAlerterTests {
         #expect(alerter.providerDisplayName(for: "antigravity") == "Antigravity")
         #expect(alerter.providerDisplayName(for: "zai") == "Z.ai")
         #expect(alerter.providerDisplayName(for: "minimax") == "MiniMax")
-        #expect(alerter.providerDisplayName(for: "alibaba") == "Alibaba")
+        #expect(alerter.providerDisplayName(for: "alibaba") == "Alibaba Token Plan")
+        #expect(alerter.providerDisplayName(for: "qwen") == "Alibaba Token Plan")
         #expect(alerter.providerDisplayName(for: "omp") == "Oh My Pi")
     }
 

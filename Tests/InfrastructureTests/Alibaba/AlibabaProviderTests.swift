@@ -23,7 +23,7 @@ struct AlibabaProviderTests {
         let provider = AlibabaProvider(probe: mockProbe, settingsRepository: repo)
 
         #expect(provider.id == "alibaba")
-        #expect(provider.name == "Alibaba")
+        #expect(provider.name == "Alibaba Token Plan")
         #expect(provider.cliCommand == "alibaba-coding-plan")
         #expect(provider.dashboardURL != nil)
         #expect(provider.dashboardURL?.absoluteString.contains("modelstudio") == true)
