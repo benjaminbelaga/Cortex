@@ -2,8 +2,8 @@ name: Build
 
 on:
   # Neutralised 2026-08-22 (Ben): these macOS-26 runs bill at 10x, gate no merge
-  # (0 required check on yoyaku-group/Cortex) and YOYAKU only needs the manual
-  # build-yoyaku.yml. dispatch-only kills the automatic macOS spend (~half the org
+  # (0 required check on this repository) and the YOYAKU lane only needs its own
+  # manual build. dispatch-only kills the automatic macOS spend (~half the
   # Actions bill). Re-enable PR CI on the self-hosted macOS runner (plan Part 3).
   workflow_dispatch:
     inputs:
