@@ -149,7 +149,32 @@ struct ProviderCompositionExhaustiveTests {
                 "a disabled provider must not be recomposed, got \(ids)")
     }
 
-    @Test("Descriptor runtime and supported modes cannot contradict each other")
+    @Test("Removal sticks for the synthetic-default provider too (qwen)")
+    func removalSticksForSyntheticDefaultProvider() {
+        // The Alibaba row synthesises a `default` account from `defaultConfig`
+        // when the store is empty, so an account-level removal used to bring the
+        // row back. Disabling the provider must drop it from the composition,
+        // whatever the store contains (Ben 2026-09-26: "ça ne le remove pas").
+        let (repo, dir) = makeRepository()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        repo.setEnabled(false, forProvider: "qwen")
+        let composition = ProviderComposition(
+            routerSnapshotClient: StubSnapshotClient(),
+            settingsRepository: repo
+        )
+        #expect(!composition.compose().map(\.id).contains("qwen"))
+    }
+
+    @Test("Alibaba has a live console fallback probe; providers without one return nil")
+    func nativeFallbackProbeIsScoped() {
+        let (repo, dir) = makeRepository()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        #expect(ProviderComposition.nativeFallbackProbe(for: "qwen", settings: repo) != nil,
+                "qwen must fall back to the live `bl console` probe, never a frozen 100 %")
+        #expect(ProviderComposition.nativeFallbackProbe(for: "claude", settings: repo) == nil)
+    }
+
+
     func descriptorRuntimeAndModesAreCoherent() {
         for descriptor in ProviderCatalog.all {
             switch descriptor.runtime {

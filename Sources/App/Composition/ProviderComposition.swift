@@ -170,8 +170,32 @@ public struct ProviderComposition {
             settingsRepository: settingsRepository,
             dailyUsageAnalyzer: backing.dailyUsage ? ClaudeDailyUsageAnalyzer() : nil,
             passProbe: backing.guestPassEnabled ? ClaudePassProbe() : nil,
-            guestPassEnabled: backing.guestPassEnabled
+            guestPassEnabled: backing.guestPassEnabled,
+            nativeFallbackProbe: Self.nativeFallbackProbe(for: descriptor.id, settings: settingsRepository)
         )
+    }
+
+    /// Live probe used when the router only publishes a `manual` placeholder
+    /// for this provider. Alibaba's console (`bl console call …/tokenplan/`) is
+    /// authoritative and reachable headlessly, so a stale router entry never
+    /// leaves the row frozen at 100 %.
+    static func nativeFallbackProbe(
+        for id: String,
+        settings: JSONSettingsRepository
+    ) -> (@MainActor () -> any UsageProbe)? {
+        switch id {
+        case "qwen":
+            return { [settings] in
+                let config = settings.accounts(forProvider: "qwen").first
+                return QwenPlanUsageProbe(
+                    profile: config?.probeConfig["bailianProfile"] ?? "default",
+                    site: config?.probeConfig["consoleSite"] ?? "international",
+                    region: config?.probeConfig["consoleRegion"] ?? "ap-southeast-1"
+                )
+            }
+        default:
+            return nil
+        }
     }
 
     /// Native (autonomous) constructors. The switch is keyed by catalog id and

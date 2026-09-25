@@ -25,7 +25,14 @@ public final class AccountUsageProvider: MultiAccountProvider {
     /// disables watching (tests, single-account providers).
     @ObservationIgnored private let settingsFileURL: URL?
     @ObservationIgnored private var settingsWatcher: DispatchSourceFileSystemObject?
+    /// Accounts to collect for this provider. Empty while the provider is
+    /// disabled: "Remove from Cortex" must make the row disappear, and a
+    /// synthetic `defaultConfig` (e.g. qwen's "Token Plan") must never
+    /// resurrect it — without this guard the row came back on the very next
+    /// refresh (Ben 2026-09-26: "ça ne le remove pas"). Enrolled accounts still
+    /// keep their last reading while enabled-but-unfollowed via `unfollow`.
     private var configs: [ProviderAccountConfig] {
+        guard isEnabled else { return [] }
         let stored = settings.accounts(forProvider: id)
         return stored.isEmpty ? defaultConfig.map { [$0] } ?? [] : stored
     }
@@ -44,9 +51,12 @@ public final class AccountUsageProvider: MultiAccountProvider {
         self.defaultConfig = defaultConfig
         self.settingsFileURL = settingsFileURL
         self.makeProbe = makeProbe
-        self.isEnabled = settings.isEnabled(forProvider: id)
+        let enabled = settings.isEnabled(forProvider: id)
+        self.isEnabled = enabled
         let stored = settings.accounts(forProvider: id)
-        let configs = stored.isEmpty ? defaultConfig.map { [$0] } ?? [] : stored
+        let configs = enabled
+            ? (stored.isEmpty ? defaultConfig.map { [$0] } ?? [] : stored)
+            : []
         self.accounts = configs.map { $0.toProviderAccount(providerId: id) }
         self.activeID = settings.activeAccountId(forProvider: id) ?? configs.first?.accountId ?? "default"
         startWatchingSettings()

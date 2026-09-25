@@ -190,7 +190,6 @@ struct CortexApp: App {
         // same catalog-driven composition, hand the instance to the monitor and
         // start one collection — one provider, never a duplicate.
         let refreshAccount: @MainActor (String, String) async throws -> Date? = { providerId, accountId in
-            settingsRepository.setEnabled(true, forProvider: providerId)
             guard let provider = composition.makeProvider(id: providerId) else {
                 throw ProbeError.executionFailed("Provider unavailable")
             }
@@ -202,6 +201,9 @@ struct CortexApp: App {
         }
         let enrolmentService = AccountEnrolmentService(onVerified: { descriptor in
             let providerId = descriptor.providerId
+            // Verifying a profile IS an explicit "add": re-enable the provider
+            // (and clear any prior removal) so an enrolled account is collected.
+            settingsRepository.setEnabled(true, forProvider: providerId)
             let previous = settingsRepository.accounts(forProvider: providerId).first {
                 $0.probeConfig["accountUUID"] == descriptor.uuid.uuidString
                     || $0.descriptor(providerId: providerId).profile == descriptor.profile
@@ -256,6 +258,14 @@ struct CortexApp: App {
                     "Activation failed for \(providerId) — no provider could be built from the catalogue"
                 )
             }
+        } providerRemoved: { providerId in
+            // Single removal rail: stop collection, persist the disabled flag
+            // (no forced re-enable on the next catalogue refresh) and drop the
+            // row from the live roster so the dashboard redraws without it.
+            settingsRepository.setEnabled(false, forProvider: providerId)
+            monitor.setProviderEnabled(providerId, enabled: false)
+            monitor.removeProvider(id: providerId)
+            AppLog.providers.info("Removed \(providerId) from Cortex")
         }
 
         let sessionMonitor = SessionMonitor()

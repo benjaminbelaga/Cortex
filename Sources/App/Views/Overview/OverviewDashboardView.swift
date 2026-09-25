@@ -19,6 +19,10 @@ struct OverviewDashboardView: View {
     @Environment(\.appTheme) private var theme
     @Environment(AccountCatalogModel.self) private var catalogModel
     @State private var calendarSnapshot: ProviderSnapshot?
+    /// Bumped on every removal so the list rebuilds even when the underlying
+    /// collection is unchanged (account-scoped rows mutate the provider's
+    /// accounts, not the roster membership).
+    @State private var removalRevision = 0
 
     private var rows: [ProviderSnapshot] {
         OverviewBuilder.sort(
@@ -69,6 +73,7 @@ struct OverviewDashboardView: View {
                         let parts = detail.id.split(separator: "|")
                         let accountId = parts.count > 1 ? String(parts[1]) : nil
                         calendarSnapshot = nil
+                        removalRevision &+= 1
                         if let accountId {
                             Task { await catalogModel.removeAccount(providerId: detail.providerId, accountId: accountId) }
                         } else {
@@ -128,8 +133,7 @@ struct OverviewDashboardView: View {
             // Tight 4pt gaps between the thin single-line rows (R8) — the
             // controls/footer keep the wider 8pt breathing room above/below.
             VStack(spacing: 4) {
-                ForEach(OverviewBuilder.groups(rows)) { group in
-                    if group.isMultiAccount {
+                ForEach(OverviewBuilder.groups(rows)) { group in                    if group.isMultiAccount {
                         groupHeader(group)
                         if settings.overviewExpandedGroups.contains(group.providerId) {
                             ForEach(group.rows) { row in
@@ -152,6 +156,7 @@ struct OverviewDashboardView: View {
                 (provider as? AccountUsageProvider)?.reloadOnAppear()
             }
         }
+        .id("overview-\(removalRevision)")
     }
 
     // MARK: - Rows

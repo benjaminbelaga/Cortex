@@ -31,6 +31,12 @@ final class AccountCatalogModel {
     /// stays repository-agnostic.
     private let activateIntegration: @MainActor (String) -> Void
 
+    /// Called when removing an account leaves the provider with no stored
+    /// account at all: the provider itself is then removed from Cortex (no
+    /// synthetic `defaultConfig` row may survive, and no forced re-enable may
+    /// resurrect it). Injected by the app; a no-op under test.
+    private let providerRemoved: @MainActor (String) -> Void
+
     private(set) var detectedProfiles: [AccountProposal] = []
     private(set) var isSearching = false
     /// Non-fatal feedback for path-proposal failures (collision etc.).
@@ -49,7 +55,8 @@ final class AccountCatalogModel {
         probeAPIKey: @escaping @Sendable (String, String) async throws -> UsageSnapshot = {
             try await APIAccountCredentials.probe(providerId: $0, apiKey: $1).probe()
         },
-        activateIntegration: @escaping @MainActor (String) -> Void
+        activateIntegration: @escaping @MainActor (String) -> Void,
+        providerRemoved: @escaping @MainActor (String) -> Void = { _ in }
     ) {
         self.credentials = credentials
         self.accountChanged = accountChanged
@@ -60,6 +67,7 @@ final class AccountCatalogModel {
         self.settingsRepository = settingsRepository
         self.homeDirectory = homeDirectory
         self.activateIntegration = activateIntegration
+        self.providerRemoved = providerRemoved
     }
 
     // MARK: - Observable surface (the service owns the live state)
@@ -375,12 +383,24 @@ final class AccountCatalogModel {
     }
 
     func removeAccount(providerId: String, accountId: String) async {
-        guard let account = settingsRepository.accounts(forProvider: providerId).first(where: { $0.accountId == accountId }) else { return }
+        guard let account = settingsRepository.accounts(forProvider: providerId).first(where: { $0.accountId == accountId }) else {
+            // No stored account (router-backed rows keep their accounts in the
+            // router roster): removing the row means removing the provider.
+            providerRemoved(providerId)
+            return
+        }
         settingsRepository.removeAccount(accountId: accountId, forProvider: providerId)
         if let reference = account.probeConfig["credentialKey"], reference.hasPrefix("account.\(providerId).") {
             credentials.delete(forKey: reference)
         }
-        let next = settingsRepository.accounts(forProvider: providerId).first?.accountId ?? "default"
+        let remaining = settingsRepository.accounts(forProvider: providerId)
+        guard let next = remaining.first?.accountId else {
+            // Last stored account gone: remove the provider itself. Calling
+            // `accountChanged` here used to force `setEnabled(true)` and
+            // re-instantiate the row, so "Remove from Cortex" never stuck.
+            providerRemoved(providerId)
+            return
+        }
         do { _ = try await accountChanged(providerId, next) }
         catch { proposalError = error.localizedDescription }
     }

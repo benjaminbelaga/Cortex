@@ -162,6 +162,19 @@ struct RouterBackedProviderTests {
         #expect(provider.accountSnapshots.keys.sorted() == ["PERSONAL", "WORK"])
     }
 
+    @Test("manual-only router windows are detected so the live fallback can take over")
+    func detectsManualOnlyWindows() {
+        // llm-router published Alibaba as a single `manual` window at grade C
+        // (stale console sync) while `bl console` answered live — the row froze
+        // at 100 % until this detection let the native probe override it.
+        let manual = RouterQuotaWindow(kind: "manual", remainingFraction: 0.999997)
+        let measured = RouterQuotaWindow(kind: "five_hour", remainingFraction: 0.58)
+        #expect(RouterBackedProvider.isManualOnly([manual]))
+        #expect(!RouterBackedProvider.isManualOnly([manual, measured]))
+        #expect(!RouterBackedProvider.isManualOnly([measured]))
+        #expect(!RouterBackedProvider.isManualOnly([]))
+    }
+
     private func makeProvider(
         snapshot: RouterQuotaSnapshot,
         settings: FakeMultiAccountSettings = FakeMultiAccountSettings()

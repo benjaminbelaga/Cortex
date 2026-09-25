@@ -102,6 +102,12 @@ public final class RouterBackedProvider: AIProvider, MultiAccountProvider, Group
     private let passProbe: (any ClaudePassProbing)?
     private let guestPassEnabled: Bool
 
+    /// Native probe used when the router publishes only a `manual` placeholder
+    /// for this provider (e.g. Alibaba's `bailian_token_plan` at grade C from a
+    /// stale console sync) while a live source exists. Display-only fallback —
+    /// routing stays the router's call (bible §15/§16).
+    private let nativeFallbackProbe: (@MainActor () -> any UsageProbe)?
+
     public init(
         id: String,
         name: String,
@@ -113,7 +119,8 @@ public final class RouterBackedProvider: AIProvider, MultiAccountProvider, Group
         settingsRepository: any MultiAccountSettingsRepository,
         dailyUsageAnalyzer: (any DailyUsageAnalyzing)? = nil,
         passProbe: (any ClaudePassProbing)? = nil,
-        guestPassEnabled: Bool = false
+        guestPassEnabled: Bool = false,
+        nativeFallbackProbe: (@MainActor () -> any UsageProbe)? = nil
     ) {
         self.id = id
         self.name = name
@@ -126,6 +133,7 @@ public final class RouterBackedProvider: AIProvider, MultiAccountProvider, Group
         self.dailyUsageAnalyzer = dailyUsageAnalyzer
         self.passProbe = passProbe
         self.guestPassEnabled = guestPassEnabled
+        self.nativeFallbackProbe = nativeFallbackProbe
         self.isEnabled = settingsRepository.isEnabled(forProvider: id)
         self.activeAccount = ProviderAccount(providerId: id, label: name)
     }
@@ -183,6 +191,21 @@ public final class RouterBackedProvider: AIProvider, MultiAccountProvider, Group
                 lastError = RouterQuotaIssue(message)
             } else {
                 lastError = nil
+            }
+
+            // Router placeholder (all windows `manual`) but a live native source
+            // exists: publish the real quota instead of a frozen 100 %. It is
+            // the Alibaba case — the router's bailian entry is a stale grade-C
+            // console sync while `bl console` answers live (Ben 2026-09-26:
+            // "ça ne connecte pas"). Failure keeps the placeholder, never a
+            // fabricated reading.
+            if let fallbackProbe = nativeFallbackProbe, Self.isManualOnly(provider.windows) {
+                if let live = try? await fallbackProbe().probe(), !live.quotas.isEmpty {
+                    accountSnapshots[activeAccount.accountId] = live
+                    snapshot = live
+                    lastError = nil
+                    return live
+                }
             }
             return activeSnapshot
         } catch {
@@ -485,8 +508,13 @@ public final class RouterBackedProvider: AIProvider, MultiAccountProvider, Group
         )
     }
 
-    static func quotaType(for kind: String) -> QuotaType {
-        let normalized = kind.lowercased()
+    /// True when every window the router published is the `manual` placeholder
+    /// (no live meter) — the signal that a native probe should be preferred.
+    static func isManualOnly(_ windows: [RouterQuotaWindow]) -> Bool {
+        !windows.isEmpty && windows.allSatisfy { $0.kind.lowercased() == "manual" }
+    }
+
+    static func quotaType(for kind: String) -> QuotaType {        let normalized = kind.lowercased()
         if normalized.contains("week") || normalized.contains("seven") || normalized.contains("7d") {
             return .weekly
         }
