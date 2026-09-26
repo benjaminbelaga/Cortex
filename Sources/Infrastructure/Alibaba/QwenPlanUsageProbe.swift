@@ -39,9 +39,12 @@ public struct QwenPlanUsageProbe: UsageProbe {
             options: .init(timeout: 25, maxBytesPerStream: 128 * 1024, terminationGrace: 1))
         guard result.exitStatus == 0 else {
             // Never surface console output that might contain an authentication URL.
+            AppLog.probes.warning("QwenPlan: console call failed — console session likely missing")
             throw ProbeError.sessionExpired(hint: "Connect the Alibaba console with bl auth login --console, then refresh.")
         }
-        return try Self.parse(result.stdout)
+        let snapshot = try Self.parse(result.stdout)
+        AppLog.probes.info("QwenPlan: live console quota fetched — \(snapshot.quotas.count) window(s)")
+        return snapshot
     }
 
     /// The console gateway wraps the payload as `data.DataV2.data.data`; an
