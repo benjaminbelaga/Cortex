@@ -1,62 +1,124 @@
 #!/usr/bin/env python3
-"""Cortex usage ledger — centralise la consommation réelle des sessions locales.
+"""Cortex usage ledger v2 — comptage normalisé des sessions locales.
 
-Lit les sources de vérité locales (transcripts Claude, rollouts Codex, base
-OpenCode) et écrit un agrégat par jour/outil dans
-`~/.claudebar/usage/ledger.json`, requêtable (jq) et réutilisé par l'app.
+Lit les sources de vérité locales et écrit un agrégat requêtable dans
+`~/.claudebar/usage/ledger.json`.
 
-Pourquoi ce fichier existe (Ben 2026-09-26) : le chiffre « 24h » affiché par
-Cortex venait de `usage.24h` du snapshot llm-router, c.-à-d. du **seul trafic
-routé** (≈512 M/j), alors que les transcripts Claude locaux montraient ≈1,1 Md
-sur la même fenêtre, Codex/OpenCode/cmux non comptés. Ce ledger est la source
-locale, jamais une estimation.
+Contrat de normalisation (audit V2, lot A) :
+- **Claude** : déduplication par `(message.id, requestId)`, dernière
+  occurrence gagnante — c'est la règle de `ClaudeDailyUsageAnalyzer`. Un
+  transcript réel répète le même message une fois par `apiBlockIndex` ; sans
+  dédup la consommation est comptée plusieurs fois. Les entrées sans les deux
+  identifiants sont conservées distinctes (jamais fusionnées au hasard).
+- **Codex** : événements `token_usage_record`, dédupliqués par
+  `(session_id, turn_id, response_id)`.
+- **OpenCode** : agrégation **par message** (et non par session) pour dater
+  l'usage réel ; `time_created` par message, tokens/cost dans la colonne JSON.
+  Une source illisible produit un **statut**, jamais un zéro rassurant.
+- **Fenêtres** : `today` (jour civil local), `last24h` (glissante sur les
+  horodatages), `last7d` (glissante). Le dernier jour stocké n'est pas « les
+  24 dernières heures ».
+- **Coût** : `cost.kind` vaut `declared` (publié par la source) ou
+  `unavailable` — un coût inconnu n'est pas 0.
 
 Usage :
-    python3 scripts/cortex-usage-ledger.py            # met à jour le ledger
-    python3 scripts/cortex-usage-ledger.py --print     # + résumé 24h/7j
-    python3 scripts/cortex-usage-ledger.py --days 30   # profondeur d'historique
+    python3 scripts/cortex-usage-ledger.py [--days 7] [--print]
 """
 
 from __future__ import annotations
 
 import argparse
+import glob
 import json
 import os
 import sqlite3
 import time
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 HOME = os.path.expanduser("~")
 LEDGER_DIR = os.path.join(HOME, ".claudebar", "usage")
 LEDGER_PATH = os.path.join(LEDGER_DIR, "ledger.json")
+SCHEMA_VERSION = 2
 
+TOOLS = ("claude", "codex", "opencode")
 FIELDS = ("input", "output", "cache_read", "cache_creation", "reasoning")
 
+OK, MISSING, PARTIAL = "ok", "missing", "partial"
+PERMISSION_DENIED, UNSUPPORTED_SCHEMA, STALE = "permission_denied", "unsupported_schema", "stale"
 
-def _iter_jsonl(path):
+
+# --------------------------------------------------------------------------- #
+# Buckets
+# --------------------------------------------------------------------------- #
+
+def blank_bucket() -> dict:
+    return {field: 0 for field in FIELDS} | {"messages": 0, "cost_usd": 0.0, "cost_declared": False}
+
+
+def add_tokens(bucket: dict, tokens: dict, cost: float | None) -> None:
+    for field in FIELDS:
+        bucket[field] += int(tokens.get(field, 0) or 0)
+    bucket["messages"] += 1
+    if cost is not None:
+        bucket["cost_usd"] += float(cost)
+        bucket["cost_declared"] = True
+
+
+def blank_windows(now: float, days: int) -> dict:
+    local_now = datetime.fromtimestamp(now)
+    midnight = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    return {
+        "today": {"start": midnight.timestamp(), "end": (midnight + timedelta(days=1)).timestamp()},
+        "last24h": {"start": now - 86400, "end": now},
+        "last7d": {"start": now - 7 * 86400, "end": now},
+    }
+
+
+class Ledger:
+    """Accumulates deduplicated events into day buckets and time windows."""
+
+    def __init__(self, now: float, days: int):
+        self.now = now
+        self.days: dict[str, dict[str, dict]] = defaultdict(lambda: defaultdict(blank_bucket))
+        self.windows: dict[str, dict[str, dict]] = {
+            name: defaultdict(blank_bucket) for name in ("today", "last24h", "last7d")
+        }
+        self.bounds = blank_windows(now, days)
+
+    def add(self, tool: str, when: float, tokens: dict, cost: float | None) -> None:
+        day = datetime.fromtimestamp(when).strftime("%Y-%m-%d")
+        add_tokens(self.days[day][tool], tokens, cost)
+        for name, window in self.bounds.items():
+            if window["start"] <= when < window["end"]:
+                add_tokens(self.windows[name][tool], tokens, cost)
+
+
+def status(state: str, **extra) -> dict:
+    return {"status": state, **extra}
+
+
+# --------------------------------------------------------------------------- #
+# Sources
+# --------------------------------------------------------------------------- #
+
+def iter_jsonl(path: str):
     try:
         with open(path, "r", errors="ignore") as handle:
             for line in handle:
-                if '"usage"' not in line and '"token' not in line and '"tokens"' not in line:
+                if '"usage"' not in line and '"token' not in line:
                     continue
                 try:
                     yield json.loads(line)
                 except Exception:
                     continue
+    except PermissionError:
+        raise
     except OSError:
         return
 
 
-def _day(epoch_seconds: float) -> str:
-    return datetime.fromtimestamp(epoch_seconds, timezone.utc).astimezone().strftime("%Y-%m-%d")
-
-
-def _blank() -> dict:
-    return {field: 0 for field in FIELDS} | {"messages": 0, "cost_usd": 0.0}
-
-
-def _parse_iso(value: str | None) -> float | None:
+def parse_iso(value: str | None) -> float | None:
     if not value:
         return None
     try:
@@ -65,143 +127,208 @@ def _parse_iso(value: str | None) -> float | None:
         return None
 
 
-def collect_claude(since: float, out: dict) -> int:
-    """Claude Code transcripts: ~/.claude/projects/**/*.jsonl."""
-    import glob
-
+def collect_claude(ledger: Ledger, since: float) -> dict:
+    """~/.claude/projects/**/*.jsonl — dedup (message.id, requestId) last-wins."""
     files = 0
-    pattern = os.path.join(HOME, ".claude", "projects", "**", "*.jsonl")
-    for path in glob.glob(pattern, recursive=True):
+    try:
+        paths = glob.glob(os.path.join(HOME, ".claude", "projects", "**", "*.jsonl"), recursive=True)
+    except OSError as exc:  # pragma: no cover - filesystem level
+        return status(PARTIAL, error=str(exc))
+    last_seen = None
+    for path in paths:
         try:
-            if os.path.getmtime(path) < since:
+            if os.path.getmtime(path) < since - 86400:
                 continue
         except OSError:
             continue
         files += 1
-        for obj in _iter_jsonl(path):
+        # Last-wins per (message.id, requestId); unkeyed records stay distinct.
+        order: list = []
+        last: dict = {}
+        unkeyed = 0
+        for obj in _claude_records(path):
             message = obj.get("message") or {}
-            usage = message.get("usage") if isinstance(message.get("usage"), dict) else None
-            if not usage:
+            usage = message.get("usage")
+            if not isinstance(usage, dict):
                 continue
-            when = _parse_iso(obj.get("timestamp"))
-            if when is None or when < since:
+            when = parse_iso(obj.get("timestamp"))
+            if when is None:
                 continue
-            bucket = out["claude"][_day(when)]
-            bucket["input"] += usage.get("input_tokens", 0) or 0
-            bucket["output"] += usage.get("output_tokens", 0) or 0
-            bucket["cache_read"] += usage.get("cache_read_input_tokens", 0) or 0
-            bucket["cache_creation"] += usage.get("cache_creation_input_tokens", 0) or 0
-            bucket["messages"] += 1
-    return files
+            message_id, request_id = message.get("id"), obj.get("requestId")
+            if message_id and request_id:
+                key = ("k", message_id, request_id)
+            else:
+                unkeyed += 1
+                key = ("u", path, unkeyed)
+            if key not in last:
+                order.append(key)
+            last[key] = (when, usage)
+        for key in order:
+            when, usage = last[key]
+            if when < since:
+                continue
+            last_seen = max(last_seen or when, when)
+            ledger.add("claude", when, {
+                "input": usage.get("input_tokens", 0),
+                "output": usage.get("output_tokens", 0),
+                "cache_read": usage.get("cache_read_input_tokens", 0),
+                "cache_creation": usage.get("cache_creation_input_tokens", 0),
+            }, None)
+    return status(OK if files else MISSING, files=files,
+                  last_observed_at=_iso(last_seen))
 
 
-def collect_codex(since: float, out: dict) -> int:
-    """Codex rollouts: ~/.codex/sessions/**/*.jsonl, `token_usage_record` events."""
-    import glob
+def _claude_records(path: str):
+    try:
+        yield from iter_jsonl(path)
+    except PermissionError:
+        return
 
+
+def collect_codex(ledger: Ledger, since: float) -> dict:
+    """~/.codex/sessions/**/*.jsonl — dedup (session_id, turn_id, response_id)."""
     files = 0
-    pattern = os.path.join(HOME, ".codex", "sessions", "**", "*.jsonl")
-    for path in glob.glob(pattern, recursive=True):
+    paths = glob.glob(os.path.join(HOME, ".codex", "sessions", "**", "*.jsonl"), recursive=True)
+    last_seen = None
+    for path in paths:
         try:
-            if os.path.getmtime(path) < since:
+            if os.path.getmtime(path) < since - 86400:
                 continue
         except OSError:
             continue
         files += 1
-        for obj in _iter_jsonl(path):
+        seen: set = set()
+        for obj in iter_jsonl(path):
             if obj.get("type") != "token_usage_record":
                 continue
-            usage = (obj.get("payload") or {}).get("usage") or {}
-            when = _parse_iso(obj.get("timestamp"))
+            payload = obj.get("payload") or {}
+            usage = payload.get("usage") or {}
+            when = parse_iso(obj.get("timestamp"))
             if when is None or when < since:
                 continue
-            bucket = out["codex"][_day(when)]
-            bucket["input"] += usage.get("input_tokens", 0) or 0
-            bucket["output"] += usage.get("output_tokens", 0) or 0
-            bucket["cache_read"] += usage.get("cached_input_tokens", 0) or 0
-            bucket["reasoning"] += usage.get("reasoning_output_tokens", 0) or 0
-            bucket["messages"] += 1
-    return files
+            key = (payload.get("session_id"), payload.get("turn_id"), payload.get("response_id"))
+            if any(key) and key in seen:
+                continue
+            seen.add(key)
+            last_seen = max(last_seen or when, when)
+            ledger.add("codex", when, {
+                "input": usage.get("input_tokens", 0),
+                "output": usage.get("output_tokens", 0),
+                "cache_read": usage.get("cached_input_tokens", 0),
+                "reasoning": usage.get("reasoning_output_tokens", 0),
+            }, None)
+    return status(OK if files else MISSING, files=files,
+                  last_observed_at=_iso(last_seen))
 
 
-def collect_opencode(since: float, out: dict) -> int:
-    """OpenCode: ~/.local/share/opencode/opencode.db (read-only, bounded)."""
+def collect_opencode(ledger: Ledger, since: float) -> dict:
+    """opencode.db — per-message rows (usage-dated), read-only and bounded."""
     db = os.path.join(HOME, ".local", "share", "opencode", "opencode.db")
     if not os.path.exists(db):
-        return 0
+        return status(MISSING, detail="opencode.db not found")
     rows = 0
+    last_seen = None
     try:
         connection = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
         connection.execute("PRAGMA query_only=ON")
-        cursor = connection.execute(
-            "SELECT time_created, tokens_input, tokens_output, tokens_cache_read, "
-            "tokens_cache_write, tokens_reasoning, cost FROM session WHERE time_created >= ?",
-            (int(since * 1000),),
-        )
-        for created, tin, tout, tread, twrite, treason, cost in cursor:
-            bucket = out["opencode"][_day(created / 1000)]
-            bucket["input"] += tin or 0
-            bucket["output"] += tout or 0
-            bucket["cache_read"] += tread or 0
-            bucket["cache_creation"] += twrite or 0
-            bucket["reasoning"] += treason or 0
-            bucket["cost_usd"] += float(cost or 0)
-            bucket["messages"] += 1
-            rows += 1
-        connection.close()
-    except sqlite3.Error:
-        return rows
-    return rows
-
-
-def collect_sessions(out: dict) -> None:
-    """Counts only — no token field exists for tmux/cmux panes."""
-    import subprocess
-
-    for tool, argv in (("tmux", ["tmux", "list-sessions"]), ("cmux", ["cmux", "list"])):
         try:
-            result = subprocess.run(argv, capture_output=True, text=True, timeout=10)
-            if result.returncode == 0:
-                out["sessions"][tool] = len([line for line in result.stdout.splitlines() if line.strip()])
-        except Exception:
-            continue
+            cursor = connection.execute(
+                "SELECT time_created, data FROM message WHERE time_created >= ?",
+                (int((since - 86400) * 1000),),
+            )
+        except sqlite3.OperationalError as exc:
+            return status(UNSUPPORTED_SCHEMA, error=str(exc))
+        for created_ms, raw in cursor:
+            try:
+                payload = json.loads(raw) if isinstance(raw, str) else (raw or {})
+            except (TypeError, ValueError):
+                continue
+            tokens = payload.get("tokens") or {}
+            cache = tokens.get("cache") or {}
+            role = payload.get("role")
+            if role != "assistant" or not tokens:
+                continue
+            when = (created_ms or 0) / 1000
+            if when < since:
+                continue
+            rows += 1
+            last_seen = max(last_seen or when, when)
+            ledger.add("opencode", when, {
+                "input": tokens.get("input", 0),
+                "output": tokens.get("output", 0),
+                "reasoning": tokens.get("reasoning", 0),
+                "cache_read": cache.get("read", 0),
+                "cache_creation": cache.get("write", 0),
+            }, payload.get("cost"))
+        connection.close()
+    except sqlite3.OperationalError as exc:
+        return status(UNSUPPORTED_SCHEMA, error=str(exc))
+    except sqlite3.Error as exc:
+        return status(PARTIAL, error=str(exc))
+    return status(OK if rows else MISSING, messages=rows, last_observed_at=_iso(last_seen))
+
+
+def _iso(epoch: float | None) -> str | None:
+    if epoch is None:
+        return None
+    return datetime.fromtimestamp(epoch, timezone.utc).astimezone().isoformat()
+
+
+# --------------------------------------------------------------------------- #
+# Output
+# --------------------------------------------------------------------------- #
+
+def serialize_bucket(bucket: dict) -> dict:
+    out = {field: bucket[field] for field in FIELDS}
+    out["messages"] = bucket["messages"]
+    out["cost"] = {
+        "kind": "declared" if bucket["cost_declared"] else "unavailable",
+        "usd": round(bucket["cost_usd"], 6) if bucket["cost_declared"] else None,
+    }
+    return out
+
+
+def serialize(bucket_map: dict) -> dict:
+    return {tool: serialize_bucket(bucket_map[tool]) for tool in bucket_map if bucket_map[tool]["messages"]}
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--days", type=int, default=7, help="history depth (default 7)")
+    parser.add_argument("--days", type=int, default=7)
     parser.add_argument("--print", action="store_true", dest="show")
     args = parser.parse_args()
 
-    since = time.time() - args.days * 86400
-    out = {"claude": defaultdict(_blank), "codex": defaultdict(_blank),
-           "opencode": defaultdict(_blank), "sessions": {}}
+    now = time.time()
+    since = now - args.days * 86400
+    ledger = Ledger(now, args.days)
 
-    counts = {"claude": collect_claude(since, out), "codex": collect_codex(since, out),
-              "opencode": collect_opencode(since, out)}
-    collect_sessions(out)
-
-    days = sorted({d for tool in ("claude", "codex", "opencode") for d in out[tool]})
-    # Cost is only known where the source publishes it (OpenCode). Emitting 0.00
-    # for Claude/Codex would read as "free" — the truth is "not computed here".
-    days_out = {}
-    for day in days:
-        days_out[day] = {}
-        for tool in ("claude", "codex", "opencode"):
-            if day not in out[tool]:
-                continue
-            bucket = dict(out[tool][day])
-            if tool != "opencode":
-                bucket["cost_usd"] = None
-            days_out[day][tool] = bucket
-    payload = {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "history_days": args.days,
-        "source_files": counts,
-        "sessions": out["sessions"],
-        "cost_note": "cost_usd is published by OpenCode only; null means not computed by this ledger",
-        "days": days_out,
+    sources = {
+        "claude": collect_claude(ledger, since),
+        "codex": collect_codex(ledger, since),
+        "opencode": collect_opencode(ledger, since),
     }
+
+    payload = {
+        "schema_version": SCHEMA_VERSION,
+        "generated_at": datetime.fromtimestamp(now, timezone.utc).isoformat(),
+        "history_days": args.days,
+        "dedup": {
+            "claude": "(message.id, requestId) last-wins",
+            "codex": "(session_id, turn_id, response_id)",
+            "opencode": "per assistant message row",
+        },
+        "sources": sources,
+        "windows": {
+            name: {
+                "start": datetime.fromtimestamp(bounds["start"], timezone.utc).astimezone().isoformat(),
+                "end": datetime.fromtimestamp(bounds["end"], timezone.utc).astimezone().isoformat(),
+                "tools": serialize(ledger.windows[name]),
+            }
+            for name, bounds in ledger.bounds.items()
+        },
+        "days": {day: serialize(tools) for day, tools in sorted(ledger.days.items())},
+    }
+
     os.makedirs(LEDGER_DIR, exist_ok=True)
     tmp = LEDGER_PATH + ".tmp"
     with open(tmp, "w") as handle:
@@ -209,18 +336,16 @@ def main() -> int:
     os.replace(tmp, LEDGER_PATH)
 
     if args.show:
-        today = days[-1] if days else None
-        for day in (days[-2:] if len(days) > 1 else days):
-            print(f"== {day} ==")
-            for tool in ("claude", "codex", "opencode"):
-                bucket = payload["days"].get(day, {}).get(tool)
-                if not bucket:
-                    continue
-                total = sum(bucket[f] for f in FIELDS)
-                print(f"  {tool:9s} {total/1e6:9.1f}M tokens "
-                      f"(in {bucket['input']/1e6:.1f}M · cache_read {bucket['cache_read']/1e6:.1f}M · "
-                      f"out {bucket['output']/1e6:.1f}M) · {bucket['messages']} msgs · " + ("$%.2f" % bucket['cost_usd'] if bucket['cost_usd'] is not None else "cost n/a"))
-        print("sessions:", payload["sessions"], "| files:", counts)
+        for name in ("today", "last24h", "last7d"):
+            window = payload["windows"][name]
+            print(f"== {name}  [{window['start'][:19]} → {window['end'][:19]}]")
+            for tool, bucket in window["tools"].items():
+                total = sum(bucket[field] for field in FIELDS)
+                cost = bucket["cost"]
+                cost_label = f"${cost['usd']:.2f}" if cost["kind"] == "declared" else "cost n/a"
+                print(f"   {tool:9s} {total/1e6:10.1f}M  cache_read {bucket['cache_read']/1e6:9.1f}M"
+                      f"  {bucket['messages']:>6} msgs  {cost_label}")
+        print("sources:", {k: v["status"] for k, v in sources.items()})
     print(f"ledger: {LEDGER_PATH}")
     return 0
 

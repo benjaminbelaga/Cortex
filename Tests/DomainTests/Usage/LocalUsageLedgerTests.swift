@@ -61,4 +61,82 @@ struct LocalUsageLedgerTests {
         #expect(claude?.nonCacheTokens == 400)
         #expect(claude?.totalTokens == 1450)
     }
+
+    // MARK: - v2 (measured windows, typed cost, source status)
+
+    private static let v2Fixture = """
+    {
+      "schema_version": 2,
+      "generated_at": "2026-09-26T05:38:09+02:00",
+      "sources": {
+        "claude": {"status": "ok", "files": 1587, "last_observed_at": "2026-09-26T05:30:00+02:00"},
+        "opencode": {"status": "unsupported_schema", "error": "no such table: message"}
+      },
+      "windows": {
+        "last24h": {
+          "start": "2026-09-25T05:38:09+02:00",
+          "end": "2026-09-26T05:38:09+02:00",
+          "tools": {
+            "claude": {"input": 100, "output": 300, "cache_read": 900, "cache_creation": 0,
+                       "reasoning": 0, "messages": 12, "cost": {"kind": "unavailable", "usd": null}},
+            "opencode": {"input": 100, "output": 100, "cache_read": 800, "cache_creation": 0,
+                         "reasoning": 0, "messages": 40, "cost": {"kind": "declared", "usd": 12.5}}
+          }
+        },
+        "last7d": {
+          "start": "2026-09-19T05:38:09+02:00",
+          "end": "2026-09-26T05:38:09+02:00",
+          "tools": {
+            "claude": {"input": 1000, "output": 3000, "cache_read": 9000, "cache_creation": 0,
+                       "reasoning": 0, "messages": 120, "cost": {"kind": "unavailable", "usd": null}}
+          }
+        }
+      },
+      "days": {}
+    }
+    """
+
+    private func decodeV2() throws -> LocalUsageLedger {
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        return try decoder.decode(LocalUsageLedger.self, from: Data(Self.v2Fixture.utf8))
+    }
+
+    @Test("v2 windows decode with a computed cache share — never a hardcoded constant")
+    func windowsCarryAMeasuredCacheShare() throws {
+        let ledger = try decodeV2()
+        let bucket = try #require(ledger.window("last24h")?.tools["claude"])
+        #expect(bucket.totalTokens == 1300)
+        let share = try #require(bucket.cacheShare)
+        #expect(abs(share - 900.0 / 1300.0) < 0.0001)
+        #expect(ledger.availableWindowNames == ["last24h", "last7d"])
+        #expect(ledger.window("today") == nil)
+    }
+
+    @Test("typed cost distinguishes a declared price from an unavailable one")
+    func typedCost() throws {
+        let ledger = try decodeV2()
+        let claude = try #require(ledger.window("last24h")?.tools["claude"]?.cost)
+        #expect(!claude.isDeclared)
+        #expect(claude.usd == nil)
+        let opencode = try #require(ledger.window("last24h")?.tools["opencode"]?.cost)
+        #expect(opencode.isDeclared)
+        #expect(opencode.usd == 12.5)
+    }
+
+    @Test("a non-ok source surfaces instead of silently reading zero")
+    func degradedSourceSurfaces() throws {
+        let ledger = try decodeV2()
+        #expect(ledger.degradedSources.map(\.name) == ["opencode"])
+        #expect(ledger.degradedSources.first?.status.status == "unsupported_schema")
+    }
+
+    @Test("perTool(inWindow:) ranks the measured window, not the last stored day")
+    func perWindowRanking() throws {
+        let ledger = try decodeV2()
+        let rows = ledger.perTool(inWindow: "last24h")
+        #expect(rows.map(\.tool) == ["claude", "opencode"])
+        #expect(rows.first?.bucket.messages == 12)
+        #expect(ledger.perTool(inWindow: "today").isEmpty)
+    }
 }

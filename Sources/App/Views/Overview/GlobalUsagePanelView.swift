@@ -13,6 +13,8 @@ struct GlobalUsagePanelView: View {
 
     @State private var expanded = false
     @State private var window: UsageWindow = .last24h
+    /// Local ledger window key ("today" / "last24h" / "last7d").
+    @State private var localWindow = "last24h"
 
     @Environment(\.appTheme) private var theme
 
@@ -246,11 +248,18 @@ struct GlobalUsagePanelView: View {
 
     /// Per-tool local session truth from the centralized ledger — the answer to
     /// "how much do I actually use", as opposed to router-metered traffic
-    /// (Ben 2026-09-26: the router figure was ~6x below reality).
+    /// (Ben 2026-09-26: the router only sees routed traffic — the measured
+    /// ledger is ~12x larger on 24h). Windows are measured, not inferred from
+    /// the last stored day, and a source that could not be read says so.
     @ViewBuilder
     private var localUsageSection: some View {
         if let localLedger {
-            let rows = localLedger.perTool(lastDays: window == .last24h ? 1 : 7)
+            let available = localLedger.availableWindowNames
+            let selected = available.contains(localWindow) ? localWindow : (available.first ?? "last24h")
+            let rows = localLedger.perTool(inWindow: selected)
+            let measured = localLedger.window(selected)
+            let degradedNames: [String] = localLedger.degradedSources.map { "\($0.name) \($0.status.status)" }
+            let degradedLabel: String = degradedNames.joined(separator: " · ")
             Divider().overlay(theme.glassBorder)
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
@@ -263,8 +272,26 @@ struct GlobalUsagePanelView: View {
                         .foregroundStyle(theme.textTertiary)
                 }
                 .help("Every session on this Mac — Claude Code, Codex, OpenCode — not only traffic routed through llm-router.")
+                if available.count > 1 {
+                    HStack(spacing: 6) {
+                        ForEach(available, id: \.self) { name in
+                            localWindowChip(name, selected: selected)
+                        }
+                        Spacer()
+                    }
+                }
+                if !degradedNames.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(theme.font(size: 8))
+                        Text(degradedLabel)
+                            .font(theme.font(size: 8))
+                    }
+                    .foregroundStyle(theme.statusWarning)
+                    .help("A source that could not be read reports its status instead of a reassuring zero.")
+                }
                 if rows.isEmpty {
-                    Text("No local sessions recorded yet.")
+                    Text(measured == nil ? "No measured window in the ledger yet." : "No local sessions in this window.")
                         .font(theme.font(size: 9))
                         .foregroundStyle(theme.textTertiary)
                 } else {
@@ -275,22 +302,67 @@ struct GlobalUsagePanelView: View {
                                 .font(theme.font(size: 9, weight: .medium))
                                 .foregroundStyle(theme.textSecondary)
                                 .frame(width: 92, alignment: .leading)
-                            Text(formatTokens(row.tokens))
+                            Text(formatTokens(row.bucket.totalTokens))
                                 .font(theme.font(size: 9, weight: .semibold))
                                 .monospacedDigit()
                                 .foregroundStyle(theme.textPrimary)
-                            Text("\(row.messages) msg")
+                            if let share = row.bucket.cacheShare {
+                                Text("cache \(Int((share * 100).rounded()))%")
+                                    .font(theme.font(size: 8))
+                                    .foregroundStyle(theme.textTertiary)
+                                    .help("Measured on this window — tokens include cache reads, the ledger keeps the split.")
+                            }
+                            Text("\(row.bucket.messages) msg")
                                 .font(theme.font(size: 8))
                                 .foregroundStyle(theme.textTertiary)
                             Spacer()
+                            if let cost = row.bucket.cost, cost.isDeclared, let usd = cost.usd {
+                                Text(String(format: "$%.2f", usd))
+                                    .font(theme.font(size: 8, weight: .medium))
+                                    .monospacedDigit()
+                                    .foregroundStyle(theme.textSecondary)
+                            } else {
+                                Text("cost n/a")
+                                    .font(theme.font(size: 8))
+                                    .foregroundStyle(theme.textTertiary)
+                            }
                         }
                     }
-                    Text("tokens include cache reads (~97% of volume) — the ledger keeps the split")
-                        .font(theme.font(size: 8))
-                        .foregroundStyle(theme.textTertiary)
+                    if let measured {
+                        Text("window \(shortTimestamp(measured.start)) → \(shortTimestamp(measured.end))")
+                            .font(theme.font(size: 8))
+                            .foregroundStyle(theme.textTertiary)
+                    }
                 }
             }
         }
+    }
+
+    private func localWindowLabel(_ name: String) -> String {
+        switch name {
+        case "today": return "Today"
+        case "last24h": return "24h"
+        case "last7d": return "7d"
+        default: return name
+        }
+    }
+
+    @ViewBuilder
+    private func localWindowChip(_ name: String, selected: String) -> some View {
+        let isSelected = name == selected
+        Button(action: { localWindow = name }) {
+            Text(localWindowLabel(name))
+                .font(theme.font(size: 8, weight: isSelected ? .semibold : .regular))
+                .foregroundStyle(isSelected ? theme.accentPrimary : theme.textTertiary)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func shortTimestamp(_ value: String) -> String {
+        guard let date = Self.isoDate(value) else { return value }
+        let formatter = DateFormatter()
+        formatter.dateFormat = "dd/MM HH:mm"
+        return formatter.string(from: date)
     }
 
     private func ledgerAgeLabel(_ ledger: LocalUsageLedger) -> String {
