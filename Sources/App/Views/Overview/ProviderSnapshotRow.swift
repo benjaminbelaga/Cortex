@@ -15,6 +15,9 @@ struct ProviderSnapshotRow: View {
     var disclosure: Bool? = nil
     /// Header summary replacing the account tag ("2/3 dispo · 1 à reconnecter").
     var groupSummary: String? = nil
+    /// Actionable tail of the header summary ("· 1 to reconnect"), rendered in
+    /// the accent colour so a collapsed group advertises its guided reconnect.
+    var groupSummaryAccent: String? = nil
     /// Number of accounts in a multi-account group, set only on the group
     /// header. Combined with an expanded `disclosure` it turns the header into
     /// a pure group label ("N comptes") instead of an account's quota bars — so
@@ -183,6 +186,12 @@ struct ProviderSnapshotRow: View {
                         .foregroundStyle(theme.textTertiary)
                         .lineLimit(1)
                         .truncationMode(.tail)
+                    if let accent = groupSummaryAccent {
+                        Text(accent)
+                            .font(theme.font(size: 9, weight: .semibold))
+                            .foregroundStyle(theme.accentPrimary)
+                            .lineLimit(1)
+                    }
                 }
             }
             .frame(width: 132, alignment: .leading)

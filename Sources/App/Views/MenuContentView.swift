@@ -368,7 +368,7 @@ struct MenuContentView: View {
     private var statusBadge: some View {
         let statusColor = badgeContent.color
 
-        return HStack(spacing: 6) {
+        let badge = HStack(spacing: 6) {
             // Animated pulse dot
             PulsingStatusDot(
                 color: statusColor,
@@ -378,6 +378,15 @@ struct MenuContentView: View {
             Text(badgeContent.text)
                 .font(theme.font(size: 11, weight: .medium))
                 .foregroundStyle(theme.textPrimary)
+
+            // "3 to reconnect" is a count Ben must be able to act on: show the
+            // affected accounts instead of leaving a dead number in the pill
+            // (Ben 2026-09-26 screenshot).
+            if !groupsNeedingReconnect.isEmpty {
+                Image(systemName: "chevron.right")
+                    .font(theme.font(size: 9, weight: .bold))
+                    .foregroundStyle(statusColor)
+            }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
@@ -389,6 +398,35 @@ struct MenuContentView: View {
                         .stroke(statusColor.opacity(0.5), lineWidth: 1)
                 )
         )
+
+        return Group {
+            if groupsNeedingReconnect.isEmpty {
+                badge
+            } else {
+                Button {
+                    withAnimation(.easeOut(duration: 0.15)) {
+                        settings.overviewExpandedGroups.formUnion(groupsNeedingReconnect)
+                    }
+                } label: {
+                    badge
+                }
+                .buttonStyle(.plain)
+                .help("Show the \(fleetReconnectCount) account(s) that need reconnecting")
+            }
+        }
+    }
+
+    /// Providers whose members include an account waiting for a typed
+    /// reconnect — the pill's call to action expands exactly these.
+    private var groupsNeedingReconnect: [String] {
+        OverviewBuilder.groups(OverviewBuilder.build(providers: monitor.enabledProviders))
+            .filter { $0.reconnectCount > 0 }
+            .map(\.providerId)
+    }
+
+    private var fleetReconnectCount: Int {
+        OverviewBuilder.groups(OverviewBuilder.build(providers: monitor.enabledProviders))
+            .reduce(0) { $0 + $1.reconnectCount }
     }
 
     private var statusText: String {

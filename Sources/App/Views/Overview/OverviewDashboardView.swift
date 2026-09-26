@@ -204,8 +204,11 @@ struct OverviewDashboardView: View {
     /// account's bars + "k/N dispo". Tap toggles; the members keep every action.
     private func groupHeader(_ group: ProviderGroup) -> some View {
         let expanded = settings.overviewExpandedGroups.contains(group.providerId)
-        var summary = "\(group.usableCount)/\(group.rows.count) available"
-        if group.reconnectCount > 0 { summary += " · \(group.reconnectCount) to reconnect" }
+        let summary = "\(group.usableCount)/\(group.rows.count) available"
+        // The reconnect count is the actionable half of the summary: it renders
+        // in the accent colour so a collapsed group advertises that tapping it
+        // reveals the guided reconnect — not just a number.
+        let reconnectSuffix = group.reconnectCount > 0 ? " · \(group.reconnectCount) to reconnect" : nil
         let ids = [group.providerId] + group.rows.map(\.id)
         let union = ids.flatMap { settings.preferredModels[$0] ?? [] }
         let badges: [ModelFamily]
@@ -218,6 +221,7 @@ struct OverviewDashboardView: View {
         return ProviderSnapshotRow(
             snapshot: group.representative, filter: settings.overviewWindowFilter,
             disclosure: expanded, groupSummary: summary,
+            groupSummaryAccent: reconnectSuffix,
             groupCount: group.rows.count,
             preferredModels: badges,
             onTogglePreferred: { togglePreferred($0, rowId: group.providerId) },
