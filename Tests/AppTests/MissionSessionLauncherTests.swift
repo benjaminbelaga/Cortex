@@ -113,7 +113,12 @@ struct MissionSessionLauncherTests {
         #expect(MissionSessionLauncher.slug("fix'; rm -rf danger") == "fix-rm-rf-danger")
     }
 
-    private func candidate(_ launcher: String, plan: MissionLaunchPlan? = nil) -> MissionCandidate {
+    private func candidate(
+        _ launcher: String,
+        plan: MissionLaunchPlan? = nil,
+        effort: String? = nil,
+        account: MissionAccount? = nil
+    ) -> MissionCandidate {
         MissionCandidate(
             provider: "test",
             model: "test",
@@ -122,7 +127,9 @@ struct MissionSessionLauncherTests {
             quotaHeadroomPercent: nil,
             reasons: [],
             warnings: [],
-            launchPlan: plan
+            launchPlan: plan,
+            effort: effort,
+            account: account
         )
     }
 }

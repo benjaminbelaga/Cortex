@@ -13,8 +13,43 @@ public enum MissionLoad: String, CaseIterable, Sendable {
     }
 }
 
+/// The account the router selected for a route. Two accounts can share the same
+/// provider and model, so a route identity that stops at `provider:model` is
+/// ambiguous (audit V2 §3 "Identité d'une route", T11). These are the labels the
+/// router already prints in its own CLI — no secret is exposed here.
+public struct MissionAccount: Sendable, Equatable {
+    public let id: String?
+    public let alias: String?
+    public let identity: String?
+
+    public init(id: String? = nil, alias: String? = nil, identity: String? = nil) {
+        self.id = id
+        self.alias = alias
+        self.identity = identity
+    }
+
+    /// Display label, most human first (`alias` → `identity` → `id`).
+    public var label: String? {
+        for value in [alias, identity, id] {
+            if let value, !value.isEmpty { return value }
+        }
+        return nil
+    }
+}
+
 public struct MissionCandidate: Sendable, Equatable, Identifiable {
-    public var id: String { "\(provider):\(model)" }
+    /// Route identity: every dimension the router can distinguish on —
+    /// provider, model, effort, account and launcher. Deduplicating on
+    /// `provider:model` collapsed two accounts (or two efforts) into one
+    /// `ForEach` identity, so `ForEach(id: \.element.id)` received duplicates.
+    public var id: String {
+        var parts = [provider, model]
+        if let effort, !effort.isEmpty { parts.append(effort) }
+        if let label = account?.label, !label.isEmpty { parts.append(label) }
+        if let launcher = launchPlan?.launcherId, !launcher.isEmpty { parts.append(launcher) }
+        return parts.joined(separator: ":")
+    }
+
     public let provider: String
     public let model: String
     public let score: Double
@@ -23,6 +58,8 @@ public struct MissionCandidate: Sendable, Equatable, Identifiable {
     public let reasons: [String]
     public let warnings: [String]
     public let launchPlan: MissionLaunchPlan?
+    public let effort: String?
+    public let account: MissionAccount?
 }
 
 public struct MissionLaunchPlan: Sendable, Equatable {
@@ -112,6 +149,10 @@ public struct LLMRouterSuggestionClient: Sendable {
                         arguments: $0.arguments,
                         environment: $0.environment
                     )
+                },
+                effort: candidate.effort,
+                account: candidate.account.map {
+                    MissionAccount(id: $0.id, alias: $0.alias, identity: $0.identity)
                 }
             )
         }
@@ -152,13 +193,23 @@ private struct CandidateWire: Decodable {
     let reasons: [String]
     let warnings: [String]
     let launchPlan: LaunchPlanWire?
+    let effort: String?
+    /// Present when the provider is multi-account: which account the router
+    /// selected. Cortex used to drop it, so two accounts looked like one route.
+    let account: AccountWire?
 
     enum CodingKeys: String, CodingKey {
-        case provider, model, score, reasons, warnings
+        case provider, model, score, reasons, warnings, effort, account
         case launcherCommand = "launcher_command"
         case quotaHeadroom = "quota_headroom_pct"
         case launchPlan = "launch_plan"
     }
+}
+
+private struct AccountWire: Decodable {
+    let id: String?
+    let alias: String?
+    let identity: String?
 }
 
 private struct LaunchPlanWire: Decodable {

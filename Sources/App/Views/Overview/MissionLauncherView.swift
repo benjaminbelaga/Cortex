@@ -115,7 +115,7 @@ struct MissionLauncherView: View {
                                 .foregroundStyle(theme.accentPrimary)
                         }
                     }
-                    Text(candidate.model)
+                    Text(candidateRouteDetail(candidate))
                         .font(theme.font(size: 9, weight: .medium))
                         .foregroundStyle(theme.textTertiary)
                 }
@@ -151,6 +151,15 @@ struct MissionLauncherView: View {
         }
         .padding(8)
         .background(RoundedRectangle(cornerRadius: 9).fill(theme.glassBackground))
+    }
+
+    /// Which route this really is: model + selected account + effort. Two
+    /// accounts on the same model must not look like one route (audit V2 §3).
+    private func candidateRouteDetail(_ candidate: MissionCandidate) -> String {
+        [candidate.model, candidate.account?.label, candidate.effort]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
     }
 
     private func requestSuggestion() {
