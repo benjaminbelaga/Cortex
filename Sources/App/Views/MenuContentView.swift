@@ -24,6 +24,9 @@ struct MenuContentView: View {
     @State private var showSharePass = false
     @State private var settings = AppSettings.shared
     @State private var hasRequestedNotificationPermission = false
+    /// Centralized local usage ledger (every session on this Mac), read when
+    /// the popover opens — the router snapshot alone under-counts by ~6x.
+    @State private var localLedger: LocalUsageLedger?
     @State private var pillsOverflow = false
     @State private var pillsContentWidth: CGFloat = 0
     @State private var pillsViewportWidth: CGFloat = 0
@@ -543,13 +546,15 @@ struct MenuContentView: View {
                     // efficiency ratios + backend split, collapsed by default
                     // ("descendre en bas pour voir le global", Ben 2026-08-24).
                     GlobalUsagePanelView(
-                        snapshot: providers.compactMap { ($0 as? RouterBackedProvider)?.quotaSnapshot }.first
+                        snapshot: providers.compactMap { ($0 as? RouterBackedProvider)?.quotaSnapshot }.first,
+                        localLedger: localLedger
                     )
                 }
                 .task {
                     // Light 60s tick + throttled transcript scan; lives with
                     // the panel ("traquer ce que j'utilise").
                     harTracker.start()
+                    localLedger = LocalUsageLedgerReader().read()
                 }
             }
         } else if let provider = selectedProvider {

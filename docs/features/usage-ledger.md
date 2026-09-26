@@ -55,7 +55,17 @@ jq -r '.days | to_entries | last | .value | to_entries[] |
 - The ledger is a **local observability artefact**, not a quota source. Quota
   stays owned by each provider's probe (and by llm-router for routing).
 
+## In-app surface
+
+The overview's global panel ("Router usage & theoretical spend") carries a
+second section, **"Local usage (this Mac)"**, reading this same JSON when the
+popover opens (`LocalUsageLedgerReader` → `LocalUsageLedger`). It shows the
+per-tool token totals for the selected window (24 h / 7 d) with the ledger's
+own freshness label, so the router figure and the local truth are never
+confused again. The app decodes the ledger; it never re-parses transcripts.
+
 ## Roadmap
 
-The in-app card ("local truth" vs "router-metered") and the scheduled refresh
-read this same JSON so there is exactly one aggregator, never a second one.
+A scheduled refresh (LaunchAgent or an in-app background run) keeps the JSON
+fresh without a manual invocation; until then the card shows the ledger's age
+honestly ("ledger updated X min ago").

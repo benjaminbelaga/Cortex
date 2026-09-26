@@ -7,6 +7,9 @@ import Domain
 /// such as Qwen can never disappear from the UI.
 struct GlobalUsagePanelView: View {
     let snapshot: RouterQuotaSnapshot?
+    /// Centralized local usage ledger (every session on this Mac). Nil until
+    /// the ledger exists — the panel then says so, never shows a fake zero.
+    var localLedger: LocalUsageLedger? = nil
 
     @State private var expanded = false
     @State private var window: UsageWindow = .last24h
@@ -51,9 +54,10 @@ struct GlobalUsagePanelView: View {
                 .font(theme.font(size: 11))
                 .foregroundStyle(theme.textSecondary)
             VStack(alignment: .leading, spacing: 1) {
-                Text("Usage & theoretical spend")
+                Text("Router usage & theoretical spend")
                     .font(theme.font(size: 12, weight: .semibold))
                     .foregroundStyle(theme.textSecondary)
+                    .help("llm-router only sees traffic routed through it. Every session on this Mac is in “Local usage (this Mac)” below.")
                 if let usageSnapshot {
                     Text(freshnessLabel(usageSnapshot))
                         .font(theme.font(size: 8, weight: .medium))
@@ -179,6 +183,8 @@ struct GlobalUsagePanelView: View {
                     .foregroundStyle(theme.textTertiary)
             }
 
+            localUsageSection
+
             if let cost {
                 Divider().overlay(theme.glassBorder)
                 Text("Billed share of theoretical spend")
@@ -238,9 +244,74 @@ struct GlobalUsagePanelView: View {
         }
     }
 
+    /// Per-tool local session truth from the centralized ledger — the answer to
+    /// "how much do I actually use", as opposed to router-metered traffic
+    /// (Ben 2026-09-26: the router figure was ~6x below reality).
     @ViewBuilder
-    private var freshnessBadges: some View {
-        if let usageSnapshot, usageSnapshot.isStale {
+    private var localUsageSection: some View {
+        if let localLedger {
+            let rows = localLedger.perTool(lastDays: window == .last24h ? 1 : 7)
+            Divider().overlay(theme.glassBorder)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text("Local usage (this Mac)")
+                        .font(theme.font(size: 9, weight: .semibold))
+                        .foregroundStyle(theme.textTertiary)
+                    Spacer()
+                    Text(ledgerAgeLabel(localLedger))
+                        .font(theme.font(size: 8))
+                        .foregroundStyle(theme.textTertiary)
+                }
+                .help("Every session on this Mac — Claude Code, Codex, OpenCode — not only traffic routed through llm-router.")
+                if rows.isEmpty {
+                    Text("No local sessions recorded yet.")
+                        .font(theme.font(size: 9))
+                        .foregroundStyle(theme.textTertiary)
+                } else {
+                    ForEach(rows, id: \.tool) { row in
+                        HStack(spacing: 6) {
+                            Circle().fill(backendColor(row.tool)).frame(width: 6, height: 6)
+                            Text(row.tool)
+                                .font(theme.font(size: 9, weight: .medium))
+                                .foregroundStyle(theme.textSecondary)
+                                .frame(width: 92, alignment: .leading)
+                            Text(formatTokens(row.tokens))
+                                .font(theme.font(size: 9, weight: .semibold))
+                                .monospacedDigit()
+                                .foregroundStyle(theme.textPrimary)
+                            Text("\(row.messages) msg")
+                                .font(theme.font(size: 8))
+                                .foregroundStyle(theme.textTertiary)
+                            Spacer()
+                        }
+                    }
+                    Text("tokens include cache reads (~97% of volume) — the ledger keeps the split")
+                        .font(theme.font(size: 8))
+                        .foregroundStyle(theme.textTertiary)
+                }
+            }
+        }
+    }
+
+    private func ledgerAgeLabel(_ ledger: LocalUsageLedger) -> String {
+        guard let date = Self.isoDate(ledger.generatedAt) else { return "ledger" }
+        let age = Date().timeIntervalSince(date)
+        if age < 60 { return "ledger updated just now" }
+        if age < 3600 { return "ledger updated \(Int(age / 60)) min ago" }
+        return "ledger updated \(Int(age / 3600)) h ago"
+    }
+
+    private static func isoDate(_ value: String) -> Date? {
+        let withFraction = ISO8601DateFormatter()
+        withFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = withFraction.date(from: value) { return date }
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        return plain.date(from: value)
+    }
+
+    @ViewBuilder
+    private var freshnessBadges: some View {        if let usageSnapshot, usageSnapshot.isStale {
             badge("stale", color: theme.statusWarning, icon: "exclamationmark.triangle")
         } else if let usageSnapshot, usageSnapshot.isPartial {
             badge("partiel", color: theme.statusWarning, icon: "circle.lefthalf.filled")
