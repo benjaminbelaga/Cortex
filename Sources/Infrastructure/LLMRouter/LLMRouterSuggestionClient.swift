@@ -60,6 +60,34 @@ public struct MissionCandidate: Sendable, Equatable, Identifiable {
     public let launchPlan: MissionLaunchPlan?
     public let effort: String?
     public let account: MissionAccount?
+    /// Eligible routes are the only ones offered; an ineligible one keeps a reason.
+    public let eligible: Bool?
+    /// Time-tariff multiplier for this route right now (`< 1` = discount window,
+    /// the engine's own vocabulary — CORTEX_BIBLE §15, never recomputed here).
+    public let timeMultiplier: Double?
+    public let penalties: [String]
+    /// Where the quota behind this decision came from and how old it is. `nil`
+    /// age is *unknown*, never zero (audit V2 §3 "inconnu n'est pas mesuré").
+    public let statusSource: String?
+    public let statusAgeMinutes: Double?
+}
+
+/// A discount window the engine says is not open yet (audit V2 §5). Display only:
+/// Cortex never decides to wait or to launch on the strength of it.
+public struct MissionWaitSuggestion: Sendable, Equatable {
+    public let provider: String
+    public let model: String
+    public let opensAtDisplay: String?
+    public let opensInMinutes: Int?
+    public let multiplier: Double?
+    public let reason: String?
+}
+
+/// A route the engine ruled out, with its reason. The audit (§12) requires the
+/// reasons alternatives were rejected to be *visible*, not recomputed.
+public struct MissionIneligibleRoute: Sendable, Equatable {
+    public let provider: String
+    public let reasons: [String]
 }
 
 public struct MissionLaunchPlan: Sendable, Equatable {
@@ -77,6 +105,14 @@ public struct MissionSuggestion: Sendable, Equatable {
     public let candidates: [MissionCandidate]
     public let explanation: [String]
     public let warnings: [String]
+    /// When the engine produced the decision. Shown as an age so a stale
+    /// decision is visible instead of implied fresh (audit V2 §12).
+    public let generatedAt: Date?
+    public let privacy: String?
+    public let contextEstimate: Int?
+    public let fallbackChain: [String]
+    public let waitSuggestion: MissionWaitSuggestion?
+    public let ineligible: [MissionIneligibleRoute]
 }
 
 /// Bounded client for `llm-router suggest --json`. It reuses the same executable
@@ -153,7 +189,12 @@ public struct LLMRouterSuggestionClient: Sendable {
                 effort: candidate.effort,
                 account: candidate.account.map {
                     MissionAccount(id: $0.id, alias: $0.alias, identity: $0.identity)
-                }
+                },
+                eligible: candidate.eligible,
+                timeMultiplier: candidate.timeMultiplier,
+                penalties: candidate.penalties ?? [],
+                statusSource: candidate.statusSource,
+                statusAgeMinutes: candidate.statusAgeMinutes
             )
         }
         guard !candidates.isEmpty else {
@@ -164,8 +205,46 @@ public struct LLMRouterSuggestionClient: Sendable {
             taskClass: wire.taskClass,
             candidates: Array(candidates.prefix(3)),
             explanation: wire.explanation,
-            warnings: wire.warnings
+            warnings: wire.warnings,
+            generatedAt: Self.parseTimestamp(wire.generatedAt),
+            privacy: wire.privacy,
+            contextEstimate: wire.contextEstimate,
+            fallbackChain: wire.fallbackChain ?? [],
+            waitSuggestion: wire.waitSuggestion.map {
+                MissionWaitSuggestion(
+                    provider: $0.provider,
+                    model: $0.model,
+                    opensAtDisplay: $0.opensAtDisplay,
+                    opensInMinutes: $0.opensInMinutes,
+                    multiplier: $0.multiplier,
+                    reason: $0.reason
+                )
+            },
+            ineligible: (wire.ineligible ?? []).map {
+                MissionIneligibleRoute(provider: $0.provider, reasons: $0.reasons ?? [])
+            }
         )
+    }
+
+    /// The engine prints microsecond ISO-8601 (`2026-09-27T15:22:34.045801+02:00`).
+    /// Foundation's fractional formatter is only reliable to milliseconds, so the
+    /// fraction is trimmed before a second attempt; and a missing timestamp stays
+    /// `nil` rather than becoming "now".
+    static func parseTimestamp(_ raw: String?) -> Date? {
+        guard let raw, !raw.isEmpty else { return nil }
+        let fractional = ISO8601DateFormatter()
+        fractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = fractional.date(from: raw) { return date }
+        if let dot = raw.firstIndex(of: "."),
+           let boundary = raw[raw.index(after: dot)...].firstIndex(where: { $0 == "+" || $0 == "-" || $0 == "Z" }) {
+            let head = raw[raw.startIndex..<dot]
+            let digits = raw[raw.index(after: dot)..<boundary].prefix(3)
+            let tail = raw[boundary...]
+            if let date = fractional.date(from: "\(head).\(digits)\(tail)") { return date }
+        }
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        return plain.date(from: raw)
     }
 }
 
@@ -176,12 +255,42 @@ private struct SuggestionWire: Decodable {
     let alternatives: [CandidateWire]
     let explanation: [String]
     let warnings: [String]
+    let generatedAt: String?
+    let privacy: String?
+    let contextEstimate: Int?
+    let fallbackChain: [String]?
+    let waitSuggestion: WaitWire?
+    let ineligible: [IneligibleWire]?
 
     enum CodingKeys: String, CodingKey {
         case missionId = "mission_id"
         case taskClass = "task_class"
-        case recommended, alternatives, explanation, warnings
+        case recommended, alternatives, explanation, warnings, privacy, ineligible
+        case generatedAt = "generated_at"
+        case contextEstimate = "context_estimate"
+        case fallbackChain = "fallback_chain"
+        case waitSuggestion = "suggest_wait_until"
     }
+}
+
+private struct WaitWire: Decodable {
+    let provider: String
+    let model: String
+    let opensAtDisplay: String?
+    let opensInMinutes: Int?
+    let multiplier: Double?
+    let reason: String?
+
+    enum CodingKeys: String, CodingKey {
+        case provider, model, multiplier, reason
+        case opensAtDisplay = "opens_at_display"
+        case opensInMinutes = "opens_in_minutes"
+    }
+}
+
+private struct IneligibleWire: Decodable {
+    let provider: String
+    let reasons: [String]?
 }
 
 private struct CandidateWire: Decodable {
@@ -197,12 +306,20 @@ private struct CandidateWire: Decodable {
     /// Present when the provider is multi-account: which account the router
     /// selected. Cortex used to drop it, so two accounts looked like one route.
     let account: AccountWire?
+    let eligible: Bool?
+    let penalties: [String]?
+    let statusSource: String?
+    let statusAgeMinutes: Double?
+    let timeMultiplier: Double?
 
     enum CodingKeys: String, CodingKey {
-        case provider, model, score, reasons, warnings, effort, account
+        case provider, model, score, reasons, warnings, effort, account, eligible, penalties
         case launcherCommand = "launcher_command"
         case quotaHeadroom = "quota_headroom_pct"
         case launchPlan = "launch_plan"
+        case statusSource = "status_source"
+        case statusAgeMinutes = "status_age_min"
+        case timeMultiplier = "time_multiplier"
     }
 }
 

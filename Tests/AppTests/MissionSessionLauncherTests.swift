@@ -129,7 +129,12 @@ struct MissionSessionLauncherTests {
             warnings: [],
             launchPlan: plan,
             effort: effort,
-            account: account
+            account: account,
+            eligible: true,
+            timeMultiplier: nil,
+            penalties: [],
+            statusSource: nil,
+            statusAgeMinutes: nil
         )
     }
 }

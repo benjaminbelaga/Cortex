@@ -62,6 +62,82 @@ struct LLMRouterSuggestionClientTests {
         #expect(suggestion.candidates[0].id == "minimax_max:MiniMax-M2.5-highspeed")
     }
 
+    @Test("the decision carries its own provenance and rejected routes")
+    func decisionProvenanceIsDecoded() throws {
+        let suggestion = try LLMRouterSuggestionClient.parse(Self.realShapedPayload())
+
+        // The engine stamps the decision; Cortex shows its age (audit V2 §12).
+        #expect(suggestion.generatedAt != nil)
+        #expect(suggestion.privacy == "internal")
+        #expect(suggestion.contextEstimate == 100_000)
+        #expect(suggestion.fallbackChain == ["deepseek", "bedrock"])
+        #expect(suggestion.waitSuggestion == nil)
+        #expect(suggestion.ineligible.count == 1)
+        #expect(suggestion.ineligible[0].provider == "kimi")
+        #expect(suggestion.ineligible[0].reasons.first?.contains("quota") == true)
+    }
+
+    @Test("quota provenance is exposed, and a missing age stays unknown")
+    func quotaProvenanceIsHonest() throws {
+        let suggestion = try LLMRouterSuggestionClient.parse(Self.realShapedPayload())
+
+        #expect(suggestion.candidates[0].statusSource == "quota_broker")
+        #expect(suggestion.candidates[0].statusAgeMinutes == 12.5)
+        #expect(suggestion.candidates[0].timeMultiplier == 0.5)
+        #expect(suggestion.candidates[0].penalties == ["latency=0.2"])
+        // Second route: the engine reports no age. Unknown is not zero.
+        #expect(suggestion.candidates[1].statusAgeMinutes == nil)
+        #expect(suggestion.candidates[1].statusSource == nil)
+    }
+
+    @Test("the router's microsecond timestamps parse")
+    func microsecondTimestampsParse() {
+        // Shape captured live from `llm-router suggest --json`.
+        let parsed = LLMRouterSuggestionClient.parseTimestamp("2026-09-27T15:22:34.045801+02:00")
+
+        #expect(parsed != nil)
+        #expect(LLMRouterSuggestionClient.parseTimestamp("2026-09-27T15:22:34Z") != nil)
+        #expect(LLMRouterSuggestionClient.parseTimestamp(nil) == nil)
+        #expect(LLMRouterSuggestionClient.parseTimestamp("not a date") == nil)
+    }
+
+    private static func realShapedPayload() -> Data {
+        Data(
+            """
+            {
+              "mission_id": "m-456",
+              "task_class": "EXECUTE_COMPLEX",
+              "generated_at": "2026-09-27T15:22:34.045801+02:00",
+              "privacy": "internal",
+              "context_estimate": 100000,
+              "fallback_chain": ["deepseek", "bedrock"],
+              "suggest_wait_until": null,
+              "ineligible": [
+                {"provider": "kimi", "reasons": ["quota épuisé/réserve atteinte (restant 0%)"]}
+              ],
+              "recommended": {
+                "provider": "claude", "model": "sonnet", "score": 0.88,
+                "launcher_command": "claude-broker",
+                "quota_headroom_pct": 0.42, "reasons": ["quota healthy"], "warnings": [],
+                "eligible": true, "time_multiplier": 0.5,
+                "penalties": ["latency=0.2"],
+                "status_source": "quota_broker", "status_age_min": 12.5
+              },
+              "alternatives": [
+                {
+                  "provider": "bedrock", "model": "think", "score": 0.7,
+                  "launcher_command": "claude-bedrock think",
+                  "quota_headroom_pct": 0.9, "reasons": [], "warnings": [],
+                  "eligible": true, "penalties": []
+                }
+              ],
+              "explanation": ["Mission classée EXECUTE_COMPLEX"],
+              "warnings": []
+            }
+            """.utf8
+        )
+    }
+
     private static func twoAccountPayload() -> Data {
         Data(
             """

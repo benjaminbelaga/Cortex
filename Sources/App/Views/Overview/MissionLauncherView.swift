@@ -73,8 +73,15 @@ struct MissionLauncherView: View {
 
             if let suggestion {
                 VStack(spacing: 7) {
+                    decisionProofLine(suggestion)
                     ForEach(Array(suggestion.candidates.enumerated()), id: \.element.id) { index, candidate in
                         candidateCard(candidate, recommended: index == 0)
+                    }
+                    if let wait = suggestion.waitSuggestion {
+                        waitLine(wait)
+                    }
+                    if !suggestion.ineligible.isEmpty {
+                        ineligibleList(suggestion.ineligible)
                     }
                 }
             }
@@ -114,10 +121,18 @@ struct MissionLauncherView: View {
                                 .font(theme.font(size: 7, weight: .bold))
                                 .foregroundStyle(theme.accentPrimary)
                         }
+                        if let multiplier = candidate.timeMultiplier, multiplier < 1 {
+                            Text("DISCOUNT ×\(multiplier, specifier: "%g")")
+                                .font(theme.font(size: 7, weight: .bold))
+                                .foregroundStyle(theme.statusHealthy)
+                        }
                     }
                     Text(candidateRouteDetail(candidate))
                         .font(theme.font(size: 9, weight: .medium))
                         .foregroundStyle(theme.textTertiary)
+                    Text(candidateProofDetail(candidate))
+                        .font(theme.font(size: 9, weight: .medium))
+                        .foregroundStyle(proofColor(candidate))
                 }
                 Spacer()
                 if let headroom = candidate.quotaHeadroomPercent {
@@ -147,6 +162,12 @@ struct MissionLauncherView: View {
                         .foregroundStyle(theme.textSecondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+                ForEach(Array(candidate.penalties.enumerated()), id: \.offset) { _, penalty in
+                    Text("⚠ \(penalty)")
+                        .font(theme.font(size: 9, weight: .medium))
+                        .foregroundStyle(theme.statusWarning)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
         }
         .padding(8)
@@ -160,6 +181,70 @@ struct MissionLauncherView: View {
             .compactMap { $0 }
             .filter { !$0.isEmpty }
             .joined(separator: " · ")
+    }
+
+    /// Where the quota behind the decision comes from and how old it is. A
+    /// missing age prints as unknown — never as a reassuring zero (audit V2 §3).
+    private func candidateProofDetail(_ candidate: MissionCandidate) -> String {
+        let source = candidate.statusSource ?? "source inconnue"
+        guard let age = candidate.statusAgeMinutes else { return "\(source) · âge du quota inconnu" }
+        return "\(source) · quota il y a \(Int(age.rounded())) min"
+    }
+
+    private func proofColor(_ candidate: MissionCandidate) -> Color {
+        guard let age = candidate.statusAgeMinutes else { return theme.textTertiary }
+        return age > 20 ? theme.statusWarning : theme.textTertiary
+    }
+
+    /// Age of the decision itself, plus the privacy scope it was taken under.
+    private func decisionProofLine(_ suggestion: MissionSuggestion) -> some View {
+        HStack(spacing: 6) {
+            if let generatedAt = suggestion.generatedAt {
+                Text("décision")
+                    .font(theme.font(size: 8, weight: .medium))
+                    .foregroundStyle(theme.textTertiary)
+                Text(generatedAt, style: .relative)
+                    .font(theme.font(size: 8, weight: .medium))
+                    .foregroundStyle(theme.textTertiary)
+            }
+            if let privacy = suggestion.privacy, !privacy.isEmpty {
+                Text("· \(privacy)")
+                    .font(theme.font(size: 8, weight: .medium))
+                    .foregroundStyle(theme.textTertiary)
+            }
+            if let context = suggestion.contextEstimate, context > 0 {
+                Text("· ≈\(context / 1000)k tokens")
+                    .font(theme.font(size: 8, weight: .medium))
+                    .foregroundStyle(theme.textTertiary)
+            }
+            Spacer()
+        }
+    }
+
+    /// The engine's own "wait for this window" advice — displayed, never acted on.
+    private func waitLine(_ wait: MissionWaitSuggestion) -> some View {
+        Text("Créneau favorable : \(wait.provider) \(wait.model)"
+            + (wait.opensInMinutes.map { " dans \($0) min" } ?? "")
+            + (wait.opensAtDisplay.map { " (\($0))" } ?? "")
+            + (wait.multiplier.map { " ×\($0)" } ?? ""))
+            .font(theme.font(size: 9, weight: .medium))
+            .foregroundStyle(theme.statusHealthy)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// Routes the engine rejected, with its reasons (audit V2 §12).
+    private func ineligibleList(_ routes: [MissionIneligibleRoute]) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text("Écartées")
+                .font(theme.font(size: 8, weight: .bold))
+                .foregroundStyle(theme.textTertiary)
+            ForEach(Array(routes.prefix(4).enumerated()), id: \.offset) { _, route in
+                Text("· \(route.provider) — \(route.reasons.joined(separator: " ; "))")
+                    .font(theme.font(size: 8, weight: .medium))
+                    .foregroundStyle(theme.textTertiary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
     }
 
     private func requestSuggestion() {

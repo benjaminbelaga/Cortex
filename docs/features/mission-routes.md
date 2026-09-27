@@ -17,6 +17,22 @@ route identity that is too small silently collapses rows in the UI.
 | `launch_plan.{executable,arguments,environment}` | structured argv, not shell text | `launchCommand(for:)` |
 | `launcher_command` | legacy rendered command (fallback when no plan) | launch fallback |
 
+### Provenance of a decision (audit V2 §12)
+
+| Field | Meaning | Displayed as |
+|---|---|---|
+| `generated_at` | when the engine produced the decision | age, relative style (`.relative`) |
+| `privacy` / `context_estimate` | scope the decision was taken under | header caption |
+| `status_source` / `status_age_min` | where the quota came from and its age | `source · quota il y a N min`; **absent = unknown, warning after 20 min** |
+| `time_multiplier` | tariff multiplier now (`< 1` = discount window) | `DISCOUNT ×N` badge |
+| `penalties` | engine penalties on the candidate | inside the existing "Pourquoi" disclosure |
+| `ineligible[]` | routes the engine rejected, with reasons | "Écartées" list — never recomputed |
+| `suggest_wait_until` | a window the engine says opens later | advice line only; Cortex never waits or launches on it |
+| `fallback_chain` | ordered fallbacks after the recommendation | available for the proof detail |
+
+Cortex **displays** all of the above and computes none of it (CORTEX_BIBLE §16). The accepted
+contract is R39 in `docs/claudebar-v2-design-requirements.md`.
+
 `account.id` / `account.alias` / `account.identity` are labels, not secrets: the
 router prints them in its own CLI and puts them in `launcher_command`
 (e.g. `opencode run go-2`). Cortex exposes `alias → identity → id` as the
