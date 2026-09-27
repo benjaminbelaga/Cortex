@@ -197,14 +197,23 @@ public final class RouterBackedProvider: AIProvider, MultiAccountProvider, Group
             // exists: publish the real quota instead of a frozen 100 %. It is
             // the Alibaba case — the router's bailian entry is a stale grade-C
             // console sync while `bl console` answers live (Ben 2026-09-26:
-            // "ça ne connecte pas"). Failure keeps the placeholder, never a
-            // fabricated reading.
+            // "ça ne connecte pas"). A FAILURE keeps the placeholder but must
+            // stay visible: the earlier `try?` swallowed the probe's own
+            // actionable message ("Connect the Alibaba console with bl auth
+            // login --console"), which is exactly how the row could look dead
+            // with no reason given (Ben 2026-09-28: "alibaba n'est pas visible").
             if let fallbackProbe = nativeFallbackProbe, Self.isManualOnly(provider.windows) {
-                if let live = try? await fallbackProbe().probe(), !live.quotas.isEmpty {
-                    accountSnapshots[activeAccount.accountId] = live
-                    snapshot = live
-                    lastError = nil
-                    return live
+                do {
+                    let live = try await fallbackProbe().probe()
+                    if !live.quotas.isEmpty {
+                        accountSnapshots[activeAccount.accountId] = live
+                        snapshot = live
+                        lastError = nil
+                        return live
+                    }
+                    publishFallbackFailure("The native fallback published no quota window.")
+                } catch {
+                    publishFallbackFailure(Self.fallbackMessage(for: error))
                 }
             }
             return activeSnapshot
@@ -411,6 +420,14 @@ public final class RouterBackedProvider: AIProvider, MultiAccountProvider, Group
         settingsRepository.setActiveAccountId(activeAccount.accountId, forProvider: id)
     }
 
+    /// Publishes a native-fallback failure on the active account's row. Called
+    /// from `refresh` AFTER `rebuildState`, so it targets the account that was
+    /// just resolved — writing it inside `rebuildState` would land on the
+    /// previous account and be invisible on the first refresh.
+    private func publishFallbackFailure(_ message: String) {
+        lastGroupErrors[activeAccount.accountId] = message
+    }
+
     /// Retains a previous reading for an account whose current cycle produced
     /// no window: every quota survives re-flagged stale, with the ORIGINAL
     /// capture date (a failed refresh must never reset the age badge).
@@ -512,6 +529,18 @@ public final class RouterBackedProvider: AIProvider, MultiAccountProvider, Group
     /// (no live meter) — the signal that a native probe should be preferred.
     static func isManualOnly(_ windows: [RouterQuotaWindow]) -> Bool {
         !windows.isEmpty && windows.allSatisfy { $0.kind.lowercased() == "manual" }
+    }
+
+    /// Turn a native-fallback failure into the line the row shows. `ProbeError`
+    /// is a `LocalizedError` whose `sessionExpired` case already folds in the
+    /// actionable hint ("Connect the Alibaba console with bl auth login
+    /// --console"), so its `localizedDescription` is exactly what the user must
+    /// read; the reason is therefore never blank.
+    static func fallbackMessage(for error: Error) -> String {
+        let description = error.localizedDescription
+        return description.isEmpty
+            ? "The live console reading failed for an unknown reason."
+            : description
     }
 
     static func quotaType(for kind: String) -> QuotaType {        let normalized = kind.lowercased()

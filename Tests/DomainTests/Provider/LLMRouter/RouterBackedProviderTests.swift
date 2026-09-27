@@ -175,6 +175,55 @@ struct RouterBackedProviderTests {
         #expect(!RouterBackedProvider.isManualOnly([]))
     }
 
+    @Test("a failed live fallback surfaces its actionable hint instead of a blank row")
+    func failedFallbackIsVisible() async throws {
+        // Ben 2026-09-28: "alibaba n'est pas visible". Root cause — the manual-only
+        // placeholder stayed on screen and the native `bl console` fallback failed
+        // (expired console session) while `try?` swallowed the probe's own
+        // actionable message. The reason must reach the row.
+        let provider = RouterBackedProvider(
+            id: "qwen",
+            name: "Alibaba Token Plan",
+            routerProviderId: "bailian_token_plan",
+            cliCommand: "qwen",
+            source: StaticRouterSource(value: Self.manualOnlySnapshot()),
+            settingsRepository: FakeMultiAccountSettings(),
+            nativeFallbackProbe: { FailingProbe() }
+        )
+
+        _ = try await provider.refresh()
+
+        let message = provider.lastGroupErrors[provider.activeAccount.accountId]
+        #expect(message?.contains("Session expired") == true)
+        #expect(message?.contains("bl auth login --console") == true)
+    }
+
+    @Test("a successful live fallback clears any previous failure message")
+    func successfulFallbackClearsMessage() async throws {
+        let provider = RouterBackedProvider(
+            id: "qwen",
+            name: "Alibaba Token Plan",
+            routerProviderId: "bailian_token_plan",
+            cliCommand: "qwen",
+            source: StaticRouterSource(value: Self.manualOnlySnapshot()),
+            settingsRepository: FakeMultiAccountSettings(),
+            nativeFallbackProbe: { LiveProbe() }
+        )
+
+        let refreshed = try await provider.refresh()
+
+        #expect(refreshed.quotas.first?.percentRemaining == 42)
+        #expect(provider.lastGroupErrors[provider.activeAccount.accountId] == nil)
+    }
+
+    @Test("the fallback message never comes back empty")
+    func fallbackMessageIsNeverEmpty() {
+        struct Opaque: Error {}
+        #expect(RouterBackedProvider.fallbackMessage(for: ProbeError.sessionExpired(hint: "h"))
+            == "Session expired. h")
+        #expect(!RouterBackedProvider.fallbackMessage(for: Opaque()).isEmpty)
+    }
+
     private func makeProvider(
         snapshot: RouterQuotaSnapshot,
         settings: FakeMultiAccountSettings = FakeMultiAccountSettings()
@@ -190,6 +239,22 @@ struct RouterBackedProviderTests {
     }
 
     private static let now = Date(timeIntervalSince1970: 1_787_263_200)
+
+    /// Alibaba's real shape: one `manual` window (stale grade-C console sync),
+    /// which is exactly what unlocks the native fallback.
+    private static func manualOnlySnapshot() -> RouterQuotaSnapshot {
+        RouterQuotaSnapshot(
+            generatedAt: now,
+            providers: [
+                "bailian_token_plan": RouterProviderQuota(
+                    providerId: "bailian_token_plan",
+                    windows: [RouterQuotaWindow(kind: "manual", remainingFraction: 0.999997)],
+                    source: "console-tokenplan-personal",
+                    capturedAt: now
+                )
+            ]
+        )
+    }
 
     private static func snapshot() -> RouterQuotaSnapshot {
         let measured = RouterQuotaWindow(kind: "five_hour", remainingFraction: 0.58)
@@ -225,6 +290,27 @@ private struct StaticRouterSource: RouterQuotaSnapshotProviding {
         forceRefresh: Bool,
         usageMaxAgeSeconds: TimeInterval
     ) async throws -> RouterQuotaSnapshot { value }
+}
+
+/// Mimics `QwenPlanUsageProbe` against an expired console session.
+private struct FailingProbe: UsageProbe {
+    func isAvailable() async -> Bool { true }
+    func probe() async throws -> UsageSnapshot {
+        throw ProbeError.sessionExpired(
+            hint: "Connect the Alibaba console with bl auth login --console, then refresh.")
+    }
+}
+
+/// Publishes a real window so the fallback is proven to win over the placeholder.
+private struct LiveProbe: UsageProbe {
+    func isAvailable() async -> Bool { true }
+    func probe() async throws -> UsageSnapshot {
+        UsageSnapshot(
+            providerId: "qwen",
+            quotas: [UsageQuota(percentRemaining: 42, quotaType: .session, providerId: "qwen")],
+            capturedAt: Date(timeIntervalSince1970: 1_787_263_200)
+        )
+    }
 }
 
 private final class FakeMultiAccountSettings: MultiAccountSettingsRepository, @unchecked Sendable {
