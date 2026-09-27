@@ -28,6 +28,11 @@ public enum LLMRuntimeInspector {
     public static func read() async -> LLMRuntimeSnapshot {
         await Task.detached(priority: .utility) {
             let home = FileManager.default.homeDirectoryForCurrentUser
+            // Guardian owns saturation; a stale snapshot reads as "no pressure"
+            // so the mission layer never claims "waiting for capacity" on old
+            // data. Read once here and shared by every mission row.
+            let guardian = GuardianStateReader.read()
+            let pressured = MissionAwareness.capacityPressured(guardian)
             return LLMRuntimeSnapshot(
                 activeMissions: await activeMissionCount(),
                 configuredHooks: hookCount(
@@ -36,7 +41,11 @@ public enum LLMRuntimeInspector {
                 sharedSkills: skillCount(
                     at: home.appendingPathComponent(".claude/skills", isDirectory: true)
                 ),
-                missions: MissionPlaneReader.read(home: home, limit: 5)
+                missions: MissionPlaneReader.read(
+                    home: home,
+                    limit: 5,
+                    capacityPressure: pressured
+                )
             )
         }.value
     }

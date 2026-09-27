@@ -92,5 +92,12 @@ public struct GuardianSnapshot: Sendable, Equatable {
             case rule, severity, message
             case autoDone = "auto_done"
         }
+
+        public init(rule: String, severity: String, message: String, autoDone: Bool) {
+            self.rule = rule
+            self.severity = severity
+            self.message = message
+            self.autoDone = autoDone
+        }
     }
 }

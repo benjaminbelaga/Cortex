@@ -180,6 +180,8 @@ struct SessionsCardView: View {
 
     /// One mission as the control plane proves it: worktree, objective, then the
     /// chain of steps actually evidenced. No state is inferred beyond the plane.
+    /// The trailing figure is the audit-V2 §7 awareness: a duration + an honest
+    /// state, never a "stuck" verdict (an absence of output is not proof).
     private func missionRow(_ mission: MissionProgress) -> some View {
         HStack(spacing: 6) {
             Image(systemName: "flag.checkered")
@@ -196,11 +198,37 @@ struct SessionsCardView: View {
                     .lineLimit(1)
             }
             Spacer(minLength: 0)
-            if let receiptAt = mission.receiptAt {
+            if let awareness = mission.awareness {
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text(awareness.state.label)
+                        .font(theme.font(size: 8, weight: .semibold))
+                        .foregroundStyle(awarenessColor(awareness.state))
+                        .lineLimit(1)
+                    if let since = awareness.sinceLaunch {
+                        Text(MissionAwareness.duration(since))
+                            .font(theme.font(size: 8, weight: .medium))
+                            .foregroundStyle(theme.textTertiary)
+                            .monospacedDigit()
+                    }
+                }
+                .help(awareness.detail)
+            } else if let receiptAt = mission.receiptAt {
                 Text(receiptAt, style: .relative)
                     .font(theme.font(size: 8, weight: .medium))
                     .foregroundStyle(theme.textTertiary)
             }
+        }
+    }
+
+    /// Colour carries the *confidence* of the state, not a verdict: a suspicion
+    /// is amber (look, do not act), a proven wait is neutral, a terminal state is
+    /// dim. Nothing renders red, because Cortex never claims a mission failed.
+    private func awarenessColor(_ state: MissionRuntimeState) -> Color {
+        switch state {
+        case .stalledSuspect: theme.statusColor(for: .warning)
+        case .running: theme.textSecondary
+        case .registered, .processStarted, .waitingCapacity, .terminal:
+            theme.textTertiary
         }
     }
 

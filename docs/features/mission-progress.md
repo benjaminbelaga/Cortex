@@ -78,3 +78,53 @@ carries the projection; its `help` text states that only proven steps are shown.
 
 Nothing on this card is computed by Cortex (CORTEX_BIBLE §16) — the steps are
 facts read from the plane.
+
+## Mission awareness (audit V2 §7)
+
+The plane records exactly four event types (`mission.created`, `lease.acquired`,
+`session.bound`, `mission.updated`) and **no progress events**. So §7's fuller
+vocabulary (`PROCESS_STARTED`, `RUNNING`, `WAITING_TOOL`, …) cannot be read from
+the plane — it has to be *derived* from what Cortex can honestly observe, and
+derived states must never outrun their evidence.
+
+`MissionAwareness` is that layer. It is a **pure function** of
+`(receiptAt, status, harness, capacityPressure, now)` — no store, no daemon, no
+clock read inside — and it yields:
+
+| State | Basis | Never claims |
+|---|---|---|
+| `registered` | no receipt | that anything launched |
+| `processStarted` | receipt at `t ≤ 0` | that work started (a receipt proves a launch, not a run) |
+| `waitingCapacity` | receipt **and** live saturation | that the mission is blocked on capacity (it is probable, not proven) |
+| `running` | receipt inside the window | progress |
+| `stalledSuspect` | receipt older than the window | **that the mission is stuck** (see below) |
+| `terminal(status)` | plane `status != active` | any further progress |
+
+### An absence of output is not proof of a stall (T23)
+
+There is deliberately no `STALLED` verdict — only `stalledSuspect`, whose detail
+says a long compile, download, reasoning turn or tool run is legitimate, so the
+hint is "go look", never "kill it". Cortex never stops a writing process.
+
+The window is `MissionAwareness.suspicionThreshold = 900 s`, **calibrated on a
+measured value**: `install-local.sh` (build + codesign + install + relaunch) took
+**~151 s** on 2026-09-27. A legitimate command can be silent for minutes, and a
+hint that fires during every normal rebuild is noise. The duration shown is
+always the *measured* age since the receipt — never estimated.
+
+### Capacity is Guardian's call
+
+`capacityPressured(snapshot)` reads Guardian and answers `true` only on a
+**fresh** snapshot showing pressure (`load_high` finding, `load1_per_core ≥ 6`,
+or `swap_used_pct ≥ 85`). A stale or missing snapshot answers `false`: claiming
+"waiting for capacity" on old data is worse than saying nothing. Guardian stays
+the single authority on machine saturation; Cortex only consumes it — the same
+thresholds the SwiftBar plugin used (rule 81: one alphabet, two surfaces).
+
+### Still not implemented, on purpose
+
+`REQUEST_OBSERVED`, `VERIFY_PENDING` and `COMPLETED_VERIFIED` remain absent.
+The first needs a usage-trace ↔ mission correlation that does not exist; the last
+two need a source that plays the *verification* role (tests, diff, human
+judgement). Inventing a state nothing can produce would be exactly the
+"reassuring zero" this projection exists to avoid.

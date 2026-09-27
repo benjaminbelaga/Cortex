@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import Domain
 @testable import Infrastructure
 
 @Suite("LLM runtime inspector")
@@ -126,5 +127,124 @@ struct LLMRuntimeInspectorTests {
         #expect(receipts.keys.sorted() == ["msn_broken", "msn_ok"])
         #expect(receipts["msn_ok"] ?? nil != nil)
         #expect((receipts["msn_broken"] ?? nil) == nil)
+    }
+
+    // MARK: - Mission awareness (audit V2 §7)
+
+    private let baseNow = Date(timeIntervalSince1970: 1_772_000_000)
+
+    @Test("no receipt means registered, never a running claim")
+    func awarenessWithoutReceiptIsRegistered() {
+        let a = MissionAwareness.awareness(
+            missionId: "msn_a", status: "active", receiptAt: nil,
+            runtime: "opencode", capacityPressure: false, now: baseNow)
+
+        #expect(a.state == .registered)
+        #expect(a.state.label == "enregistrée")
+    }
+
+    @Test("a fresh receipt proves the launch, not the work")
+    func awarenessJustLaunchedIsProcessStarted() {
+        let a = MissionAwareness.awareness(
+            missionId: "msn_a", status: "active", receiptAt: baseNow,
+            runtime: "opencode", capacityPressure: false, now: baseNow)
+
+        #expect(a.state == .processStarted)
+        #expect(a.sinceLaunch == 0)
+    }
+
+    @Test("a recent launch under pressure reads as waiting for capacity")
+    func awarenessRecentLaunchUnderPressureWaitsForCapacity() {
+        let a = MissionAwareness.awareness(
+            missionId: "msn_a", status: "active",
+            receiptAt: baseNow.addingTimeInterval(-120),
+            runtime: "codex", capacityPressure: true, now: baseNow)
+
+        #expect(a.state == .waitingCapacity)
+        #expect(a.sinceLaunch == 120)
+        #expect(a.detail.contains("saturée"))
+    }
+
+    @Test("a recent launch without pressure is simply running")
+    func awarenessRecentLaunchRuns() {
+        let a = MissionAwareness.awareness(
+            missionId: "msn_a", status: "active",
+            receiptAt: baseNow.addingTimeInterval(-30),
+            runtime: "claude", capacityPressure: false, now: baseNow)
+
+        #expect(a.state == .running)
+    }
+
+    @Test("a long silence is a suspicion, never a stall verdict (T23)")
+    func awarenessLongSilenceIsSuspicionNotVerdict() {
+        // 20 min of silence: past the 15 min window, so it is worth a look —
+        // yet the detail must say it can be a legitimate long compile/tool.
+        let a = MissionAwareness.awareness(
+            missionId: "msn_a", status: "active",
+            receiptAt: baseNow.addingTimeInterval(-1200),
+            runtime: "codex", capacityPressure: false, now: baseNow)
+
+        #expect(a.state == .stalledSuspect)
+        #expect(a.sinceLaunch == 1200)
+        #expect(a.detail.contains("compilation"))
+        #expect(!a.detail.lowercased().contains("bloqué"))
+    }
+
+    @Test("silence under the window is not flagged, even if long by most standards")
+    func awarenessBelowThresholdIsNotFlagged() {
+        // 8 min < 15 min window: a legitimate build (install-local.sh measured
+        // ~151 s) must not be nagged.
+        let a = MissionAwareness.awareness(
+            missionId: "msn_a", status: "active",
+            receiptAt: baseNow.addingTimeInterval(-480),
+            runtime: "claude", capacityPressure: false, now: baseNow)
+
+        #expect(a.state == .running)
+    }
+
+    @Test("a terminal mission reports its plane status, not progress")
+    func awarenessTerminalMission() {
+        let a = MissionAwareness.awareness(
+            missionId: "msn_a", status: "complete", receiptAt: baseNow,
+            runtime: "opencode", capacityPressure: true, now: baseNow)
+
+        #expect(a.state == .terminal("complete"))
+        #expect(a.state.label == "complete")
+    }
+
+    @Test("capacity pressure needs a fresh snapshot; stale or absent answers false")
+    func capacityPressureNeedsFreshSnapshot() {
+        #expect(MissionAwareness.capacityPressured(nil) == false)
+
+        let stale = GuardianSnapshot(
+            status: "red",
+            capturedAt: baseNow.addingTimeInterval(-3600),
+            metrics: GuardianSnapshot.Metrics(load1PerCore: 12),
+            findings: [GuardianSnapshot.Finding(rule: "load_high", severity: "red", message: "x", autoDone: false)],
+            isStale: true
+        )
+        #expect(MissionAwareness.capacityPressured(stale) == false)
+
+        let live = GuardianSnapshot(
+            status: "red",
+            capturedAt: baseNow,
+            metrics: GuardianSnapshot.Metrics(load1PerCore: 10.8),
+            findings: [GuardianSnapshot.Finding(rule: "load_high", severity: "red", message: "x", autoDone: false)],
+            isStale: false
+        )
+        #expect(MissionAwareness.capacityPressured(live) == true)
+    }
+
+    @Test("awareness rides along on the projection so the row can render it")
+    func projectionCarriesAwareness() {
+        let rows = [MissionPlaneRow(missionId: "msn_a", objective: "op", runtime: "codex")]
+        let projected = MissionPlaneReader.project(
+            rows,
+            receipts: ["msn_a": baseNow.addingTimeInterval(-1200)],
+            capacityPressure: false,
+            now: baseNow)
+
+        #expect(projected[0].awareness?.state == .stalledSuspect)
+        #expect(projected[0].isCapacityPressured == false)
     }
 }
