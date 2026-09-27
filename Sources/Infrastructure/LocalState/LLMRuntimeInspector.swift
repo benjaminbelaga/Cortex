@@ -7,11 +7,20 @@ public struct LLMRuntimeSnapshot: Sendable, Equatable {
     public let activeMissions: Int?
     public let configuredHooks: Int
     public let sharedSkills: Int
+    /// Proven mission chain from the control plane (`missiond`), newest first.
+    /// Read-only projection: Cortex never writes into the plane.
+    public let missions: [MissionProgress]
 
-    public init(activeMissions: Int?, configuredHooks: Int, sharedSkills: Int) {
+    public init(
+        activeMissions: Int?,
+        configuredHooks: Int,
+        sharedSkills: Int,
+        missions: [MissionProgress] = []
+    ) {
         self.activeMissions = activeMissions
         self.configuredHooks = configuredHooks
         self.sharedSkills = sharedSkills
+        self.missions = missions
     }
 }
 
@@ -26,7 +35,8 @@ public enum LLMRuntimeInspector {
                 ),
                 sharedSkills: skillCount(
                     at: home.appendingPathComponent(".claude/skills", isDirectory: true)
-                )
+                ),
+                missions: MissionPlaneReader.read(home: home, limit: 5)
             )
         }.value
     }

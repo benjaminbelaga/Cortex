@@ -134,6 +134,25 @@ struct SessionsCardView: View {
                 .help("Active missions: agentctl · hooks: ~/.claude/settings.json · skills: ~/.claude/skills. Cortex reads these authorities without duplicating their state.")
             }
 
+            if isExpanded, let runtime, !runtime.missions.isEmpty {
+                Divider().overlay(theme.glassBorder)
+                VStack(alignment: .leading, spacing: 5) {
+                    HStack(spacing: 6) {
+                        Text("Missions (plan de contrôle)")
+                            .font(theme.font(size: 9, weight: .semibold))
+                            .foregroundStyle(theme.textSecondary)
+                        Spacer(minLength: 0)
+                        Text("étapes prouvées")
+                            .font(theme.font(size: 8, weight: .medium))
+                            .foregroundStyle(theme.textTertiary)
+                    }
+                    ForEach(runtime.missions.prefix(3)) { mission in
+                        missionRow(mission)
+                    }
+                }
+                .help("Projection read-only de ~/.yoyaku/brain/brain.db (missiond). Seules les étapes que la plane ou un reçu peuvent prouver sont affichées — une mission sans bail, sans session liée et sans reçu reste « enregistrée », jamais « en cours ».")
+            }
+
             if isExpanded, !sessionMonitor.recentNotableEvents.isEmpty {
                 Divider().overlay(theme.glassBorder)
                 ForEach(Array(sessionMonitor.recentNotableEvents.prefix(6).enumerated()), id: \.offset) { _, event in
@@ -153,6 +172,40 @@ struct SessionsCardView: View {
     }
 
     // MARK: - Cells
+
+    /// One mission as the control plane proves it: worktree, objective, then the
+    /// chain of steps actually evidenced. No state is inferred beyond the plane.
+    private func missionRow(_ mission: MissionProgress) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: "flag.checkered")
+                .font(theme.font(size: 8, weight: .semibold))
+                .foregroundStyle(theme.textTertiary)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(mission.worktreeName ?? mission.missionId)
+                    .font(theme.font(size: 9, weight: .medium))
+                    .foregroundStyle(theme.textPrimary)
+                    .lineLimit(1)
+                Text(missionStepChain(mission))
+                    .font(theme.font(size: 8, weight: .medium))
+                    .foregroundStyle(theme.textTertiary)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 0)
+            if let receiptAt = mission.receiptAt {
+                Text(receiptAt, style: .relative)
+                    .font(theme.font(size: 8, weight: .medium))
+                    .foregroundStyle(theme.textTertiary)
+            }
+        }
+    }
+
+    private func missionStepChain(_ mission: MissionProgress) -> String {
+        var parts = mission.steps.map(\.label)
+        if let harness = mission.harness, !harness.isEmpty {
+            parts.append(harness)
+        }
+        return parts.joined(separator: " → ")
+    }
 
     private func harnessCell(
         _ name: String,
