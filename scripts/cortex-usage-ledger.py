@@ -20,6 +20,12 @@ Contrat de normalisation (audit V2, lot A) :
   24 dernières heures ».
 - **Coût** : `cost.kind` vaut `declared` (publié par la source) ou
   `unavailable` — un coût inconnu n'est pas 0.
+- **Compteur remis à zéro = événement, jamais delta négatif** (T07). Une baisse
+  de compteur cumulatif est bloquée à zéro et journalisée : au pire une reprise
+  est manquée, jamais une consommation fictive produite.
+- **Horloges** : les horodatages sont conservés en UTC et convertis une seule
+  fois, à la sortie ; un changement d'heure locale ne doit pas créer d'heure
+  inexistante ou répétée mal attribuée.
 
 Usage :
     python3 scripts/cortex-usage-ledger.py [--days 7] [--print]
@@ -85,6 +91,9 @@ class Ledger:
             name: defaultdict(blank_bucket) for name in ("today", "last24h", "last7d")
         }
         self.bounds = blank_windows(now, days)
+        # Anomalies worth surfacing, never silently swallowed: negative deltas
+        # in cumulative counters (T07) — one entry per (tool, field).
+        self.anomalies: list[dict] = []
 
     def add(self, tool: str, when: float, tokens: dict, cost: float | None) -> None:
         day = datetime.fromtimestamp(when).strftime("%Y-%m-%d")
@@ -92,6 +101,31 @@ class Ledger:
         for name, window in self.bounds.items():
             if window["start"] <= when < window["end"]:
                 add_tokens(self.windows[name][tool], tokens, cost)
+                self._guard_negative(name, tool, tokens, when)
+
+    def _guard_negative(self, window: str, tool: str, tokens: dict, when: float) -> None:
+        """A counter reset is an event, never negative consumption (T07).
+
+        When a source hands back a smaller value than the one already counted,
+        the alternative readings are "the counter wrapped/reset" (a start event
+        for a new tally) or "the source re-reported". Subtracting would invent
+        negative consumption, which is worse than the small clamp: at worst a
+        little usage is missed, never a fictional total produced. The value is
+        clamped to zero and the anomaly is recorded so it stays visible.
+        """
+        bucket = self.windows[window][tool]
+        for field in FIELDS:
+            raw = int(tokens.get(field, 0) or 0)
+            if raw < 0:
+                bucket[field] -= raw  # undo the negative that add_tokens applied
+                self.anomalies.append({
+                    "window": window,
+                    "tool": tool,
+                    "kind": "counter_reset",
+                    "field": field,
+                    "value": raw,
+                    "when": when,
+                })
 
 
 def status(state: str, **extra) -> dict:
@@ -232,8 +266,20 @@ def collect_opencode(ledger: Ledger, since: float) -> dict:
         connection = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
         connection.execute("PRAGMA query_only=ON")
         try:
+            # Filter in SQL, not in Python: a bare `SELECT time_created, data`
+            # materializes the whole 28 GB table before the first row is
+            # discarded. On 2026-09-27 that fetch was observed collapsing with
+            # `unable to open database file` on a DB whose free pages alone
+            # exceed the process's materialization headroom, and it re-read
+            # ~4.5k assistant rows per run to keep ~2.4k. The role lives under
+            # `data.role` (JSON), so `json_extract` is the contract-visible
+            # filter. `LIKE '%"tokens"%'` is only a cheap pre-narrow (guarded:
+            # tokens values are JSON objects, never strings).
             cursor = connection.execute(
-                "SELECT time_created, data FROM message WHERE time_created >= ?",
+                "SELECT time_created, data FROM message "
+                "WHERE time_created >= ? "
+                "AND json_extract(data, '$.role') = 'assistant' "
+                "AND data LIKE '%\"tokens\"%'",
                 (int((since - 86400) * 1000),),
             )
         except sqlite3.OperationalError as exc:
@@ -327,6 +373,7 @@ def main() -> int:
             for name, bounds in ledger.bounds.items()
         },
         "days": {day: serialize(tools) for day, tools in sorted(ledger.days.items())},
+        "anomalies": ledger.anomalies,
     }
 
     os.makedirs(LEDGER_DIR, exist_ok=True)

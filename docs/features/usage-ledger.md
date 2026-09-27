@@ -109,6 +109,45 @@ last stored day is not the last 24 h, T09 unknown cost is `unavailable` — not
 - The ledger is a **local observability artefact**, not a quota source. Quota
   stays owned by each provider's probe (and by llm-router for routing).
 
+## Counter resets are events (T07)
+
+A source that hands back a smaller cumulative value than the one already
+counted means the counter wrapped or the source re-reported — it never means
+"negative consumption". The collector clamps the value at zero and appends an
+entry to `anomalies`, which the ledger publishes:
+
+```json
+"anomalies": [
+  {"window": "last24h", "tool": "opencode", "kind": "counter_reset",
+   "field": "input", "value": -5, "when": 1774568000.0}
+]
+```
+
+The trade-off is deliberate: at worst a little usage is missed, never a
+fictional total produced (subtracting would silently buy back budget). An empty
+`anomalies` array is the healthy state.
+
+## What the collection must NOT do
+
+Measured on 2026-09-27 (`opencode.db` at 28.4 GB, 6.93 M pages, 4.78 M of them
+free):
+
+- **Never `SELECT` without filtering in SQL.** A bare
+  `SELECT time_created, data FROM message WHERE time_created >= ?` makes SQLite
+  materialize the matching rows before Python skips the non-assistant ones; at
+  this size the fetch was observed collapsing with `unable to open database
+  file`, and it re-read ≈4.5 k assistant rows per run to keep ≈2.4 k. The role
+  lives under `data.role` (JSON), so `json_extract(data, '$.role') = 'assistant'`
+  (plus a cheap `data LIKE '%"tokens"%'` pre-narrow) is the contract-visible
+  filter. A run now counts exactly the assistant rows.
+- **Never copy the database.** It has outgrown ordinary copy headroom: a plain
+  `cp` overflowed a 15-minute budget, and a 64 MiB file slice does not parse as
+  a standalone database, so "shrink it locally first" is not a shortcut.
+- **Reclaim with the owner's tooling.** 19.6 GB of that file is free pages
+  (`freelist_count`); compaction belongs to OpenCode's own maintenance, not to
+  Cortex — the collector only reads.
+
+
 ## In-app surface
 
 The overview's global panel ("Router usage & theoretical spend") carries a

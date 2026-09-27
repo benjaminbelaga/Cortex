@@ -151,6 +151,34 @@ class CollectorTests(unittest.TestCase):
         )
         self.assertEqual(total, 999)
 
+    # -- T07 ----------------------------------------------------------------- #
+
+    def test_counter_reset_is_an_event_not_negative_consumption(self) -> None:
+        # A cumulative counter that wraps/resets must never produce negative
+        # consumption (which would silently buy back budget). It is clamped to
+        # zero and recorded as an anomaly.
+        now = time.time()
+        self._write_opencode([
+            (now - 3600, {"role": "assistant", "tokens": {"input": 5, "output": 5}}),
+            (now - 60, {"role": "assistant", "tokens": {"input": -5, "output": 5}}),
+        ])
+        state = ledger.Ledger(now, 7)
+        ledger.collect_opencode(state, now - 7 * 86400)
+
+        bucket = state.windows["last24h"]["opencode"]
+        self.assertEqual(bucket["input"], 5)
+        self.assertEqual(bucket["output"], 10)
+        self.assertTrue(state.anomalies, "a reset must be visible, not swallowed")
+        self.assertEqual(state.anomalies[0]["kind"], "counter_reset")
+        self.assertEqual(state.anomalies[0]["field"], "input")
+
+    def test_a_clean_run_records_no_anomaly(self) -> None:
+        now = time.time()
+        self._write_opencode([(now - 60, {"role": "assistant", "tokens": {"input": 5, "output": 5}})])
+        state = ledger.Ledger(now, 7)
+        ledger.collect_opencode(state, now - 7 * 86400)
+        self.assertEqual(state.anomalies, [])
+
     # -- T09 ----------------------------------------------------------------- #
 
     def test_unknown_cost_is_unavailable_never_zero(self) -> None:
