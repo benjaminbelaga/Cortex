@@ -65,6 +65,11 @@ struct SessionsCardView: View {
                             live: nil, day: tracker.counts24h?.kimi)
                 harnessCell("Qwen", glyph: "Q", providerId: "qwen",
                             live: nil, day: tracker.counts24h?.qwen)
+                // OpenCode a un compteur vivant (Guardian) comme Claude/Codex —
+                // il était collecté mais jamais affiché dans cette rangée.
+                harnessCell("OpenCode", glyph: "{}", providerId: "opencode",
+                            live: tracker.liveOpencode, day: nil,
+                            windowLabel: "live")
                 harnessCell("tmux", glyph: "tmux", providerId: nil,
                             live: nil, day: tmuxCount, windowLabel: "sessions")
                 // cmux voisine tmux (même rangée, même famille terminal) au lieu

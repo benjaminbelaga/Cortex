@@ -43,6 +43,7 @@ public struct GuardianSnapshot: Sendable, Equatable {
         public let zombies: Int?
         public let liveClaude: Int?
         public let liveCodex: Int?
+        public let liveOpencode: Int?
         public let limited: Int?
 
         enum CodingKeys: String, CodingKey {
@@ -52,7 +53,32 @@ public struct GuardianSnapshot: Sendable, Equatable {
             case runnable, zombies
             case liveClaude = "live_claude"
             case liveCodex = "live_codex"
+            case liveOpencode = "live_opencode"
             case limited
+        }
+
+        public init(
+            swapUsedPct: Double? = nil,
+            ramFreePct: Double? = nil,
+            load1: Double? = nil,
+            load1PerCore: Double? = nil,
+            runnable: Int? = nil,
+            zombies: Int? = nil,
+            liveClaude: Int? = nil,
+            liveCodex: Int? = nil,
+            liveOpencode: Int? = nil,
+            limited: Int? = nil
+        ) {
+            self.swapUsedPct = swapUsedPct
+            self.ramFreePct = ramFreePct
+            self.load1 = load1
+            self.load1PerCore = load1PerCore
+            self.runnable = runnable
+            self.zombies = zombies
+            self.liveClaude = liveClaude
+            self.liveCodex = liveCodex
+            self.liveOpencode = liveOpencode
+            self.limited = limited
         }
     }
 

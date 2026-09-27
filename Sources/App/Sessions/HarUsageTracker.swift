@@ -18,6 +18,7 @@ public final class HarUsageTracker {
 
     public private(set) var liveClaude: Int?
     public private(set) var liveCodex: Int?
+    public private(set) var liveOpencode: Int?
     public private(set) var counts24h: HarTranscriptCounter.Counts?
     public private(set) var countsAt: Date?
     public private(set) var guardian: GuardianSnapshot?
@@ -62,6 +63,7 @@ public final class HarUsageTracker {
         guardian = GuardianStateReader.read(now: now)
         liveClaude = guardian?.metrics.liveClaude
         liveCodex = guardian?.metrics.liveCodex
+        liveOpencode = guardian?.metrics.liveOpencode
 
         let scanDue = lastScanAt.map { now.timeIntervalSince($0) >= Self.scanInterval } ?? true
         guard scanDue else { return }
