@@ -254,9 +254,35 @@ private struct ProviderDetailView: View {
                 TextField("Region", text: $consoleRegion)
                 Text("Connection: bl auth login --console --console-site \(consoleSite) --config \(bailianProfile)")
                     .font(.caption).textSelection(.enabled)
-                Button("Save and read quotas") {
-                    Task { await catalog.configureQwen(profile: bailianProfile, site: consoleSite, region: consoleRegion) }
+                HStack(spacing: 10) {
+                    Button("Save and read quotas") {
+                        Task { await catalog.configureQwen(profile: bailianProfile, site: consoleSite, region: consoleRegion) }
+                    }
+                    Button("Connect console") {
+                        Task {
+                            await catalog.connectAlibaba(
+                                profile: bailianProfile, site: consoleSite, region: consoleRegion)
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
+                if let state = catalog.alibabaEnrolmentState(profile: bailianProfile) {
+                    Text(Self.alibabaStateLabel(state))
+                        .font(.caption)
+                        .foregroundStyle(Self.alibabaStateIsFailure(state) ? theme.statusWarning : theme.statusHealthy)
+                }
+                // Permanent fix for the recurring browser login: an OpenAPI
+                // AK/SK lets `bl` renew its own console session token instead
+                // of expiring until a human logs in again. Without it the rail
+                // still works but falls back to a browser login on every expiry.
+                Link(destination: URL(string: "https://ram.console.aliyun.com/manage/ak")!) {
+                    Text("Create a permanent AccessKey (RAM) → stops the recurring browser login")
+                        .font(.caption)
+                }
+                Text("Then run: bl auth login --open-api --access-key-id … --access-key-secret …")
+                    .font(.caption2)
+                    .foregroundStyle(theme.textTertiary)
+                    .textSelection(.enabled)
                 if let error = catalog.proposalError { Text(error).font(.caption).foregroundStyle(theme.statusWarning) }
             }
         }.onAppear {
@@ -265,6 +291,48 @@ private struct ProviderDetailView: View {
             consoleSite = config["consoleSite"] ?? "international"
             consoleRegion = config["consoleRegion"] ?? "ap-southeast-1"
         }
+    }
+
+    /// Verbatim mapping of the typed enrolment outcome — no message-text
+    /// heuristics. Kept local so the settings card never needs CatalogStrings.
+    private static func alibabaStateLabel(_ state: EnrolmentState) -> String {
+        switch state {
+        case .profileDetected: return "Profile detected"
+        case .authRequired(_, let reason):
+            switch reason {
+            case .neverAuthenticated: return "Connect the Alibaba console"
+            case .refreshTokenExpired: return "Session expired — reconnect"
+            case .credentialsRevoked: return "Credentials revoked — reconnect"
+            case .explicitReconnect: return "Reconnecting…"
+            }
+        case .loginInProgress(_, let stage):
+            switch stage {
+            case .launching: return "Opening terminal…"
+            case .waitingForUser: return "Waiting for browser login…"
+            case .pollingIdentity: return "Verifying identity…"
+            }
+        case .identityConfirmed: return "Connected — identity verified"
+        case .quotaPending: return "Connected · quota pending"
+        case .quotaReceived: return "Connected · quota received"
+        case .failed(_, let error):
+            switch error {
+            case .dependencyMissing(let tool): return "Missing \(tool) — install the Bailian CLI"
+            case .timeout: return "Timed out — login not observed"
+            case .identityMismatch(let expected, let actual):
+                return "Identity mismatch: expected \(expected ?? "?"), got \(actual)"
+            case .loginFailed(let code, _): return "Login failed (exit \(code))"
+            case .cancelled: return "Cancelled"
+            case .profileCollision(let path): return "Profile already in use: \(path)"
+            case .registryRejected(let reason): return "Rejected: \(reason)"
+            case .underlying(let message): return message
+            }
+        case .cancelled: return "Cancelled — nothing was saved"
+        }
+    }
+
+    private static func alibabaStateIsFailure(_ state: EnrolmentState) -> Bool {
+        if case .failed = state { return true }
+        return false
     }
 
     private var backButton: some View {

@@ -116,7 +116,7 @@ struct AlibabaConfigCard: View {
                 .onChange(of: alibabaRegion) { _, newValue in
                     settings.alibaba.setAlibabaRegion(newValue)
                     Task {
-                        await monitor.refresh(providerId: "alibaba")
+                        await monitor.refresh(providerId: "qwen")
                     }
                 }
             }
@@ -312,7 +312,7 @@ struct AlibabaConfigCard: View {
         }
 
         AppLog.credentials.info("Testing Alibaba connection via provider refresh")
-        await monitor.refresh(providerId: "alibaba")
+        await monitor.refresh(providerId: "qwen")
 
         if let error = monitor.provider(for: "alibaba")?.lastError {
             AppLog.credentials.error("Alibaba connection test failed: \(error.localizedDescription)")

@@ -145,6 +145,41 @@ struct AccountEnrolmentServiceTests {
         #expect(tool == "mystery-tool")
     }
 
+    // MARK: - Alibaba routing
+
+    @Test("A bailian profile routes to the Alibaba adapter (providerId qwen)")
+    func bailianProfileRoutesToAlibabaAdapter() async {
+        let alibaba = ScriptedAdapter(providerId: "qwen", script: [
+            .profileDetected(descriptor(providerId: "qwen")),
+            .quotaPending(descriptor(providerId: "qwen")),
+        ])
+        let service = AccountEnrolmentService(
+            claudeAdapter: ScriptedAdapter(providerId: "claude", script: []),
+            codexAdapter: ScriptedAdapter(providerId: "codex", script: []),
+            alibabaAdapter: alibaba
+        )
+        let qwen = descriptor(providerId: "qwen")
+        let states = await Self.drain(service.enrol(intent: EnrolmentIntent(
+            descriptor: qwen, targetSource: .native
+        )))
+        #expect(await alibaba.state.enrolCalls == 1)
+        #expect(states.count == 2)
+    }
+
+    @Test("verifyIdentity resolves a bailian profile to the qwen adapter (not the default reject)")
+    func verifyIdentityRoutesBailianProfile() async {
+        let service = AccountEnrolmentService(
+            claudeAdapter: ScriptedAdapter(providerId: "claude", script: []),
+            codexAdapter: ScriptedAdapter(providerId: "codex", script: []),
+            alibabaAdapter: ScriptedAdapter(providerId: "qwen", script: [])
+        )
+        // The scripted adapter returns a canned identity; receiving it proves a
+        // bailian profile resolved to the qwen adapter instead of the
+        // `default: return nil` path used for profiles no adapter owns.
+        let identity = await service.verifyIdentity(profile: .bailianProfile("cortex-monitor"))
+        #expect(identity?.email == "read@example.com")
+    }
+
     // MARK: - State plumbing
 
     @Test("enrol() yields every adapter state in order and mirrors states[uuid]")

@@ -11,6 +11,7 @@ public extension ProviderAccountConfig {
     enum DescriptorKeys {
         public static let claudeConfigDir = "claudeConfigDir"
         public static let codexHome = "codexHome"
+        public static let bailianProfile = "bailianProfile"
         public static let routerAlias = "routerAlias"
         public static let uuid = "accountUUID"
         public static let source = "source"
@@ -37,6 +38,8 @@ public extension ProviderAccountConfig {
             profile = .codexHome(codex)
         } else if let claude = pc[DescriptorKeys.claudeConfigDir] {
             profile = .claudeConfigDir(claude)
+        } else if let bailian = pc[DescriptorKeys.bailianProfile] {
+            profile = .bailianProfile(bailian)
         } else if let alias = pc[DescriptorKeys.routerAlias] {
             profile = .routerAlias(alias)
         } else {
@@ -100,12 +103,15 @@ public extension ProviderAccountConfig {
         // Clear the profile keys this projection owns, then set the current one.
         pc[DescriptorKeys.claudeConfigDir] = nil
         pc[DescriptorKeys.codexHome] = nil
+        pc[DescriptorKeys.bailianProfile] = nil
         // routerAlias is preserved when it is the profile; otherwise cleared.
         switch descriptor.profile {
         case let .claudeConfigDir(path):
             pc[DescriptorKeys.claudeConfigDir] = path
         case let .codexHome(path):
             pc[DescriptorKeys.codexHome] = path
+        case let .bailianProfile(name):
+            pc[DescriptorKeys.bailianProfile] = name
         case let .routerAlias(alias):
             pc[DescriptorKeys.routerAlias] = alias
         case .none:

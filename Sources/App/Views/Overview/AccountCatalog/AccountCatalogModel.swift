@@ -433,6 +433,36 @@ final class AccountCatalogModel {
         catch { proposalError = error.localizedDescription }
     }
 
+    /// Save the console settings AND run the verified Alibaba login flow
+    /// (`bl auth login --console` → poll `bl auth status` → identity read-back
+    /// → refresh). This is the in-app "Connecter" path for Alibaba — it is the
+    /// only way a person using Cortex authenticates the console without
+    /// copy-pasting a cookie. Reuses the persisted descriptor's stable UUID so
+    /// repeated connects observe one state slot.
+    func connectAlibaba(profile: String, site: String, region: String) async {
+        await configureQwen(profile: profile, site: site, region: region)
+        let existing = existingDescriptors(forProvider: "qwen")
+            .first { $0.profile == .bailianProfile(profile) }
+        let descriptor = existing ?? AccountDescriptor(
+            providerId: "qwen", label: "Token Plan",
+            profile: .bailianProfile(profile), source: .native
+        )
+        start(EnrolmentIntent(
+            descriptor: descriptor,
+            expectedIdentityEmail: existing?.verifiedIdentity?.email,
+            targetSource: .native
+        ))
+    }
+
+    /// Live enrolment state for the Alibaba account bound to `profile`, so the
+    /// settings card can surface the typed outcome in place. nil until a
+    /// connect has been started for that profile.
+    func alibabaEnrolmentState(profile: String) -> EnrolmentState? {
+        guard let descriptor = existingDescriptors(forProvider: "qwen")
+            .first(where: { $0.profile == .bailianProfile(profile) }) else { return nil }
+        return states[descriptor.uuid]
+    }
+
     func cancel(uuid: UUID) {
         enrolmentService.cancel(uuid: uuid)
     }

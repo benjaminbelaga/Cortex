@@ -8,6 +8,9 @@ public enum ProfileReference: Sendable, Equatable {
     case claudeConfigDir(String)
     /// An isolated Codex home (`CODEX_HOME`).
     case codexHome(String)
+    /// A `bl` config profile (`~/.bailian/config.json` top-level key) for
+    /// Alibaba/Bailian. Not a directory — identified by its profile name.
+    case bailianProfile(String)
     /// An alias in the llm-router registry (router mode).
     case routerAlias(String)
     /// No local profile yet (e.g. a detected-but-unconfirmed candidate).
@@ -17,8 +20,14 @@ public enum ProfileReference: Sendable, Equatable {
     public var localPath: String? {
         switch self {
         case let .claudeConfigDir(path), let .codexHome(path): return path
-        case .routerAlias, .none: return nil
+        case .bailianProfile, .routerAlias, .none: return nil
         }
+    }
+
+    /// The `bl` config profile name, when this reference is an Alibaba profile.
+    public var bailianProfileName: String? {
+        if case let .bailianProfile(name) = self { return name }
+        return nil
     }
 }
 
@@ -44,6 +53,8 @@ public enum IdentityVerificationMethod: String, Sendable, Equatable, Codable {
     case claudeAuthStatus
     case codexAppServer
     case routerRegistry
+    /// `bl auth status --output json` — Alibaba/Bailian workspace principal.
+    case alibabaConsole
 }
 
 /// An identity that was actually read back from an authenticated tool.

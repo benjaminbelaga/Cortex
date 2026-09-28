@@ -11,12 +11,32 @@ import Infrastructure
 /// AFTER `identityConfirmed` is reached.
 public struct AppleScriptTerminalLoginLauncher:
     TerminalLoginLaunching,
-    CodexTerminalLoginLaunching
+    CodexTerminalLoginLaunching,
+    AlibabaTerminalLoginLaunching
 {
     public init() {}
 
     private static func quote(_ value: String) -> String {
         "'" + value.replacingOccurrences(of: "'", with: "'\"'\"'") + "'"
+    }
+
+    // MARK: - Alibaba (bl)
+
+    /// `bl` writes its console session into the named config profile
+    /// (`~/.bailian/config.json` → `--config <name>`). The site decides which
+    /// console is opened (international vs China mainland).
+    public func launchLoginShell(profile: String, site: String) async -> Bool {
+        let cmd = "bl auth login --console --console-site " + Self.quote(site)
+            + (profile == "default" ? "" : " --config " + Self.quote(profile))
+        let result = await TerminalCommandLauncher.open(
+            cmd,
+            successMessage: "Terminal ouvert · connectez-vous puis revenez"
+        )
+        return result.launched
+    }
+
+    public func launchReconnectShell(profile: String, site: String) async -> Bool {
+        await launchLoginShell(profile: profile, site: site)
     }
 
     // MARK: - Claude

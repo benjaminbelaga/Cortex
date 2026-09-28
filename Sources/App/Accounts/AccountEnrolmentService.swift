@@ -16,8 +16,8 @@ public final class AccountEnrolmentService {
     /// reads this directly to render the right row's state.
     public private(set) var states: [UUID: EnrolmentState] = [:]
 
-    /// Adapters indexed by providerId. Constructed with the Claude and Codex
-    /// adapters by default; new tools plug in here.
+    /// Adapters indexed by providerId. Constructed with the Claude, Codex and
+    /// Alibaba adapters by default; new tools plug in here.
     private let adaptersByProvider: [String: any AccountAdapter]
 
     private let onVerified: @MainActor (AccountDescriptor) async throws -> Date?
@@ -39,12 +39,17 @@ public final class AccountEnrolmentService {
         codexAdapter: any AccountAdapter = CodexAccountAdapter(
             authStatusProbe: CodexAuthStatusRPCProbe(),
             terminalLauncher: AppleScriptTerminalLoginLauncher()
+        ),
+        alibabaAdapter: any AccountAdapter = AlibabaAccountAdapter(
+            authStatusProbe: AlibabaAuthStatusCLIProbe(),
+            terminalLauncher: AppleScriptTerminalLoginLauncher()
         )
     ) {
         self.onVerified = onVerified
         var adapters: [String: any AccountAdapter] = [:]
         adapters[claudeAdapter.providerId] = claudeAdapter
         adapters[codexAdapter.providerId] = codexAdapter
+        adapters[alibabaAdapter.providerId] = alibabaAdapter
         self.adaptersByProvider = adapters
     }
 
@@ -186,6 +191,7 @@ public final class AccountEnrolmentService {
         switch profile {
         case .codexHome: providerId = "codex"
         case .claudeConfigDir: providerId = "claude"
+        case .bailianProfile: providerId = "qwen"
         default: return nil
         }
         if let claude = adaptersByProvider[providerId] {

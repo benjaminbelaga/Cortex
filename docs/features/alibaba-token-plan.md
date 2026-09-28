@@ -1,6 +1,6 @@
 # Alibaba Token Plan
 
-There is exactly **one** Alibaba subscription in the roster: the **Token Plan Personal**. Everything else that once looked like a second Alibaba connection was a manual sync that had stopped — the naming across the four surfaces never quite agreed, and this page is the one place where they are pinned together.
+There is exactly **one** Alibaba subscription in the roster: the **Token Plan Personal**. Everything else that once looked like a second Alibaba connection was a manual sync that had stopped — the naming across the surfaces never quite agreed, and this page is the one place where they are pinned together.
 
 ---
 
@@ -11,39 +11,50 @@ There is exactly **one** Alibaba subscription in the roster: the **Token Plan Pe
 | Cortex provider descriptor | `qwen` | Stable id; the row's internal key. |
 | Cortex display name | `Alibaba Token Plan` | What the user reads. |
 | llm-router roster id | `bailian_token_plan` | What the router reports and routes on. |
-| OpenCode provider key | `bailian-token-plan` | `~/.config/opencode` provider name, base `token-plan.ap-southeast-1.maas.aliyuncs.com`. |
+| `bl` config profile | `cortex-monitor` (this Mac) | Top-level key in `~/.bailian/config.json`. |
 | Console (source of truth for quota) | [Token Plan Personal](https://modelstudio.console.alibabacloud.com/ap-southeast-1/subscription/token-plan/personal) | Where the numbers live. |
 
-`RouterProviderIdMap` maps `qwen → bailian_token_plan` on purpose. The old `qwen_personal_pro` id was a dead manual sync (2026-08-17); the mapping is asserted by `RouterProviderIdMapTests` and must not be "corrected" back.
+`RouterProviderIdMap` maps `qwen → bailian_token_plan` on purpose. The old `qwen_personal_pro` id was a dead manual sync (2026-08-17); the mapping is asserted by `RouterProviderIdMapTests` and must not be "corrected" back. The old `alibaba` provider id is likewise dead — `AlibabaProvider` is never constructed in production, and any code that refreshed `providerId: "alibaba"` was refreshing a row that does not exist (fixed 2026-09-28).
 
 ## How Cortex gets the quota
 
 `ProviderDescriptor.qwenPlan` declares a dual runtime — `.routerOrNative(RouterBacking(routerProviderId: "bailian_token_plan"))` — so the row reads from whichever lane is live:
 
-1. **Router snapshot (preferred, when llm-router is up).** The router owns quota truth for a routed lane; Cortex displays it and never recomputes it locally.
-2. **Native probe — `AlibabaUsageProbe`** — used when the router is absent:
-   - **API key** (`alibaba-api-key` in the Keychain) → `fetchWithApiKey`, or
-   - **console cookie** (manual paste, or extracted from a browser) → `fetchWithCookie`.
+1. **Router snapshot (preferred, when llm-router is up).** The router owns quota truth for a routed lane; Cortex displays it and never recomputes it locally. The router entry is refreshed hourly by the llm-router rail (`scripts/refresh-alibaba-token-plan.py` + LaunchAgent `com.yoyaku.llm-router.alibaba-token-plan`), which reads the console **read-only** and pushes the number.
+2. **Native probe — `QwenPlanUsageProbe`** — used when the router only publishes a stale `manual` placeholder. It runs the official console command:
+   ```
+   bl console call --api "zeldaHttp.apikeyMgr./tokenplan/personal/api/v2/usage" \
+     --data '{}' --output json
+   ```
+   The console session token (`~/.bailian/config.json`) is used — **never the inference key**. A dead console session surfaces as `ProbeError.sessionExpired` with an actionable hint on the row (it was silently swallowed before 2026-09-28; see C13).
 
-`isAvailable()` returns true only when one of those credentials exists. The region comes from `AlibabaRegion` (default international; `---ap-southeast-1` for the Token Plan console).
+## Connecting the console — in-app (the durable path)
 
-### What is deliberately not a source
+Alibaba is the first provider with a **CLI-auth adapter** (`AlibabaAccountAdapter`) rather than a config card alone. Settings → the `qwen` provider → **Connect console**:
 
-`bl usage token-plan` (the Bailian CLI) prints **no numeric quota** for a Token Plan Personal account — it answers *"may be unlimited; verify in the console"*. It is therefore not wired as a probe: a source that cannot produce a number would only add a probe that always "succeeds" with nothing to show. The number, when it exists, comes from the console (cookie/API-key path above) or from the router.
+1. saves the console profile/site/region,
+2. launches `bl auth login --console --console-site <site> [--config <profile>]` in the terminal,
+3. polls `bl auth status --output json` until the login is observed,
+4. reads back the **workspace principal** (`ws-…` from the API key's base-URL host, else the masked console token) as the verified identity,
+5. refreshes the row.
 
-## Connecting the console
+The identity is a real read-back, never a typed email: `bl` exposes no email, so the account-scoped workspace id is the honest principal. A mismatch against a previously verified principal fails closed.
 
-When no credential is present the row has no windows, and the detail sheet says so and offers the two ways in:
+### The permanent fix for the recurring browser login
 
-- **Open console** — the sheet's footer button opens the Token Plan console so the user can sign in; per-provider web consoles live here, not on the dashboard's `Dashboard` button (which opens Cortex's own window).
-- **Settings → Alibaba** (`AlibabaConfigCard`) — paste the console cookie (or an API key) once; it is stored in the Keychain, never in `settings.json`.
+The console token is a **browser session token**; `bl` can renew it itself (`refreshAccessToken` → `POST /modelstudio/cli/generateAccessToken`) **only when an Alibaba Cloud OpenAPI AK/SK is configured**. Without it, every expiry means a manual browser login. The settings pane therefore surfaces the one-time gesture:
 
-Auto browser-cookie extraction is best-effort and depends on the browser cookie store being readable; the manual paste is the reliable path and the reason the card exists.
+- Create an AccessKey: <https://ram.console.aliyun.com/manage/ak>
+- `bl auth login --open-api --access-key-id … --access-key-secret …`
+
+After that, the CLI renews its own console session indefinitely and the hourly rail never needs a human.
 
 ## Failure modes
 
 | Symptom | Cause | Handling |
 |---|---|---|
-| Row present, no quota windows | No credential enrolled (no key, no cookie) | Sheet header: *"No quota data yet — open the console to connect this provider."* + `Open console` |
-| Cookie expired | Console session ended | Re-paste in `AlibabaConfigCard` |
-| Router mode unavailable | llm-router down | Falls back to the native probe; degradation is carried by the row, not an exception in composition |
+| Row present, no quota windows + `stale` | Console session dead | Row shows the `sessionExpired` hint; **Connect console** re-authenticates; the llm-router rail alerts within the hour |
+| "Connecter" does nothing | (was) no adapter for `qwen` | Fixed: `AlibabaAccountAdapter` registered for `qwen` (2026-09-28) |
+| Settings changes had no effect | (was) refreshed the dead `alibaba` id | Fixed: card refreshes `qwen` |
+| Router mode unavailable | llm-router down | Falls back to the native `bl console` probe; degradation is carried by the row |
+| Browser login keeps returning | No OpenAPI AK/SK | Configure AK/SK once (link above) → CLI self-renews |
