@@ -195,6 +195,80 @@ class CollectorTests(unittest.TestCase):
         claude_serialized = ledger.serialize(claude_state.windows["last24h"])
         self.assertEqual(claude_serialized["claude"]["cost"]["kind"], "unavailable")
 
+    # -- T10 ----------------------------------------------------------------- #
+
+    def _write_codex(self, records: list[dict]) -> None:
+        directory = os.path.join(self.home, ".codex", "sessions", "2026", "09", "28")
+        os.makedirs(directory, exist_ok=True)
+        with open(os.path.join(directory, "rollout.jsonl"), "w") as handle:
+            for record in records:
+                handle.write(json.dumps(record) + "\n")
+
+    @staticmethod
+    def _codex(timestamp: float, **usage) -> dict:
+        return {
+            "type": "token_usage_record",
+            "timestamp": iso(timestamp),
+            "payload": {
+                "session_id": "ses", "turn_id": "turn", "response_id": "resp",
+                "usage": usage,
+            },
+        }
+
+    def test_codex_inclusive_counters_are_normalized_not_double_counted(self) -> None:
+        # Live Codex shape: input_tokens INCLUDES cached_input_tokens and
+        # output_tokens INCLUDES reasoning_output_tokens. Adding them again would
+        # roughly double the figure (audit V2 T10).
+        now = time.time()
+        self._write_codex([self._codex(
+            now - 120,
+            input_tokens=34027, cached_input_tokens=33664,
+            output_tokens=312, reasoning_output_tokens=94,
+            total_tokens=34339,
+        )])
+        state = ledger.Ledger(now, 7)
+        status = ledger.collect_codex(state, now - 7 * 86400)
+        self.assertEqual(status["status"], "ok")
+        bucket = state.windows["last24h"]["codex"]
+        # Disjoint: input excludes cache, output excludes reasoning.
+        self.assertEqual(bucket["input"], 34027 - 33664)
+        self.assertEqual(bucket["output"], 312 - 94)
+        self.assertEqual(bucket["cache_read"], 33664)
+        self.assertEqual(bucket["reasoning"], 94)
+        # The sum now equals the producer's own total, never input+output+cache.
+        total = sum(bucket[field] for field in ledger.FIELDS)
+        self.assertEqual(total, 34339)
+        # The raw producer numbers survive for the audit trail.
+        self.assertEqual(bucket["native_input"], 34027)
+        self.assertEqual(bucket["native_output"], 312)
+
+    def test_codex_normalization_never_goes_negative(self) -> None:
+        # A producer quirk (cached > input) must clamp to zero, never invent
+        # negative consumption.
+        now = time.time()
+        self._write_codex([self._codex(
+            now - 60, input_tokens=10, cached_input_tokens=50,
+            output_tokens=5, reasoning_output_tokens=99,
+        )])
+        state = ledger.Ledger(now, 7)
+        ledger.collect_codex(state, now - 7 * 86400)
+        bucket = state.windows["last24h"]["codex"]
+        self.assertEqual(bucket["input"], 0)
+        self.assertEqual(bucket["output"], 0)
+
+    def test_serialize_publishes_the_inclusion_split(self) -> None:
+        now = time.time()
+        self._write_codex([self._codex(
+            now - 60, input_tokens=100, cached_input_tokens=80,
+            output_tokens=50, reasoning_output_tokens=20,
+        )])
+        state = ledger.Ledger(now, 7)
+        ledger.collect_codex(state, now - 7 * 86400)
+        serialized = ledger.serialize(state.windows["last24h"])["codex"]
+        self.assertEqual(serialized["input"], 20)
+        self.assertEqual(serialized["cache_read"], 80)
+        self.assertEqual(serialized["native_input"], 100)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

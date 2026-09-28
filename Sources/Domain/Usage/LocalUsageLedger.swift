@@ -51,9 +51,17 @@ public struct LocalUsageBucket: Codable, Sendable, Equatable {
     public let reasoning: Int
     public let messages: Int
     public let cost: LocalUsageCost?
+    /// The producer's own input/output, before the ledger made the fields
+    /// disjoint (audit V2 T10). For Codex the raw `input` already contains the
+    /// cache read and the raw `output` already contains reasoning; these let a
+    /// reader see the original split instead of trusting a total. Absent on
+    /// schema ≤2 files.
+    public let nativeInput: Int?
+    public let nativeOutput: Int?
 
     public init(input: Int, output: Int, cacheRead: Int, cacheCreation: Int,
-                reasoning: Int, messages: Int, cost: LocalUsageCost?) {
+                reasoning: Int, messages: Int, cost: LocalUsageCost?,
+                nativeInput: Int? = nil, nativeOutput: Int? = nil) {
         self.input = input
         self.output = output
         self.cacheRead = cacheRead
@@ -61,6 +69,8 @@ public struct LocalUsageBucket: Codable, Sendable, Equatable {
         self.reasoning = reasoning
         self.messages = messages
         self.cost = cost
+        self.nativeInput = nativeInput
+        self.nativeOutput = nativeOutput
     }
 
     public var totalTokens: Int { input + output + cacheRead + cacheCreation + reasoning }

@@ -11,7 +11,15 @@ Contrat de normalisation (audit V2, lot A) :
   dédup la consommation est comptée plusieurs fois. Les entrées sans les deux
   identifiants sont conservées distinctes (jamais fusionnées au hasard).
 - **Codex** : événements `token_usage_record`, dédupliqués par
-  `(session_id, turn_id, response_id)`.
+  `(session_id, turn_id, response_id)`. **Contrats d'inclusion (T10)** : chez
+  Codex, `input_tokens` **inclut** `cached_input_tokens` et `output_tokens`
+  **inclut** `reasoning_output_tokens` (vérifié live : `input=34027` avec
+  `cached=33664`, `output=312` avec `reasoning=94`, `total=34339=input+output`).
+  Les champs stockés sont donc rendus **disjoints** (input −= cached,
+  output −= reasoning, plancher à zéro) pour que la somme ne double jamais ; les
+  valeurs brutes du producteur restent lisibles dans `native_input` /
+  `native_output`. Claude (`input_tokens`/`cache_*` disjoints) et OpenCode
+  (`input`/`output` disjoints de `cache.read`) sont stockés tels quels.
 - **OpenCode** : agrégation **par message** (et non par session) pour dater
   l'usage réel ; `time_created` par message, tokens/cost dans la colonne JSON.
   Une source illisible produit un **statut**, jamais un zéro rassurant.
@@ -45,7 +53,7 @@ from datetime import datetime, timedelta, timezone
 HOME = os.path.expanduser("~")
 LEDGER_DIR = os.path.join(HOME, ".claudebar", "usage")
 LEDGER_PATH = os.path.join(LEDGER_DIR, "ledger.json")
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 TOOLS = ("claude", "codex", "opencode")
 FIELDS = ("input", "output", "cache_read", "cache_creation", "reasoning")
@@ -55,17 +63,80 @@ PERMISSION_DENIED, UNSUPPORTED_SCHEMA, STALE = "permission_denied", "unsupported
 
 
 # --------------------------------------------------------------------------- #
+# Inclusion contracts (audit V2 T10)
+# --------------------------------------------------------------------------- #
+#
+# A token field is only honest if its INCLUSION is declared: "input" means the
+# non-cached input, or the total input? Every source answers differently, and a
+# collector that reads two of them at once must normalize or it double-counts.
+#
+# Measured live 2026-09-28:
+#   Claude   input_tokens EXCLUDES cache_read/cache_creation → already disjoint
+#   Codex    input_tokens INCLUDES cached_input_tokens
+#            output_tokens INCLUDES reasoning_output_tokens
+#   OpenCode input/output EXCLUDE cache.read/write        → already disjoint
+#
+# `normalizers` encodes that per source. Each takes the raw usage dict and the
+# already-extracted disjoint fields, and returns (input, output, reasoning)
+# adjusted so the sum never counts a sub-counter twice. The producer's own
+# numbers are preserved as `native_input`/`native_output` on the serialized
+# bucket — nothing is hidden, the split is just made explicit.
+
+_INCLUSIONS = {
+    "input_includes_cache": True,   # does `input` already contain the cache read?
+    "output_includes_reasoning": True,
+}
+
+
+def _normalize_inclusive(raw_input: int, raw_output: int,
+                         reasoning: int, cache_read: int) -> tuple[dict, dict]:
+    """Claude and OpenCode: the producer already reports disjoint fields."""
+    return (
+        {"native_input": int(raw_input or 0), "native_output": int(raw_output or 0)},
+        {"reasoning": int(reasoning or 0)},
+    )
+
+
+def _normalize_codex(usage: dict) -> tuple[dict, dict]:
+    """Codex reports totals, not a split: input contains cache, output contains
+    reasoning. Subtract to keep the stored fields disjoint (floored at zero, so
+    a producer quirk can never invent negative consumption)."""
+    raw_input = int(usage.get("input_tokens", 0) or 0)
+    raw_output = int(usage.get("output_tokens", 0) or 0)
+    cache_read = int(usage.get("cached_input_tokens", 0) or 0)
+    reasoning = int(usage.get("reasoning_output_tokens", 0) or 0)
+    return (
+        {"native_input": raw_input, "native_output": raw_output},
+        {
+            "input": max(0, raw_input - cache_read),
+            "output": max(0, raw_output - reasoning),
+            "cache_read": cache_read,
+            "reasoning": reasoning,
+        },
+    )
+
+
+# --------------------------------------------------------------------------- #
 # Buckets
 # --------------------------------------------------------------------------- #
 
 def blank_bucket() -> dict:
-    return {field: 0 for field in FIELDS} | {"messages": 0, "cost_usd": 0.0, "cost_declared": False}
+    return {field: 0 for field in FIELDS} | {
+        "messages": 0, "cost_usd": 0.0, "cost_declared": False,
+        # The producer's own numbers, kept so the normalization is auditable.
+        # For a source whose fields are already disjoint these mirror
+        # input/output; for Codex they are the inclusive totals.
+        "native_input": 0, "native_output": 0,
+    }
 
 
-def add_tokens(bucket: dict, tokens: dict, cost: float | None) -> None:
+def add_tokens(bucket: dict, tokens: dict, cost: float | None, native: dict | None = None) -> None:
     for field in FIELDS:
         bucket[field] += int(tokens.get(field, 0) or 0)
     bucket["messages"] += 1
+    if native:
+        bucket["native_input"] += int(native.get("native_input", 0) or 0)
+        bucket["native_output"] += int(native.get("native_output", 0) or 0)
     if cost is not None:
         bucket["cost_usd"] += float(cost)
         bucket["cost_declared"] = True
@@ -95,12 +166,13 @@ class Ledger:
         # in cumulative counters (T07) — one entry per (tool, field).
         self.anomalies: list[dict] = []
 
-    def add(self, tool: str, when: float, tokens: dict, cost: float | None) -> None:
+    def add(self, tool: str, when: float, tokens: dict, cost: float | None,
+            native: dict | None = None) -> None:
         day = datetime.fromtimestamp(when).strftime("%Y-%m-%d")
-        add_tokens(self.days[day][tool], tokens, cost)
+        add_tokens(self.days[day][tool], tokens, cost, native)
         for name, window in self.bounds.items():
             if window["start"] <= when < window["end"]:
-                add_tokens(self.windows[name][tool], tokens, cost)
+                add_tokens(self.windows[name][tool], tokens, cost, native)
                 self._guard_negative(name, tool, tokens, when)
 
     def _guard_negative(self, window: str, tool: str, tokens: dict, when: float) -> None:
@@ -207,7 +279,10 @@ def collect_claude(ledger: Ledger, since: float) -> dict:
                 "output": usage.get("output_tokens", 0),
                 "cache_read": usage.get("cache_read_input_tokens", 0),
                 "cache_creation": usage.get("cache_creation_input_tokens", 0),
-            }, None)
+            }, None, native={
+                "native_input": usage.get("input_tokens", 0),
+                "native_output": usage.get("output_tokens", 0),
+            })
     return status(OK if files else MISSING, files=files,
                   last_observed_at=_iso(last_seen))
 
@@ -245,12 +320,8 @@ def collect_codex(ledger: Ledger, since: float) -> dict:
                 continue
             seen.add(key)
             last_seen = max(last_seen or when, when)
-            ledger.add("codex", when, {
-                "input": usage.get("input_tokens", 0),
-                "output": usage.get("output_tokens", 0),
-                "cache_read": usage.get("cached_input_tokens", 0),
-                "reasoning": usage.get("reasoning_output_tokens", 0),
-            }, None)
+            native, tokens = _normalize_codex(usage)
+            ledger.add("codex", when, tokens, None, native)
     return status(OK if files else MISSING, files=files,
                   last_observed_at=_iso(last_seen))
 
@@ -305,7 +376,10 @@ def collect_opencode(ledger: Ledger, since: float) -> dict:
                 "reasoning": tokens.get("reasoning", 0),
                 "cache_read": cache.get("read", 0),
                 "cache_creation": cache.get("write", 0),
-            }, payload.get("cost"))
+            }, payload.get("cost"), native={
+                "native_input": tokens.get("input", 0),
+                "native_output": tokens.get("output", 0),
+            })
         connection.close()
     except sqlite3.OperationalError as exc:
         return status(UNSUPPORTED_SCHEMA, error=str(exc))
@@ -327,6 +401,10 @@ def _iso(epoch: float | None) -> str | None:
 def serialize_bucket(bucket: dict) -> dict:
     out = {field: bucket[field] for field in FIELDS}
     out["messages"] = bucket["messages"]
+    # The producer's own numbers, so a reader can see the raw split the
+    # normalization was derived from (audit V2 T10) instead of trusting a total.
+    out["native_input"] = bucket.get("native_input", bucket["input"])
+    out["native_output"] = bucket.get("native_output", bucket["output"])
     out["cost"] = {
         "kind": "declared" if bucket["cost_declared"] else "unavailable",
         "usd": round(bucket["cost_usd"], 6) if bucket["cost_declared"] else None,
@@ -362,6 +440,14 @@ def main() -> int:
             "claude": "(message.id, requestId) last-wins",
             "codex": "(session_id, turn_id, response_id)",
             "opencode": "per assistant message row",
+        },
+        # Declares, per source, whether the stored fields are disjoint (T10) so a
+        # reader never has to guess whether `input` already contains the cache.
+        "inclusions": {
+            "claude": {"input_excludes_cache": True, "output_excludes_reasoning": True},
+            "codex": {"input_excludes_cache": True, "output_excludes_reasoning": True,
+                      "note": "normalized from inclusive totals; raw in native_*"},
+            "opencode": {"input_excludes_cache": True, "output_excludes_reasoning": True},
         },
         "sources": sources,
         "windows": {

@@ -314,7 +314,7 @@ struct AlibabaConfigCard: View {
         AppLog.credentials.info("Testing Alibaba connection via provider refresh")
         await monitor.refresh(providerId: "qwen")
 
-        if let error = monitor.provider(for: "alibaba")?.lastError {
+        if let error = monitor.provider(for: "qwen")?.lastError {
             AppLog.credentials.error("Alibaba connection test failed: \(error.localizedDescription)")
             alibabaTestResult = "Failed: \(error.localizedDescription)"
         } else {

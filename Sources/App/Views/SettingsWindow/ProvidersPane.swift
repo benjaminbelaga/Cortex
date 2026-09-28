@@ -413,7 +413,7 @@ private struct ProviderDetailView: View {
                 MiniMaxConfigCard(monitor: monitor)
             case "deepseek":
                 DeepSeekConfigCard(monitor: monitor)
-            case "alibaba":
+            case "qwen":
                 AlibabaConfigCard(monitor: monitor)
             case "vercel-gateway":
                 VercelConfigCard(monitor: monitor)
