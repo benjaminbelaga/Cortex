@@ -7,6 +7,91 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (Cortex — router-priority dashboard ordering)
+
+- **Priority** is now the default dashboard sort. The list is ordered by
+  llm-router's own `route_now` decision for the active profile (Plan by
+  default): recommended provider first, then its alternatives in score order,
+  then providers the router did not mention, then the excluded ones
+  (exhausted / incompatible / reconnect). `PriorityRanking` translates the
+  router ids to Cortex ids through the single `RouterProviderIdMap` table, so
+  the Priority card and the list can never disagree. Session / Week / All
+  change what is *measured*, never the ordering. With no `route_now` available
+  the sort falls back to worst-percentage — it never invents an order. See
+  [docs/features/priority-ordering.md](docs/features/priority-ordering.md).
+
+### Added (Cortex — dedicated Dashboard window)
+
+- The compact menu's `Dashboard` button became **Open dashboard** (window glyph
+  + tooltip). It closes the menu first, then opens a single bounded, themed,
+  scrolling window root (`DashboardWindowView`, 720×520 min / 1040×760 ideal)
+  instead of embedding the popover list. The window no longer grows with the
+  account count or shows an unthemed white surface. See
+  [docs/features/dashboard-window.md](docs/features/dashboard-window.md).
+
+### Changed (Cortex — honest account states)
+
+- Enrolment now runs as **two independent stages**: (1) persist the verified
+  account, (2) collect the first reading. A collection failure after the account
+  is saved surfaces as `Connected · quota unavailable` (recoverable, "retry
+  usage") instead of a failed enrolment that invites the login to be replayed.
+  See [docs/features/account-enrolment-states.md](docs/features/account-enrolment-states.md).
+
+### Changed (Cortex — price coverage label)
+
+- The usage panel's `43 % billed` label was renamed to `% priced` with an
+  explicit tooltip: it is the share of tokens Cortex could price from the tariff
+  SSOT, **not** what was paid. A subscription is never presented as its
+  API-equivalent bill.
+
+### Added (Cortex — DeepSeek preference seeding)
+
+- The preferred model family (DeepSeek) is seeded on OpenCode Go, Command Code
+  and Ollama Cloud when the key is absent, so the family logo appears on every
+  provider that runs it. An explicit choice is never overwritten.
+
+### Fixed (Cortex — Claude usage panel recovery)
+
+- `claude /usage` captures whose terminal replay ends on a repainted screen
+  (plugin skill-footprint, "what's contributing") no longer lose their quota
+  bars: the parser falls back to the ANSI-stripped stream when the rendered
+  screen has no labelled section. Regression test built from the real
+  2026-10-03 capture.
+
+### Added (Cortex fork — app bundle retention)
+
+- `scripts/prune-app-backups.sh` — keep the N most recent
+  `/Applications/Cortex.app.backup-*` bundles, delete the rest. Every install
+  moves the previous bundle aside and nothing pruned them: 54 bundles (4.0 GB)
+  had accumulated before the 2026-10-02 cleanup. Dry-run by default, `--apply`
+  to delete, every path re-validated against
+  `Cortex.app.backup-YYYY-MM-DD-HHMM-<sha>` before removal (a surprise path
+  aborts the whole run), and the live bundle can never match. `install-local.sh`
+  now points at it in its receipt. The generic rail
+  (`~/.claude/state/backup-retention.yaml` + `backup-retention-policy.sh`) could
+  not be reused: it is retired and enumerates files, while an `.app` is a
+  directory.
+
+### Fixed (Cortex Fleet 2.1.1)
+
+- The failover card reads the full Go → Muse → Ollama chain from the personal
+  OpenCode SSOT, including model-scoped Muse quarantine and separate switches.
+- Historical origin records no longer masquerade as sessions currently on
+  Ollama; local candidates are not presented as live quota proof.
+- Fleet builds must include the account-catalogue launch crash fix before the
+  app is signed and distributed.
+
+### Added (Cortex fork — C20 absolute refill clocks)
+
+- Low/exhausted window hints name the actual refill moment — "Mon 5 02:00"
+  instead of a lone "4d" countdown (Ben 2026-09-30; requirement R40 completes
+  U2 "épuisé + date de refill").
+- Row tooltip pairs both renderings ("4d · Mon 5 02:00"); the resets calendar
+  strip goes fully absolute ("15:50" same-day, "EEE d HH:mm" otherwise) with
+  a shared cached formatter (`UsageQuota.absoluteResetString(from:)`).
+- Settings → General → "Absolute Reset Dates" (default ON) restores the
+  R8-era relative-only hints; the tooltip keeps both renderings either way.
+
 ### Added (Cortex fork — v7.4 spend fallback)
 
 - Spend column falls back to the benchmark estimate when the provider reports
