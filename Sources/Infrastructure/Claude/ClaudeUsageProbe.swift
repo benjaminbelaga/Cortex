@@ -323,7 +323,24 @@ public final class ClaudeUsageProbe: UsageProbe, @unchecked Sendable {
     }
 
     private func parseClaudeOutput(_ text: String) throws -> UsageSnapshot {
-        let clean = renderTerminalOutput(text)
+        var clean = renderTerminalOutput(text)
+
+        // The SwiftTerm replay returns only the terminal's FINAL composed
+        // screen. When the CLI repaints after the usage panel (the plugin
+        // skill-footprint view, the "what's contributing" report, a hook's
+        // transcript line), that final screen can no longer contain the
+        // labelled quota sections even though every emitted line is present in
+        // the capture. Fall back to the line-oriented ANSI-stripped stream,
+        // which still carries them, before declaring the capture unparseable.
+        // (Captured 2026-10-03: the rendered screen was the plugin panel and the
+        //  quotas survived only in the raw stream.)
+        if clean.range(of: "Current session", options: .caseInsensitive) == nil {
+            let stripped = ANSIStripper.strip(text)
+            if stripped.range(of: "Current session", options: .caseInsensitive) != nil {
+                AppLog.probes.info("Claude /usage: rendered screen lost the quota panel; parsing the ANSI-stripped stream")
+                clean = stripped
+            }
+        }
 
         // Log both original and normalized output for debugging
         AppLog.probes.debug("Claude /usage raw output (\(text.count) chars):\n\(text)")

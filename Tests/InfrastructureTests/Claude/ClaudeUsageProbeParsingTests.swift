@@ -1179,6 +1179,98 @@ struct ClaudeUsageProbeParsingTests {
         #expect(snapshot.weeklyQuota?.percentRemaining == 40)
     }
 
+    // MARK: - Terminal repaint (rendered screen loses the quota panel)
+
+    /// Actual failing capture (anonymized), 2026-10-03. The CLI's FINAL screen
+    /// is the plugin skill-footprint panel, so the SwiftTerm replay drops the
+    /// quota sections even though every emitted line is present in the stream.
+    /// The parser must fall back to the ANSI-stripped stream instead of failing.
+    static let repaintLostQuotaPanelCapture = """
+\u{1B}7\u{1B}8\u{1B}[<u\u{1B}[>5u\u{1B}[>4;2m\u{1B}[>0q\u{1B}[>4m\u{1B}[<u\u{1B}[<u\u{1B}[>5u\u{1B}[>4;2m  \u{1B}[<u\u{1B}[>5u\u{1B}[>4;2m 
+  ▐▛███▛█ Claude Code v2.1.285
+ ▝▜██████▀ Fable 5.1 · Claude Max
+  ▝▝ ▝▝ ~/Library/Application Support/Cortex/Probe
+ ❯ /usage
+ ✽ Kerfuffling… (running SessionStart hooks… 3/16 · 0s)
+  ● high · /effort
+ ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ ❯ 
+ ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+  ⏵⏵ auto mode on (shift+tab to cycle) · ← for agents    ▝▝ ▝▝ ~/Library/Application Support/Cortex/Probe
+   
+ ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔ ● high · /effort ▔
+    Settings  Status   Config   Usage   Stats 
+  Session
+  
+  Total cost: $0.0000
+  Total duration (API): 0s
+  Total duration (wall): 3s
+  Total code changes: 0 lines added, 0 lines removed
+  Usage: 0 input, 0 output, 0 cache read, 0 cache write
+  Current session
+  ██ 4% used
+  Resets 10pm (Europe/Paris)
+  Current week (all models)
+  ▌ 1% used
+  Resets Oct 10 at 5pm (Europe/Paris)
+  What's contributing to your limits usage?
+  Approximate, based on local sessions on this machine — does not include other devices or claude.ai
+  Scanning local sessions…
+  Refreshing…
+  Esc to cancel
+  
+  
+  
+  
+  
+     \u{1B}[>0q 
+   
+  Plugin skill-listing footprint  
+  What each plugin's skill descriptions add to the system prompt (cached input after the first turn). Agents and MCP tools not yet counted.
+  codex                     2 skills · ~75 tok/turn
+  feature-dev 1 skill · ~35 tok/turn  
+  pr-review-toolkit           1 sk ll · ~27 tok/turn
+  Total                       ~137 tok/turn
+   
+  Current session
+  ██                       4% used
+  Resets 10pm (Europe/Paris)
+   
+  Current week (all models)
+  ▌             1% used
+  Resets Oct 10 at 5pm (Europe/Paris)
+  What's contributing to your limits usage?
+  Approximate, based on local sessions on this machine — does not include other devices or claude.ai
+  Scanning local sessions…
+  Refreshing…
+  Esc to cancel   
+  9:59pm (Europe/Paris)
+  4:59pm (Europe/Paris)
+  Current week (Fable) 
+                                                     0% used 
+  Resets Oct 10 at 4:59pm (Europe/Paris)
+   
+  What's contributing to your limits usage?
+  App oximate, based on local sessions on this machine — does not include other devices or claude.ai
+  Scanning local sessions…
+  Usage credits
+  Usage credits are off · /usage-credits to turn them on
+  Esc to cancel     
+ ⏺ cc-plugin-agents-md: no CLAUDE.md found; AGENTS.md loaded: /Users/example/AGENTS.md, /Users/example/.claude/AGENTS.md  
+"""
+
+    @Test
+    func `recovers quotas when the rendered screen repainted over the usage panel`() throws {
+        // When
+        let snapshot = try ClaudeUsageProbe.parse(Self.repaintLostQuotaPanelCapture)
+
+        // Then — the labelled sections come back from the emitted stream
+        #expect(snapshot.sessionQuota?.percentRemaining == 96) // 4% used
+        #expect(snapshot.weeklyQuota?.percentRemaining == 99)  // 1% used
+        let fable = snapshot.quota(for: .modelSpecific("fable"))
+        #expect(fable?.percentRemaining == 100) // 0% used
+    }
+
     // MARK: - Helper
 
     private func simulateParse(text: String) throws -> UsageSnapshot {

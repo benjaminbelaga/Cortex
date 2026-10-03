@@ -16,6 +16,7 @@ enum CatalogStrings {
         case .loginInProgress: return "Connecting…"
         case .identityConfirmed: return "Identity confirmed"
         case .quotaPending: return "Connected · quotas pending"
+        case .quotaUnavailable: return "Connected · quota unavailable"
         case .quotaReceived: return "Tracked account"
         case .failed: return "Enrolment failed"
         case .cancelled: return "Cancelled"
@@ -34,6 +35,8 @@ enum CatalogStrings {
             return IdentityMasking.mask(identity.email) ?? "identity verified"
         case .quotaPending:
             return "First reading not received yet — the state is valid, not an error."
+        case .quotaUnavailable(_, let reason):
+            return "\(reason) — the account is saved; retry usage."
         case .quotaReceived(_, let observedAt):
             let formatter = RelativeDateTimeFormatter()
             formatter.unitsStyle = .abbreviated

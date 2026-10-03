@@ -15,6 +15,12 @@ struct OverviewDashboardView: View {
     /// Removes a whole provider from Cortex (account-scoped rows use the
     /// catalog's account removal instead). Never touches the tool's own config.
     var onRemoveProvider: ((String) -> Void)? = nil
+    /// Whether this instance renders the shared `+` account catalogue. The
+    /// catalogue holds ONE presentation flag on the shared model, so two live
+    /// instances (the compact menu and the Dashboard window) rendered the same
+    /// form twice (Ben 2026-10-03). The menu is the account surface for now;
+    /// the Dashboard's own Resources section takes over in a later batch.
+    var rendersAccountCatalog: Bool = true
 
     @Environment(\.appTheme) private var theme
     @Environment(AccountCatalogModel.self) private var catalogModel
@@ -125,7 +131,7 @@ struct OverviewDashboardView: View {
                 )
             )
             controls
-            if catalogModel.isPresented {
+            if rendersAccountCatalog, catalogModel.isPresented {
                 AccountCatalogView(model: catalogModel) {
                     withAnimation(.easeOut(duration: 0.15)) { catalogModel.isPresented = false }
                 }
@@ -288,34 +294,36 @@ struct OverviewDashboardView: View {
             .menuStyle(.borderlessButton)
             .fixedSize()
 
-            Button {
-                withAnimation(.easeOut(duration: 0.15)) { catalogModel.isPresented.toggle() }
-            } label: {
-                Image(systemName: catalogModel.isPresented ? "minus" : "more")
-                    .font(theme.font(size: 10, weight: .bold))
-                    .foregroundStyle(theme.accentPrimary)
-                    .frame(width: 24, height: 24)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(theme.glassBackground))
-                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(theme.glassBorder, lineWidth: 1))
-            }
-            .buttonStyle(.plain)
-            .help("Add an account (verified catalog) or enable a connection")
+            if rendersAccountCatalog {
+                Button {
+                    withAnimation(.easeOut(duration: 0.15)) { catalogModel.isPresented.toggle() }
+                } label: {
+                    Image(systemName: catalogModel.isPresented ? "minus" : "more")
+                        .font(theme.font(size: 10, weight: .bold))
+                        .foregroundStyle(theme.accentPrimary)
+                        .frame(width: 24, height: 24)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(theme.glassBackground))
+                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(theme.glassBorder, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .help("Add an account (verified catalog) or enable a connection")
 
-            // Global paste: shapes route themselves (oc_… → OpenCode Go,
-            // Ollama form → Ollama). Never forces a provider choice up front.
-            Button {
-                Task { await catalogModel.addAPIAccountsFromPasteboard(
-                    providerId: "opencode-go", fallbackLabel: "Account", autoRoute: true) }
-            } label: {
-                Image(systemName: "doc.on.clipboard")
-                    .font(theme.font(size: 10, weight: .semibold))
-                    .foregroundStyle(theme.accentPrimary)
-                    .frame(width: 24, height: 24)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(theme.glassBackground))
-                    .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(theme.glassBorder, lineWidth: 1))
+                // Global paste: shapes route themselves (oc_… → OpenCode Go,
+                // Ollama form → Ollama). Never forces a provider choice up front.
+                Button {
+                    Task { await catalogModel.addAPIAccountsFromPasteboard(
+                        providerId: "opencode-go", fallbackLabel: "Account", autoRoute: true) }
+                } label: {
+                    Image(systemName: "doc.on.clipboard")
+                        .font(theme.font(size: 10, weight: .semibold))
+                        .foregroundStyle(theme.accentPrimary)
+                        .frame(width: 24, height: 24)
+                        .background(RoundedRectangle(cornerRadius: 6).fill(theme.glassBackground))
+                        .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(theme.glassBorder, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .help("Paste API keys: each key joins its provider (OpenCode Go, Ollama)")
             }
-            .buttonStyle(.plain)
-            .help("Paste API keys: each key joins its provider (OpenCode Go, Ollama)")
         }
     }
 

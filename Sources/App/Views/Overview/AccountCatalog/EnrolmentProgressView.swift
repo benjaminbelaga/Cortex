@@ -55,6 +55,7 @@ struct EnrolmentProgressView: View {
         case .loginInProgress: return "terminal"
         case .identityConfirmed: return "checkmark.seal"
         case .quotaPending: return "hourglass"
+        case .quotaUnavailable: return "exclamationmark.arrow.triangle.2.circlepath"
         case .quotaReceived: return "checkmark.circle.fill"
         case .failed: return "exclamationmark.triangle.fill"
         case .cancelled: return "xmark.circle"
@@ -65,6 +66,7 @@ struct EnrolmentProgressView: View {
         switch state {
         case .profileDetected, .authRequired, .loginInProgress: return theme.accentPrimary
         case .identityConfirmed, .quotaPending, .quotaReceived: return theme.statusColor(for: .healthy)
+        case .quotaUnavailable: return theme.statusColor(for: .warning)
         case .failed: return theme.statusColor(for: .warning)
         case .cancelled: return theme.textTertiary
         }

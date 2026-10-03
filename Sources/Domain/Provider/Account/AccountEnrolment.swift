@@ -76,6 +76,11 @@ public enum EnrolmentState: Sendable, Equatable {
     /// Identity verified + persisted; first quota snapshot not yet observed.
     /// The user sees "Connected · quotas pending".
     case quotaPending(AccountDescriptor)
+    /// Identity verified AND the account persisted, but the first reading could
+    /// not be collected (parse failure, timeout, rate limit). The account IS
+    /// enrolled — this is a recoverable collection gap, never a login failure,
+    /// so the row offers "Retry usage" instead of re-running the login.
+    case quotaUnavailable(AccountDescriptor, reason: String)
     /// First quota snapshot observed. Steady state — the row joins the menu.
     case quotaReceived(AccountDescriptor, observedAt: Date)
     /// Terminal failure with the typed `EnrolmentError`.

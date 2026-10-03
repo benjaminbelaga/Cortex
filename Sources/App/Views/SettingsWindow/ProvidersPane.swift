@@ -313,6 +313,7 @@ private struct ProviderDetailView: View {
             }
         case .identityConfirmed: return "Connected — identity verified"
         case .quotaPending: return "Connected · quota pending"
+        case .quotaUnavailable: return "Connected · quota unavailable"
         case .quotaReceived: return "Connected · quota received"
         case .failed(_, let error):
             switch error {

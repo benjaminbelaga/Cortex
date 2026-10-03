@@ -20,7 +20,16 @@ public final class AccountEnrolmentService {
     /// Alibaba adapters by default; new tools plug in here.
     private let adaptersByProvider: [String: any AccountAdapter]
 
-    private let onVerified: @MainActor (AccountDescriptor) async throws -> Date?
+    /// Stage 1 of the post-identity handshake: persist the verified account.
+    /// Returns the account id it stored. A throw here is a REAL enrolment
+    /// failure — nothing was saved, so the sheet may safely offer a retry of
+    /// the whole flow.
+    private let onRegistered: @MainActor (AccountDescriptor) async throws -> String
+
+    /// Stage 2: collect the first reading for an account that IS already saved.
+    /// A throw here is reported as `.quotaUnavailable` (recoverable), never as
+    /// `.failed` — the account is enrolled and must not be re-created.
+    private let onQuotaObserved: @MainActor (AccountDescriptor, String) async throws -> Date?
 
     private var tasks: [UUID: Task<Void, Never>] = [:]
 
@@ -35,7 +44,8 @@ public final class AccountEnrolmentService {
             authStatusProbe: ClaudeAuthStatusCLIProbe(),
             terminalLauncher: AppleScriptTerminalLoginLauncher()
         ),
-        onVerified: @escaping @MainActor (AccountDescriptor) async throws -> Date? = { _ in nil },
+        onRegistered: @escaping @MainActor (AccountDescriptor) async throws -> String = { _ in "" },
+        onQuotaObserved: @escaping @MainActor (AccountDescriptor, String) async throws -> Date? = { _, _ in nil },
         codexAdapter: any AccountAdapter = CodexAccountAdapter(
             authStatusProbe: CodexAuthStatusRPCProbe(),
             terminalLauncher: AppleScriptTerminalLoginLauncher()
@@ -45,7 +55,8 @@ public final class AccountEnrolmentService {
             terminalLauncher: AppleScriptTerminalLoginLauncher()
         )
     ) {
-        self.onVerified = onVerified
+        self.onRegistered = onRegistered
+        self.onQuotaObserved = onQuotaObserved
         var adapters: [String: any AccountAdapter] = [:]
         adapters[claudeAdapter.providerId] = claudeAdapter
         adapters[codexAdapter.providerId] = codexAdapter
@@ -85,13 +96,27 @@ public final class AccountEnrolmentService {
                         do {
                             self?.update(uuid: uuid, state: state)
                             continuation.yield(state)
+                            // Stage 1 — persist the verified account. A throw
+                            // here means nothing was saved: a real failure.
+                            let accountId = try await self?.onRegistered(verified) ?? ""
                             let pending = EnrolmentState.quotaPending(verified)
                             self?.update(uuid: uuid, state: pending)
                             continuation.yield(pending)
-                            if let observed = try await self?.onVerified(verified) {
-                                let ready = EnrolmentState.quotaReceived(verified, observedAt: observed)
-                                self?.update(uuid: uuid, state: ready)
-                                continuation.yield(ready)
+                            // Stage 2 — collect the first reading. The account
+                            // IS saved, so a collection failure is a recoverable
+                            // gap ("Connected · quota unavailable"), never
+                            // "enrolment failed" and never a re-login prompt.
+                            do {
+                                if let observed = try await self?.onQuotaObserved(verified, accountId) {
+                                    let ready = EnrolmentState.quotaReceived(verified, observedAt: observed)
+                                    self?.update(uuid: uuid, state: ready)
+                                    continuation.yield(ready)
+                                }
+                            } catch {
+                                let unavailable = EnrolmentState.quotaUnavailable(
+                                    verified, reason: error.localizedDescription)
+                                self?.update(uuid: uuid, state: unavailable)
+                                continuation.yield(unavailable)
                             }
                         } catch {
                             let failed = EnrolmentState.failed(verified, error: .underlying(error.localizedDescription))
@@ -144,13 +169,27 @@ public final class AccountEnrolmentService {
                         do {
                             self?.update(uuid: uuid, state: state)
                             continuation.yield(state)
+                            // Stage 1 — persist the verified account. A throw
+                            // here means nothing was saved: a real failure.
+                            let accountId = try await self?.onRegistered(verified) ?? ""
                             let pending = EnrolmentState.quotaPending(verified)
                             self?.update(uuid: uuid, state: pending)
                             continuation.yield(pending)
-                            if let observed = try await self?.onVerified(verified) {
-                                let ready = EnrolmentState.quotaReceived(verified, observedAt: observed)
-                                self?.update(uuid: uuid, state: ready)
-                                continuation.yield(ready)
+                            // Stage 2 — collect the first reading. The account
+                            // IS saved, so a collection failure is a recoverable
+                            // gap ("Connected · quota unavailable"), never
+                            // "enrolment failed" and never a re-login prompt.
+                            do {
+                                if let observed = try await self?.onQuotaObserved(verified, accountId) {
+                                    let ready = EnrolmentState.quotaReceived(verified, observedAt: observed)
+                                    self?.update(uuid: uuid, state: ready)
+                                    continuation.yield(ready)
+                                }
+                            } catch {
+                                let unavailable = EnrolmentState.quotaUnavailable(
+                                    verified, reason: error.localizedDescription)
+                                self?.update(uuid: uuid, state: unavailable)
+                                continuation.yield(unavailable)
                             }
                         } catch {
                             let failed = EnrolmentState.failed(verified, error: .underlying(error.localizedDescription))

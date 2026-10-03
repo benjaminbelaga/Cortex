@@ -292,6 +292,59 @@ struct AccountEnrolmentServiceTests {
         #expect(!service.hasActiveTask(for: d.uuid))
     }
 
+    // MARK: - Honest states: registration vs quota collection are independent
+
+    private func confirmedIdentity() -> VerifiedIdentity {
+        VerifiedIdentity(
+            email: "read@example.com", orgId: nil, orgName: nil,
+            verifiedAt: Date(), method: .claudeAuthStatus
+        )
+    }
+
+    @Test("A quota-collection failure AFTER registration yields quotaUnavailable, never failed")
+    func quotaFailureAfterRegistrationIsRecoverable() async {
+        let d = descriptor()
+        let service = AccountEnrolmentService(
+            claudeAdapter: ScriptedAdapter(providerId: "claude", script: [
+                .identityConfirmed(d, identity: confirmedIdentity()),
+            ]),
+            onRegistered: { _ in "acct-1" },
+            onQuotaObserved: { _, _ in throw ProbeError.executionFailed("usage parse failed") },
+            codexAdapter: ScriptedAdapter(providerId: "codex", script: [])
+        )
+        let states = await Self.drain(service.enrol(intent: EnrolmentIntent(
+            descriptor: d, targetSource: .native
+        )))
+        guard case let .quotaUnavailable(_, reason) = states.last else {
+            Issue.record("expected quotaUnavailable, got \(String(describing: states.last))")
+            return
+        }
+        #expect(reason.contains("usage parse failed"))
+        // The account was saved — a re-login must NOT be invited by a `failed`.
+        #expect(!states.contains { if case .failed = $0 { return true } else { return false } })
+        #expect(service.states[d.uuid] != nil)
+    }
+
+    @Test("A REGISTRATION failure still yields failed — nothing was saved")
+    func registrationFailureIsTerminal() async {
+        let d = descriptor()
+        let service = AccountEnrolmentService(
+            claudeAdapter: ScriptedAdapter(providerId: "claude", script: [
+                .identityConfirmed(d, identity: confirmedIdentity()),
+            ]),
+            onRegistered: { _ in throw EnrolmentError.registryRejected(reason: "nope") },
+            codexAdapter: ScriptedAdapter(providerId: "codex", script: [])
+        )
+        let states = await Self.drain(service.enrol(intent: EnrolmentIntent(
+            descriptor: d, targetSource: .native
+        )))
+        guard case .failed = states.last else {
+            Issue.record("expected failed, got \(String(describing: states.last))")
+            return
+        }
+        #expect(!states.contains { if case .quotaUnavailable = $0 { return true } else { return false } })
+    }
+
     @Test("A reconnect stream that completes also leaves no task slot")
     func completedReconnectLeavesNoTaskSlot() async {
         let d = descriptor()

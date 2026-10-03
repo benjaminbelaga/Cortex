@@ -199,7 +199,9 @@ struct CortexApp: App {
             }
             return try await provider.refresh().capturedAt
         }
-        let enrolmentService = AccountEnrolmentService(onVerified: { descriptor in
+        // Stage 1 — persist the verified account, returning the id it stored.
+        // A throw here means nothing was saved (a real enrolment failure).
+        let registerVerifiedAccount: @MainActor (AccountDescriptor) async throws -> String = { descriptor in
             let providerId = descriptor.providerId
             // Verifying a profile IS an explicit "add": re-enable the provider
             // (and clear any prior removal) so an enrolled account is collected.
@@ -234,8 +236,17 @@ struct CortexApp: App {
             guard settingsRepository.accounts(forProvider: providerId).contains(where: { $0.accountId == accountId }) else {
                 throw ProbeError.executionFailed("Account could not be saved")
             }
-            return try await refreshAccount(providerId, accountId)
-        })
+            return accountId
+        }
+        // Stage 2 — collect the first reading for the account that was just
+        // saved. A throw here surfaces as "Connected · quota unavailable", not
+        // as an enrolment failure (Ben 2026-10-03).
+        let enrolmentService = AccountEnrolmentService(
+            onRegistered: { descriptor in try await registerVerifiedAccount(descriptor) },
+            onQuotaObserved: { descriptor, accountId in
+                try await refreshAccount(descriptor.providerId, accountId)
+            }
+        )
         let profileResolver = ProfileResolver()
         accountCatalog = AccountCatalogModel(
             enrolmentService: enrolmentService,
@@ -439,6 +450,18 @@ struct CortexApp: App {
         }
     }
 
+    /// Open the dedicated Dashboard window from the compact menu: close the menu
+    /// first so the two surfaces never sit on top of each other, then bring the
+    /// window forward (Cortex is an LSUIElement, so it must be activated
+    /// explicitly). The Window scene keeps a single instance for the id — ten
+    /// clicks never create ten windows.
+    @MainActor
+    private func openDashboardWindow() {
+        isMenuPresented = false
+        openWindow(id: "dashboard")
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
     /// Detects and validates isolated Claude config directories on first run.
     /// Existing accounts are authoritative and are never replaced or pruned.
     @MainActor
@@ -515,16 +538,20 @@ struct CortexApp: App {
         MenuBarExtra {
             Group {
                 #if ENABLE_SPARKLE
-                MenuContentView(monitor: monitor, sessionMonitor: sessionMonitor, quotaAlerter: quotaAlerter) { enabled in
-                        if enabled { startHookServer() } else { stopHookServer() }
-                    }
+                MenuContentView(
+                    monitor: monitor, sessionMonitor: sessionMonitor, quotaAlerter: quotaAlerter,
+                    onHookSettingsChanged: { enabled in if enabled { startHookServer() } else { stopHookServer() } },
+                    onOpenDashboard: { openDashboardWindow() }
+                )
                     .appThemeProvider(themeModeId: settings.themeMode)
                     .environment(\.sparkleUpdater, sparkleUpdater)
                     .environment(accountCatalog)
                 #else
-                MenuContentView(monitor: monitor, sessionMonitor: sessionMonitor, quotaAlerter: quotaAlerter) { enabled in
-                        if enabled { startHookServer() } else { stopHookServer() }
-                    }
+                MenuContentView(
+                    monitor: monitor, sessionMonitor: sessionMonitor, quotaAlerter: quotaAlerter,
+                    onHookSettingsChanged: { enabled in if enabled { startHookServer() } else { stopHookServer() } },
+                    onOpenDashboard: { openDashboardWindow() }
+                )
                     .appThemeProvider(themeModeId: settings.themeMode)
                     .environment(accountCatalog)
                 #endif
@@ -581,7 +608,7 @@ struct CortexApp: App {
         // provider's billing page. The per-provider web console moved to the
         // detail sheet's "Open console" button.
         Window("Cortex Dashboard", id: "dashboard") {
-            OverviewDashboardView(
+            DashboardWindowView(
                 providers: monitor.allProviders,
                 settings: settings,
                 onRemoveProvider: { id in
@@ -591,9 +618,15 @@ struct CortexApp: App {
             )
             .appThemeProvider(themeModeId: settings.themeMode)
             .environment(accountCatalog)
-            .padding(16)
         }
-        .defaultSize(width: 480, height: 720)
+        .defaultSize(
+            width: DashboardWindowLayout.idealWidth,
+            height: DashboardWindowLayout.idealHeight
+        )
+        // `.contentMinSize` used to grow the window with the account list and
+        // push it off-screen. The DashboardWindowView supplies a bounded min
+        // (720 × 520), so the window keeps that floor and never derives its size
+        // from how many accounts exist.
         .windowResizability(.contentMinSize)
     }
 

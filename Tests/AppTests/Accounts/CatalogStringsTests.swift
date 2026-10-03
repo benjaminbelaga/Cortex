@@ -39,6 +39,7 @@ struct CatalogStringsTests {
             .loginInProgress(d, stage: .pollingIdentity),
             .identityConfirmed(d, identity: identity()),
             .quotaPending(d),
+            .quotaUnavailable(d, reason: "usage endpoint rate limited"),
             .quotaReceived(d, observedAt: Date()),
             .failed(d, error: .dependencyMissing(tool: "claude")),
             .failed(d, error: .loginFailed(exitCode: 1, stderrTail: "boom")),

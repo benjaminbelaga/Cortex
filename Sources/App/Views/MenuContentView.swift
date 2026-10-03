@@ -12,6 +12,10 @@ struct MenuContentView: View {
     let sessionMonitor: SessionMonitor
     let quotaAlerter: QuotaAlerter
     var onHookSettingsChanged: ((Bool) -> Void)?
+    /// Opens the dedicated Dashboard window. Supplied by the app composition so
+    /// the compact menu can also close itself in the same gesture; previews
+    /// fall back to a bare `openWindow`.
+    var onOpenDashboard: (() -> Void)?
 
     @Environment(\.appTheme) private var theme
     @Environment(\.colorScheme) private var colorScheme
@@ -954,14 +958,21 @@ struct MenuContentView: View {
             // provider's billing page (Ben 2026-09-26: pressing Dashboard opened
             // Claude Code's settings/billing). Per-provider web consoles live on
             // the detail sheet's "Open console" button.
+            //
+            // The label, the window glyph and the tooltip were made explicit and
+            // the action closes the compact menu first (Ben 2026-10-03): opening
+            // the window left the menu floating over it, so "what the button
+            // does" was unreadable.
             WrappedActionButton(
-                icon: "chart.bar.xaxis",
-                label: "Dashboard",
+                icon: "macwindow",
+                label: "Open dashboard",
                 gradient: theme.accentGradient
             ) {
-                openWindow(id: "dashboard")
+                if let onOpenDashboard { onOpenDashboard() }
+                else { openWindow(id: "dashboard") }
             }
             .keyboardShortcut("d")
+            .help("Open the full Cortex dashboard in its own window")
 
             // Refresh Button
             let isCurrentlyRefreshing = settings.overviewModeEnabled
