@@ -30,6 +30,124 @@ struct CortexAccountsExporterTests {
         return (JSONSettingsRepository(store: store), dir)
     }
 
+    /// A temp `cortex-accounts.json` path in its own UUID directory, following
+    /// `makeRepository()`'s isolation convention. Never touches real state.
+    private func makeExportURL() throws -> URL {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("cortex-accounts.json")
+    }
+
+    /// Decodes only the exported `generation`, mirroring the producer's own
+    /// best-effort reader.
+    private struct GenerationField: Decodable {
+        let generation: Int?
+    }
+
+    /// The export writes on a detached task, so poll until the file has been
+    /// written and carries at least `minimum` — this never mistakes a
+    /// pre-existing generation (e.g. a seeded `37`) for the new result.
+    private func waitForGeneration(
+        at url: URL,
+        atLeast minimum: Int,
+        timeout: TimeInterval = 5
+    ) async -> Int? {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if let data = try? Data(contentsOf: url),
+               let field = try? JSONDecoder().decode(GenerationField.self, from: data),
+               let generation = field.generation,
+               generation >= minimum {
+                return generation
+            }
+            try? await Task.sleep(nanoseconds: 2_000_000)
+        }
+        return nil
+    }
+
+    /// An exporter wired to a temp URL with no settings or network access.
+    private func makeExporter(outputURL: URL) -> CortexAccountsExporter {
+        CortexAccountsExporter(
+            outputURL: outputURL,
+            preferredModelsProvider: { [:] },
+            clock: { Date(timeIntervalSince1970: 0) },
+            catalogIdsProvider: { [:] }
+        )
+    }
+
+    @Test("the disk seed reads 37, and 0 for an absent or malformed file, never throwing")
+    func diskSeedReadsGeneration() throws {
+        let url = try makeExportURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+
+        // Absent → 0.
+        #expect(CortexAccountsExporter.lastPublishedGeneration(at: url) == 0)
+
+        // A payload that only carries the generation still seeds it.
+        try Data(#"{"generation": 37}"#.utf8).write(to: url)
+        #expect(CortexAccountsExporter.lastPublishedGeneration(at: url) == 37)
+
+        // Garbage bytes → 0, no throw.
+        try Data([0x00, 0xFF, 0x7B, 0x13]).write(to: url)
+        #expect(CortexAccountsExporter.lastPublishedGeneration(at: url) == 0)
+    }
+
+    @Test("a fresh exporter continues above the generation on disk (restart regression)")
+    func freshExporterContinuesAboveDiskGeneration() async throws {
+        let url = try makeExportURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        // A previous process left generation 37 on disk.
+        try Data(#"{"generation": 37}"#.utf8).write(to: url)
+
+        let exporter = makeExporter(outputURL: url)
+        exporter.exportAfterRefresh(providers: [])
+
+        // 38, NOT 1 — the counter must not restart.
+        #expect(await waitForGeneration(at: url, atLeast: 38) == 38)
+    }
+
+    @Test("an absent file starts the sequence at 1")
+    func absentFileStartsAtOne() async throws {
+        let url = try makeExportURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+
+        let exporter = makeExporter(outputURL: url)
+        exporter.exportAfterRefresh(providers: [])
+
+        #expect(await waitForGeneration(at: url, atLeast: 1) == 1)
+    }
+
+    @Test("a malformed file starts at 1 and never throws")
+    func malformedFileStartsAtOne() async throws {
+        let url = try makeExportURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+        try Data([0x00, 0xFF, 0x7B, 0x13]).write(to: url)
+
+        let exporter = makeExporter(outputURL: url)
+        exporter.exportAfterRefresh(providers: [])
+
+        #expect(await waitForGeneration(at: url, atLeast: 1) == 1)
+    }
+
+    @Test("a second exporter over the same file continues strictly above the first")
+    func secondExporterContinuesAboveFirst() async throws {
+        let url = try makeExportURL()
+        defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+
+        let first = makeExporter(outputURL: url)
+        first.exportAfterRefresh(providers: [])
+        let firstGeneration = await waitForGeneration(at: url, atLeast: 1)
+
+        let second = makeExporter(outputURL: url)
+        second.exportAfterRefresh(providers: [])
+        let secondGeneration = await waitForGeneration(at: url, atLeast: 2)
+
+        #expect(firstGeneration == 1)
+        #expect(secondGeneration == 2)
+        #expect((secondGeneration ?? 0) > (firstGeneration ?? 0))
+    }
+
     @Test("the exported roster never contains any probeConfig secret value")
     func exportOmitsProbeConfigSecrets() async throws {
         let (repo, dir) = makeRepository()
