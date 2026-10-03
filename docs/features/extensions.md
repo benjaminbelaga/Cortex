@@ -79,7 +79,7 @@ Declare user-configurable settings that appear in Cortex's Settings UI. Values a
 | `id` | Yes | Unique field identifier (becomes env var name) |
 | `label` | Yes | Display label in settings UI |
 | `type` | Yes | Field type (see below) |
-| `required` | No | Whether the field must be set (default: `false`) |
+| `required` | No | Whether the field gates the probe (default: `false`). A required field with no stored value and no `default` stops the probe from running until it is set (see [Required Fields Gate the Probe](#required-fields-gate-the-probe)). |
 | `default` | No | Default value when user hasn't configured |
 | `placeholder` | No | Hint text shown in empty input |
 | `helpText` | No | Description shown below the field |
@@ -130,6 +130,28 @@ Config values are injected into probe scripts as `CLAUDEBAR_*` environment varia
 }
 ```
 
+#### Required Fields Gate the Probe
+
+A field marked `"required": true` is a hard gate, not a hint. Before a probe runs,
+Cortex checks every required field for a stored value or a `default`:
+
+- **All required fields satisfied** → the probe runs with the usual `CLAUDEBAR_*`
+  environment.
+- **Any required field has neither a stored value nor a `default`** → the probe is
+  **not run at all**. `ScriptProbe` throws a typed `ExtensionProbeError.unconfigured`
+  naming the missing fields by their `label`, e.g.
+  *“Extension not configured — set the required field in Settings: API Key.”*, and
+  the Settings card shows a **`NOT CONFIGURED`** badge on the row plus a
+  **“Not fully configured”** banner.
+
+An unset **optional** field stays silent: it is simply left out of the environment
+and the probe runs with the remaining values. The distinction is deliberate — a
+required key must never be silently dropped from the environment, because a probe
+that runs without it either fails deep in the data layer (an error the user cannot
+attribute) or, worse, quietly returns less data. Cortex's doctrine is honest
+states, so a missing required key is surfaced as a missing configuration rather
+than run.
+
 ### Section Definition
 
 Each section has its own probe command and refresh interval for optimal performance:
@@ -161,7 +183,7 @@ Probe scripts are executed via `/bin/sh -c <command>` in the extension directory
 2. Print valid JSON to stdout
 3. Complete within the configured timeout
 
-Config values are available as `CLAUDEBAR_*` environment variables (see [Config Fields](#config-fields)).
+Config values are available as `CLAUDEBAR_*` environment variables (see [Config Fields](#config-fields)). If any `required` field is missing, the probe is not run at all (see [Required Fields Gate the Probe](#required-fields-gate-the-probe)).
 
 Each section type expects a specific JSON key in the output:
 
@@ -404,7 +426,7 @@ public struct ConfigField: Sendable, Equatable, Codable {
     public let id: String               // e.g., "apiKey"
     public let label: String            // e.g., "API Key"
     public let type: ConfigFieldType    // .string, .secret, .number, .toggle, .choice, .path
-    public let required: Bool
+    public let required: Bool           // true = the probe is gated on this field
     public let defaultValue: String?    // JSON key: "default"
     public let placeholder: String?
     public let helpText: String?
@@ -499,7 +521,7 @@ Tests/
 │   ├── SectionDataTests.swift                [10 tests — all 5 section types, errors]
 │   └── ExtensionProviderTests.swift          [10 tests — identity, refresh, merge, availability]
 └── InfrastructureTests/Extension/
-    ├── ScriptProbeTests.swift                [9 tests — execution, parsing, errors, config injection]
+    ├── ScriptProbeTests.swift                [13 tests — execution, parsing, errors, config injection, required-field gating]
     ├── JSONExtensionConfigRepositoryTests.swift [9 tests — store, secrets, isolation, allValues]
     └── ExtensionDirectoryScannerTests.swift  [5 tests — scanning, validation, missing dirs]
 ```
@@ -542,7 +564,7 @@ xcodebuild test -scheme Cortex-Workspace -workspace Cortex.xcworkspace \
   -only-testing:InfrastructureTests/ScriptProbeTests \
   -only-testing:InfrastructureTests/JSONExtensionConfigRepositoryTests \
   -only-testing:InfrastructureTests/ExtensionDirectoryScannerTests
-# Test run with 75 tests in 8 suites passed
+# Expect 79 tests across 8 suites — re-run the gate to confirm
 ```
 
 ---

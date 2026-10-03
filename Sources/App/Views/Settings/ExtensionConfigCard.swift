@@ -23,6 +23,10 @@ struct ExtensionConfigCard: View {
                 .padding(.vertical, 12)
 
             VStack(alignment: .leading, spacing: 14) {
+                if !missingRequiredFields.isEmpty {
+                    notConfiguredBanner
+                }
+
                 ForEach(manifest.configFields, id: \.id) { field in
                     fieldView(for: field)
                 }
@@ -76,6 +80,12 @@ struct ExtensionConfigCard: View {
                 Text(manifest.description ?? "Extension settings")
                     .font(theme.font(size: 10, weight: .medium))
                     .foregroundStyle(theme.textTertiary)
+
+                if !missingRequiredFields.isEmpty {
+                    Text("Not fully configured")
+                        .font(theme.font(size: 9, weight: .semibold))
+                        .foregroundStyle(theme.statusWarning)
+                }
             }
 
             Spacer()
@@ -86,11 +96,19 @@ struct ExtensionConfigCard: View {
 
     @ViewBuilder
     private func fieldView(for field: ConfigField) -> some View {
+        let isMissing = isMissingRequired(field)
+
         VStack(alignment: .leading, spacing: 6) {
-            Text(field.label.uppercased())
-                .font(theme.font(size: 9, weight: .semibold))
-                .foregroundStyle(theme.textSecondary)
-                .tracking(0.5)
+            HStack(spacing: 6) {
+                Text(field.label.uppercased())
+                    .font(theme.font(size: 9, weight: .semibold))
+                    .foregroundStyle(theme.textSecondary)
+                    .tracking(0.5)
+
+                if isMissing {
+                    missingFieldBadge
+                }
+            }
 
             switch field.type {
             case .string, .number, .path:
@@ -101,6 +119,12 @@ struct ExtensionConfigCard: View {
                 toggleView(for: field)
             case .choice:
                 pickerView(for: field)
+            }
+
+            if isMissing {
+                Text("Required — not configured. This extension will not run until it is set.")
+                    .font(theme.font(size: 9, weight: .semibold))
+                    .foregroundStyle(theme.statusWarning)
             }
 
             if let helpText = field.helpText {
@@ -230,5 +254,66 @@ struct ExtensionConfigCard: View {
         } else {
             configRepository.setValue(storedValue, forFieldId: field.id, extensionId: extensionId)
         }
+    }
+
+    // MARK: - Configuration Completeness
+
+    /// A `required` field with no effective value (stored value or `default`).
+    /// Such a field gates the probe — `ScriptProbe` refuses to run until it is
+    /// set — so the card must say so rather than render a bare empty field.
+    /// Optional fields are never flagged: an empty optional field is a valid,
+    /// silent configuration.
+    private func isMissingRequired(_ field: ConfigField) -> Bool {
+        field.required && readValue(for: field).isEmpty
+    }
+
+    /// The required fields the user still has to fill in, in manifest order.
+    private var missingRequiredFields: [ConfigField] {
+        manifest.configFields.filter { isMissingRequired($0) }
+    }
+
+    /// Card-level banner shown while any required field is unset, mirroring the
+    /// diagnostic banners used by the built-in provider cards.
+    private var notConfiguredBanner: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(theme.font(size: 11))
+                .foregroundStyle(theme.statusWarning)
+                .frame(width: 16)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Not fully configured")
+                    .font(theme.font(size: 10, weight: .semibold))
+                    .foregroundStyle(theme.statusWarning)
+
+                Text("The probe will not run until these required fields are set: \(missingRequiredFields.map(\.label).joined(separator: ", ")).")
+                    .font(theme.font(size: 9, weight: .medium))
+                    .foregroundStyle(theme.textTertiary)
+            }
+        }
+        .padding(8)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(theme.statusWarning.opacity(0.1))
+        )
+    }
+
+    /// Inline row badge marking a required field that has no value.
+    private var missingFieldBadge: some View {
+        HStack(spacing: 3) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(theme.font(size: 8))
+
+            Text("NOT CONFIGURED")
+                .font(theme.font(size: 8, weight: .bold))
+                .tracking(0.4)
+        }
+        .foregroundStyle(theme.statusWarning)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(
+            RoundedRectangle(cornerRadius: 4)
+                .fill(theme.statusWarning.opacity(0.12))
+        )
     }
 }

@@ -290,4 +290,187 @@ struct ScriptProbeTests {
         let available = await probe.isAvailable()
         #expect(available == false)
     }
+
+    // MARK: - Required Field Gating
+
+    @Test
+    func `probe throws and names the field when a required field has no value`() async {
+        let scriptOutput = """
+        { "quotas": [{ "type": "session", "percentRemaining": 80.0 }] }
+        """
+
+        let executor = MockCLIExecutor()
+        given(executor)
+            .execute(binary: .any, args: .any, input: .any, timeout: .any, workingDirectory: .any, autoResponses: .any)
+            .willReturn(CLIResult(output: scriptOutput, exitCode: 0))
+
+        let configRepo = MockExtensionConfigRepository()
+        let fields = [
+            ConfigField(id: "apiKey", label: "API Key", type: .secret, required: true),
+        ]
+        // Required field with no stored value and no default — the repository
+        // omits it, so the probe must refuse to run.
+        given(configRepo)
+            .allValues(forExtensionId: .value("openrouter"), fields: .any)
+            .willReturn([:])
+
+        let manifest = ExtensionManifest(
+            id: "openrouter", name: "OpenRouter", version: "1.0.0",
+            configFields: fields,
+            sections: [ExtensionSection(id: "q", type: .quotaGrid, probeCommand: "./probe.sh")]
+        )
+
+        let probe = ScriptProbe(
+            scriptPath: "./probe.sh",
+            extensionDir: URL(filePath: "/ext"),
+            providerId: "ext-openrouter",
+            sectionType: .quotaGrid,
+            timeout: 10,
+            cliExecutor: executor,
+            configRepository: configRepo,
+            manifest: manifest
+        )
+
+        // The error is typed and carries the field's human label, not its id.
+        await #expect(throws: ExtensionProbeError.unconfigured(fields: ["API Key"])) {
+            try await probe.probe()
+        }
+    }
+
+    @Test
+    func `probe runs once the required field is set`() async throws {
+        let scriptOutput = """
+        { "quotas": [{ "type": "session", "percentRemaining": 80.0 }] }
+        """
+
+        let executor = MockCLIExecutor()
+        given(executor)
+            .execute(binary: .any, args: .any, input: .any, timeout: .any, workingDirectory: .any, autoResponses: .any)
+            .willReturn(CLIResult(output: scriptOutput, exitCode: 0))
+
+        let configRepo = MockExtensionConfigRepository()
+        let fields = [
+            ConfigField(id: "apiKey", label: "API Key", type: .secret, required: true),
+        ]
+        given(configRepo)
+            .allValues(forExtensionId: .value("openrouter"), fields: .any)
+            .willReturn(["apiKey": "sk-123"])
+
+        let manifest = ExtensionManifest(
+            id: "openrouter", name: "OpenRouter", version: "1.0.0",
+            configFields: fields,
+            sections: [ExtensionSection(id: "q", type: .quotaGrid, probeCommand: "./probe.sh")]
+        )
+
+        let probe = ScriptProbe(
+            scriptPath: "./probe.sh",
+            extensionDir: URL(filePath: "/ext"),
+            providerId: "ext-openrouter",
+            sectionType: .quotaGrid,
+            timeout: 10,
+            cliExecutor: executor,
+            configRepository: configRepo,
+            manifest: manifest
+        )
+
+        let snapshot = try await probe.probe()
+        #expect(snapshot.quotas.count == 1)
+    }
+
+    @Test
+    func `probe still runs when only an optional field is unset`() async throws {
+        let scriptOutput = """
+        { "quotas": [{ "type": "session", "percentRemaining": 80.0 }] }
+        """
+
+        let executor = MockCLIExecutor()
+        var capturedArgs: [String] = []
+        given(executor)
+            .execute(binary: .any, args: .any, input: .any, timeout: .any, workingDirectory: .any, autoResponses: .any)
+            .willProduce { _, args, _, _, _, _ in
+                capturedArgs = args
+                return CLIResult(output: scriptOutput, exitCode: 0)
+            }
+
+        let configRepo = MockExtensionConfigRepository()
+        let fields = [
+            ConfigField(id: "baseUrl", label: "URL", type: .string),
+        ]
+        given(configRepo)
+            .allValues(forExtensionId: .value("openrouter"), fields: .any)
+            .willReturn([:])
+
+        let manifest = ExtensionManifest(
+            id: "openrouter", name: "OpenRouter", version: "1.0.0",
+            configFields: fields,
+            sections: [ExtensionSection(id: "q", type: .quotaGrid, probeCommand: "./probe.sh")]
+        )
+
+        let probe = ScriptProbe(
+            scriptPath: "./probe.sh",
+            extensionDir: URL(filePath: "/ext"),
+            providerId: "ext-openrouter",
+            sectionType: .quotaGrid,
+            timeout: 10,
+            cliExecutor: executor,
+            configRepository: configRepo,
+            manifest: manifest
+        )
+
+        let snapshot = try await probe.probe()
+        #expect(snapshot.quotas.count == 1)
+
+        // Optional and unset: silent, no env prefix, no error.
+        let command = capturedArgs.last ?? ""
+        #expect(!command.contains("CLAUDEBAR_"))
+    }
+
+    @Test
+    func `probe runs when a required field is satisfied by its default`() async throws {
+        let scriptOutput = """
+        { "quotas": [{ "type": "session", "percentRemaining": 80.0 }] }
+        """
+
+        let executor = MockCLIExecutor()
+        var capturedArgs: [String] = []
+        given(executor)
+            .execute(binary: .any, args: .any, input: .any, timeout: .any, workingDirectory: .any, autoResponses: .any)
+            .willProduce { _, args, _, _, _, _ in
+                capturedArgs = args
+                return CLIResult(output: scriptOutput, exitCode: 0)
+            }
+
+        let configRepo = MockExtensionConfigRepository()
+        let fields = [
+            ConfigField(id: "baseUrl", label: "URL", type: .string, required: true, defaultValue: "https://default.com"),
+        ]
+        // No stored value (writeValue maps empty → nil), so the repository folds
+        // in the default — which satisfies the required gate.
+        given(configRepo)
+            .allValues(forExtensionId: .value("openrouter"), fields: .any)
+            .willReturn(["baseUrl": "https://default.com"])
+
+        let manifest = ExtensionManifest(
+            id: "openrouter", name: "OpenRouter", version: "1.0.0",
+            configFields: fields,
+            sections: [ExtensionSection(id: "q", type: .quotaGrid, probeCommand: "./probe.sh")]
+        )
+
+        let probe = ScriptProbe(
+            scriptPath: "./probe.sh",
+            extensionDir: URL(filePath: "/ext"),
+            providerId: "ext-openrouter",
+            sectionType: .quotaGrid,
+            timeout: 10,
+            cliExecutor: executor,
+            configRepository: configRepo,
+            manifest: manifest
+        )
+
+        let snapshot = try await probe.probe()
+        #expect(snapshot.quotas.count == 1)
+
+        let command = capturedArgs.last ?? ""
+        #expect(command.contains("CLAUDEBAR_BASE_URL='https://default.com'"))
+    }
 }
