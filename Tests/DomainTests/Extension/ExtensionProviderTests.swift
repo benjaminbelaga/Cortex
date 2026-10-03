@@ -207,6 +207,42 @@ struct ExtensionProviderTests {
         #expect(available == false)
     }
 
+    // MARK: - Actionable failure surfacing
+
+    @Test
+    func `an unconfigured required field is surfaced, not collapsed into no-data`() async {
+        let probe = MockUsageProbe()
+        given(probe).probe().willThrow(ExtensionProbeError.unconfigured(fields: ["API Key"]))
+
+        let provider = ExtensionProvider(
+            manifest: makeManifest(id: "test", name: "Test"),
+            probes: ["q": probe],
+            settingsRepository: makeSettingsRepository()
+        )
+
+        await #expect(throws: ExtensionProbeError.unconfigured(fields: ["API Key"])) {
+            try await provider.refresh()
+        }
+        #expect(provider.lastError as? ExtensionProbeError == .unconfigured(fields: ["API Key"]))
+    }
+
+    @Test
+    func `a probe that simply reports nothing still collapses to no-data`() async {
+        let probe = MockUsageProbe()
+        given(probe).probe().willThrow(ProbeError.noData)
+
+        let provider = ExtensionProvider(
+            manifest: makeManifest(id: "test", name: "Test"),
+            probes: ["q": probe],
+            settingsRepository: makeSettingsRepository()
+        )
+
+        await #expect(throws: ProbeError.noData) {
+            try await provider.refresh()
+        }
+        #expect(provider.lastError is ProbeError)
+    }
+
     // MARK: - Helpers
 
     private func makeManifest(id: String, name: String) -> ExtensionManifest {

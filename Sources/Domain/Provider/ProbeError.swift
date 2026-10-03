@@ -78,6 +78,29 @@ public enum ProbeError: Error, Sendable, LocalizedError {
     }
 }
 
+/// Errors raised by the extension layer *before* a probe is allowed to run.
+///
+/// Lives in Domain, not Infrastructure, because `ExtensionProvider` (Domain) has
+/// to surface it: a probe that cannot run because a `required` config field is
+/// unset must say so, and collapsing it into `ProbeError.noData` hid the only
+/// message the user could act on. Kept as its own type rather than a
+/// `ProbeError` case: these failures happen before the script executes, so
+/// there is no exit code, no stdout and no CLI to attribute them to.
+public enum ExtensionProbeError: Error, Sendable, Equatable, LocalizedError {
+    /// One or more `required` config fields have neither a stored value nor a
+    /// `default`, so the probe was not run. `fields` holds the human-readable
+    /// labels of the missing fields, in manifest order.
+    case unconfigured(fields: [String])
+
+    public var errorDescription: String? {
+        switch self {
+        case .unconfigured(let fields):
+            let noun = fields.count == 1 ? "field" : "fields"
+            return "Extension not configured — set the required \(noun) in Settings: \(fields.joined(separator: ", "))."
+        }
+    }
+}
+
 // MARK: - Equatable (hint ignored for sessionExpired)
 
 extension ProbeError: Equatable {

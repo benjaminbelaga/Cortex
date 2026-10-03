@@ -67,29 +67,42 @@ public final class ExtensionProvider: AIProvider {
 
         // Run all section probes concurrently
         let probeEntries = Array(probes)
-        let results = await withTaskGroup(of: (String, UsageSnapshot?).self) { group in
+        let outcome = await withTaskGroup(of: (String, Result<UsageSnapshot, Error>).self) { group in
             for (sectionId, probe) in probeEntries {
                 group.addTask {
                     do {
                         let snapshot = try await probe.probe()
-                        return (sectionId, snapshot)
+                        return (sectionId, .success(snapshot))
                     } catch {
-                        return (sectionId, nil)
+                        return (sectionId, .failure(error))
                     }
                 }
             }
 
             var collected: [(String, UsageSnapshot)] = []
-            for await (sectionId, snapshot) in group {
-                if let snapshot {
+            /// The first error the user can ACT on. A probe that cannot run
+            /// because a required config field is unset must say so: collapsing
+            /// it into `noData` hides the only message that would let the user
+            /// fix it (honest states — see `ExtensionProbeError`).
+            var actionable: ExtensionProbeError?
+            for await (sectionId, result) in group {
+                switch result {
+                case .success(let snapshot):
                     collected.append((sectionId, snapshot))
+                case .failure(let error):
+                    if let probeError = error as? ExtensionProbeError,
+                       case .unconfigured = probeError {
+                        actionable = actionable ?? probeError
+                    }
                 }
             }
-            return collected
+            return (collected, actionable)
         }
 
+        let results = outcome.0
+
         guard !results.isEmpty else {
-            let error = ProbeError.noData
+            let error: Error = outcome.1 ?? ProbeError.noData
             lastError = error
             throw error
         }
