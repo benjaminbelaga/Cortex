@@ -72,6 +72,7 @@ struct GlobalUsagePanelView: View {
                     .font(theme.font(size: 10, weight: .bold))
                     .monospacedDigit()
                     .foregroundStyle(theme.textPrimary)
+                    .help(Self.coverageHelp)
             } else if let usage {
                 Text(formatTokens(usage.totals.totalTokens))
                     .font(theme.font(size: 10, weight: .bold))
@@ -212,7 +213,7 @@ struct GlobalUsagePanelView: View {
                     if let perSession = cost.eurPerSession ?? cost.usdPerSession {
                         ratio(cost.eurPerSession == nil ? "$/session" : "€/session", formatted(perSession))
                     }
-                    ratio("billed", formattedCoverage(cost.coveragePct))
+                    ratio("priced", formattedCoverage(cost.coveragePct))
                     if let recorded = cost.recordedUsd {
                         ratio("actual cost", "$\(formatted(recorded))")
                     }
@@ -682,9 +683,17 @@ struct GlobalUsagePanelView: View {
         return "$\(formatted(cost.totalUsd))"
     }
 
+    /// "X % priced" — the share of tokens Cortex could price from the tariff
+    /// SSOT. It is NOT what was paid: a $10 subscription that consumes $363 of
+    /// API-equivalent traffic still shows a price-coverage figure here, never a
+    /// 363-dollar bill (Ben 2026-10-03, the old "% billed" mislabel).
     private func formattedCoverage(_ value: Double) -> String {
-        value < 10 ? String(format: "%.1f%% billed", value) : "\(Int(value.rounded()))% billed"
+        value < 10 ? String(format: "%.1f%% priced", value) : "\(Int(value.rounded()))% priced"
     }
+
+    static let coverageHelp =
+        "Price coverage: the share of your tokens Cortex could price from the tariff SSOT. "
+        + "It is not what you paid — subscription usage is not billed per token."
 
     private func formatTokens(_ value: Int) -> String {
         switch value {

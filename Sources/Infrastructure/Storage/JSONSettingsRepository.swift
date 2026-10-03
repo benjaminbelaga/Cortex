@@ -227,7 +227,9 @@ public final class JSONSettingsRepository:
     public func overviewSort() -> OverviewSort {
         guard let raw: String = store.read(key: "app.overviewSort"),
               let sort = OverviewSort(rawValue: raw) else {
-            return .percentRemaining
+            // Default is the router's Priority order (Ben 2026-10-03): the list
+            // shows what to use first. An explicitly stored choice still wins.
+            return .priority
         }
         return sort
     }

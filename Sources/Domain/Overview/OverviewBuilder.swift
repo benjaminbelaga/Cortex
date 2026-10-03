@@ -306,7 +306,8 @@ public enum OverviewBuilder {
     public static func sort(
         _ snapshots: [ProviderSnapshot],
         by mode: OverviewSort,
-        filter: OverviewWindowFilter
+        filter: OverviewWindowFilter,
+        priority: PriorityRanking? = nil
     ) -> [ProviderSnapshot] {
         var groupOrder: [String] = []
         var groups: [String: [(offset: Int, snapshot: ProviderSnapshot)]] = [:]
@@ -317,8 +318,8 @@ public enum OverviewBuilder {
         let sortedGroups = groupOrder
             .map { ($0, groups[$0] ?? []) }
             .sorted { lhs, rhs in
-                let lhsKey = groupKey(lhs.1, mode: mode, filter: filter)
-                let rhsKey = groupKey(rhs.1, mode: mode, filter: filter)
+                let lhsKey = groupKey(lhs.1, mode: mode, filter: filter, priority: priority)
+                let rhsKey = groupKey(rhs.1, mode: mode, filter: filter, priority: priority)
                 if lhsKey != rhsKey { return lhsKey < rhsKey }
                 return (lhs.1.first?.offset ?? 0) < (rhs.1.first?.offset ?? 0)
             }
@@ -329,11 +330,12 @@ public enum OverviewBuilder {
     private static func groupKey(
         _ members: [(offset: Int, snapshot: ProviderSnapshot)],
         mode: OverviewSort,
-        filter: OverviewWindowFilter
+        filter: OverviewWindowFilter,
+        priority: PriorityRanking?
     ) -> (rank: Int, value: Double) {
         var best: (rank: Int, value: Double)?
         for member in members {
-            let key = sortKey(member.snapshot, mode: mode, filter: filter)
+            let key = sortKey(member.snapshot, mode: mode, filter: filter, priority: priority)
             if best == nil || key < best! { best = key }
         }
         return best ?? (1, 0)
@@ -343,13 +345,21 @@ public enum OverviewBuilder {
     private static func sortKey(
         _ snapshot: ProviderSnapshot,
         mode: OverviewSort,
-        filter: OverviewWindowFilter
+        filter: OverviewWindowFilter,
+        priority: PriorityRanking?
     ) -> (rank: Int, value: Double) {
+        // Priority is the router's ordering and applies BEFORE the window
+        // filter: Session/Week/All change what is measured, never who comes
+        // first (Ben 2026-10-03). A measured rank beats a missing window.
+        if mode == .priority, let priority, priority.isAvailable {
+            return (0, Double(priority.rank(forProvider: snapshot.providerId)))
+        }
         guard let worst = snapshot.worstWindow(matching: filter) else {
             return (1, 0) // no matching windows → bottom, stable-ish by id upstream
         }
         switch mode {
-        case .percentRemaining:
+        case .priority, .percentRemaining:
+            // No router decision → honest fallback to worst percentage.
             let value = worst.isDollarBased ? 101 : worst.percentRemaining
             return (0, value)
         case .timeToReset:

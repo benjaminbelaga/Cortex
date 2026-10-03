@@ -34,7 +34,8 @@ struct OverviewDashboardView: View {
         OverviewBuilder.sort(
             OverviewBuilder.build(providers: providers),
             by: settings.overviewSort,
-            filter: settings.overviewWindowFilter
+            filter: settings.overviewWindowFilter,
+            priority: PriorityRanking(routeNow: routeNow, profile: settings.routeProfile)
         )
     }
 

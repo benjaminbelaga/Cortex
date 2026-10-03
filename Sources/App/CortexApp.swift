@@ -132,6 +132,9 @@ struct CortexApp: App {
         // Bake in the curated roster: hide niche native probe providers so a
         // fresh install stays curated. Keys already stored are never clobbered.
         CortexApp.seedCuratedProviderDefaultsIfNeeded(settingsRepository: settingsRepository)
+        // Ben's profile runs DeepSeek on the pooled subscriptions; seed the
+        // preference so the DeepSeek logo shows on all three (Ben 2026-10-03).
+        CortexApp.seedPreferredModelsIfNeeded(settingsRepository: settingsRepository)
         // v7.2: drop the removed `qwen-api` provider settings subtree (dead
         // router id `qwen_cloud_payg`). Idempotent — no-op on a clean install.
         QwenApiRemovalMigration.applyIfNeeded()
@@ -532,6 +535,21 @@ struct CortexApp: App {
             guard keyAbsent else { continue }
             settingsRepository.setEnabled(false, forProvider: id)
         }
+    }
+
+    /// Seed the preferred model family that Ben's profile runs on the pooled
+    /// subscriptions (OpenCode Go, Command Code, Ollama Cloud all serve
+    /// DeepSeek). Only fills a MISSING key — an explicit choice is never
+    /// clobbered — so the DeepSeek logo appears on every provider that runs it
+    /// instead of only the one that happened to be set (Ben 2026-10-03).
+    static func seedPreferredModelsIfNeeded(settingsRepository: any AppSettingsRepository) {
+        var map = settingsRepository.providerPreferredModel()
+        var changed = false
+        for id in ["opencode-go", "commandcode", "ollama"] where map[id] == nil {
+            map[id] = ModelFamily.deepseek.rawValue
+            changed = true
+        }
+        if changed { settingsRepository.setProviderPreferredModel(map) }
     }
 
     var body: some Scene {

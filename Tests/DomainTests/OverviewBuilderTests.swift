@@ -246,4 +246,71 @@ struct OverviewBuilderTests {
         let sorted = OverviewBuilder.sort([later, unknown, soon], by: .timeToReset, filter: .session)
         #expect(sorted.map(\.id) == ["soon", "later", "unknown"])
     }
+
+    // MARK: - Priority ordering (router route_now → list order)
+
+    private static func routeNow(
+        recommended: String,
+        alternatives: [String] = [],
+        excluded: [String] = []
+    ) -> RouterRouteNow {
+        RouterRouteNow(
+            generatedAt: Date(),
+            profiles: ["plan": RouterRecommendation(
+                decisionId: "d", provider: recommended,
+                model: "m", score: 90,
+                excluded: excluded.map { RouterRouteExclusion(provider: $0, reason: "r") },
+                alternatives: alternatives.map { RouterRouteAlternative(provider: $0, model: "m", score: 80) }
+            )]
+        )
+    }
+
+    private static func priorityRow(_ providerId: String, percent: Double) -> ProviderSnapshot {
+        ProviderSnapshot(id: providerId, providerId: providerId, providerName: providerId, accountLabel: nil, windows: [
+            WindowSnapshot(id: "\(providerId)-5h", title: "5h", percentRemaining: percent, resetsAt: nil, compactReset: "1h", scope: .session),
+        ])
+    }
+
+    @Test("PriorityRanking maps the route_now decision to Cortex provider ranks")
+    func priorityRankingMapsRouterIds() {
+        let ranking = PriorityRanking(
+            routeNow: Self.routeNow(recommended: "claude", alternatives: ["codex", "commandcode"], excluded: ["bailian_token_plan"]),
+            profile: .plan
+        )
+        #expect(ranking.isAvailable)
+        #expect(ranking.rank(forProvider: "claude") == 0)
+        #expect(ranking.rank(forProvider: "codex") == 1)
+        #expect(ranking.rank(forProvider: "commandcode") == 2)
+        #expect(ranking.rank(forProvider: "qwen") == PriorityRanking.excludedRank)
+        #expect(ranking.rank(forProvider: "opencode-go") == PriorityRanking.unmentionedRank)
+    }
+
+    @Test("Priority sort follows the router's order, independent of the window filter")
+    func prioritySortFollowsRouterOrder() {
+        // Router (plan): claude → codex → commandcode; glm excluded; deepseek unmentioned.
+        let rows = [
+            Self.priorityRow("glm", percent: 90),
+            Self.priorityRow("deepseek", percent: 5),
+            Self.priorityRow("commandcode", percent: 70),
+            Self.priorityRow("codex", percent: 40),
+            Self.priorityRow("claude", percent: 80),
+        ]
+        let ranking = PriorityRanking(
+            routeNow: Self.routeNow(recommended: "claude", alternatives: ["codex", "commandcode"], excluded: ["glm_pro"]),
+            profile: .plan
+        )
+        let expected = ["claude", "codex", "commandcode", "deepseek", "glm"]
+
+        #expect(OverviewBuilder.sort(rows, by: .priority, filter: .session, priority: ranking).map(\.providerId) == expected)
+        // Session/Week/All change what is measured, never the Priority order.
+        #expect(OverviewBuilder.sort(rows, by: .priority, filter: .weekly, priority: ranking).map(\.providerId) == expected)
+    }
+
+    @Test("Priority sort falls back to worst percentage when no route_now is available")
+    func prioritySortFallsBackWithoutRouteNow() {
+        let rows = [Self.priorityRow("a", percent: 80), Self.priorityRow("b", percent: 10)]
+        let ranking = PriorityRanking(routeNow: nil, profile: .plan)
+        #expect(!ranking.isAvailable)
+        #expect(OverviewBuilder.sort(rows, by: .priority, filter: .session, priority: ranking).map(\.providerId) == ["b", "a"])
+    }
 }

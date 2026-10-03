@@ -60,7 +60,12 @@ public enum OverviewWindowFilter: String, Sendable, CaseIterable, Identifiable {
 
 /// Row ordering for the dashboard.
 public enum OverviewSort: String, Sendable, CaseIterable, Identifiable {
-    /// Worst remaining percentage first (default — "ce qu'il me reste").
+    /// The router's own ordering for the active profile (Ben 2026-10-03):
+    /// recommended provider first, then its alternatives in order, then
+    /// providers the router did not mention, then the excluded ones. Falls back
+    /// to worst-percentage when no `route_now` decision is available.
+    case priority
+    /// Worst remaining percentage first ("ce qu'il me reste").
     case percentRemaining
     /// Soonest reset first, relative ("3d 4h"), unknown resets last.
     case timeToReset
@@ -70,9 +75,62 @@ public enum OverviewSort: String, Sendable, CaseIterable, Identifiable {
     /// French UI label (rawValue is the stable storage key).
     public var displayName: String {
         switch self {
+        case .priority: return "Priority"
         case .percentRemaining: return "% left"
         case .timeToReset: return "Reset"
         }
+    }
+}
+
+/// Router-derived ranking backing the Priority sort: the `route_now` decision
+/// for the active profile, translated to Cortex provider ids. Cortex NEVER
+/// invents this order — it is the router's (Contract B). Recommended provider
+/// ranks first, then alternatives in score order, then providers the router did
+/// not mention, then the excluded ones (exhausted / incompatible / reconnect).
+public struct PriorityRanking: Sendable, Equatable {
+    /// Cortex provider id → rank (lower = higher priority).
+    public let rankByProvider: [String: Int]
+    /// Provider ids the router explicitly excluded.
+    public let excluded: Set<String>
+    /// False when there is no usable decision → the caller keeps its fallback.
+    public let isAvailable: Bool
+
+    /// Ranks used for the two non-router buckets, kept strictly above the
+    /// recommendation/alternatives so ordering can never collide.
+    public static let unmentionedRank = 100
+    public static let excludedRank = 200
+
+    public init(routeNow: RouterRouteNow?, profile: RouterRouteNow.Profile) {
+        guard let rec = routeNow?.recommendation(for: profile) else {
+            rankByProvider = [:]
+            excluded = []
+            isAvailable = false
+            return
+        }
+        var ranks: [String: Int] = [:]
+        var excludedIds: Set<String> = []
+        if let id = RouterProviderIdMap.cortexId(forRouter: rec.provider) { ranks[id] = 0 }
+        var next = 1
+        for alt in rec.alternatives {
+            guard let id = RouterProviderIdMap.cortexId(forRouter: alt.provider) else { continue }
+            if ranks[id] == nil { ranks[id] = next; next += 1 }
+        }
+        for ex in rec.excluded {
+            if let id = RouterProviderIdMap.cortexId(forRouter: ex.provider) { excludedIds.insert(id) }
+        }
+        // A provider can only carry one verdict — a measured rank always wins.
+        excludedIds.subtract(ranks.keys)
+        rankByProvider = ranks
+        excluded = excludedIds
+        isAvailable = !ranks.isEmpty || !excludedIds.isEmpty
+    }
+
+    /// Rank for a Cortex provider id: recommended/alternatives < unmentioned <
+    /// excluded.
+    public func rank(forProvider providerId: String) -> Int {
+        if let rank = rankByProvider[providerId] { return rank }
+        if excluded.contains(providerId) { return Self.excludedRank }
+        return Self.unmentionedRank
     }
 }
 
