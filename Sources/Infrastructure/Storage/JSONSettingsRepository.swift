@@ -6,8 +6,9 @@ import Domain
 /// (including all sub-protocols) + HookSettingsRepository + NotifySettingsRepository.
 ///
 /// Backed by `JSONSettingsStore` reading/writing `~/.claudebar/settings.json`.
-/// Vercel and Notify! credentials use the injected secure store; legacy provider
-/// credentials remain in UserDefaults pending their own migrations.
+/// Vercel, Notify! and provider credentials use the injected secure store; earlier
+/// plaintext credentials are read-only UserDefaults legacy, migrated on first read
+/// and removed only after a verified secure write.
 public final class JSONSettingsRepository:
     AppSettingsRepository,
     ZaiSettingsRepository,
@@ -42,6 +43,62 @@ public final class JSONSettingsRepository:
             secureKey: CredentialKey.vercelApiKey,
             legacyKey: Self.legacyVercelApiKeyKey
         )
+    }
+
+    private var githubTokenCredential: SecureCredentialMigration {
+        SecureCredentialMigration(
+            secureStore: secureCredentials,
+            legacyStore: credentials,
+            secureKey: CredentialKey.githubToken,
+            legacyKey: Self.legacyGithubTokenKey
+        )
+    }
+
+    private var alibabaManualCookieCredential: SecureCredentialMigration {
+        SecureCredentialMigration(
+            secureStore: secureCredentials,
+            legacyStore: credentials,
+            secureKey: CredentialKey.alibabaManualCookie,
+            legacyKey: Self.legacyAlibabaManualCookieKey
+        )
+    }
+
+    private var alibabaApiKeyCredential: SecureCredentialMigration {
+        SecureCredentialMigration(
+            secureStore: secureCredentials,
+            legacyStore: credentials,
+            secureKey: CredentialKey.alibabaApiKey,
+            legacyKey: Self.legacyAlibabaApiKeyKey
+        )
+    }
+
+    private var minimaxApiKeyCredential: SecureCredentialMigration {
+        SecureCredentialMigration(
+            secureStore: secureCredentials,
+            legacyStore: credentials,
+            secureKey: CredentialKey.minimaxApiKey,
+            legacyKey: Self.legacyMinimaxApiKeyKey
+        )
+    }
+
+    private var deepseekApiKeyCredential: SecureCredentialMigration {
+        SecureCredentialMigration(
+            secureStore: secureCredentials,
+            legacyStore: credentials,
+            secureKey: CredentialKey.deepseekApiKey,
+            legacyKey: Self.legacyDeepSeekApiKeyKey
+        )
+    }
+
+    /// Persists a secret through its migration seam. An empty value is treated as a
+    /// clear — it deletes both stores rather than storing a blank as if it were a
+    /// credential — so a blank field can never read back as a configured secret.
+    private func storeSecret(_ value: String, using migration: SecureCredentialMigration) {
+        if value.isEmpty {
+            migration.delete()
+        } else {
+            migration.save(value)
+        }
     }
 
     public init(
@@ -516,22 +573,30 @@ public final class JSONSettingsRepository:
         store.write(value: year, key: "copilot.lastUsagePeriodYear")
     }
 
-    // Credentials (UserDefaults for now, Keychain migration later)
+    // The Copilot token now lives in the Keychain. Its legacy UserDefaults key
+    // (`com.claudebar.credentials.github-copilot-token`) is read-only: migrated on
+    // first read and removed only after a verified secure write. The GitHub username
+    // is not a secret and stays in UserDefaults.
 
+    /// Saves the GitHub Copilot token in the Keychain. An empty token clears both stores.
     public func saveGithubToken(_ token: String) {
-        credentials.set(token, forKey: "com.claudebar.credentials.github-copilot-token")
+        storeSecret(token, using: githubTokenCredential)
     }
 
+    /// Reads the GitHub Copilot token from the Keychain, migrating a legacy
+    /// UserDefaults value on first read.
     public func getGithubToken() -> String? {
-        credentials.string(forKey: "com.claudebar.credentials.github-copilot-token")
+        githubTokenCredential.get()
     }
 
+    /// Deletes the GitHub Copilot token from the Keychain and any legacy UserDefaults copy.
     public func deleteGithubToken() {
-        credentials.removeObject(forKey: "com.claudebar.credentials.github-copilot-token")
+        githubTokenCredential.delete()
     }
 
+    /// Whether a GitHub Copilot token is available in either store.
     public func hasGithubToken() -> Bool {
-        getGithubToken() != nil
+        githubTokenCredential.exists()
     }
 
     public func saveGithubUsername(_ username: String) {
@@ -601,28 +666,41 @@ public final class JSONSettingsRepository:
         store.write(value: source.rawValue, key: "alibaba.cookieSource")
     }
 
+    // The Alibaba manual cookie and API key now live in the Keychain. Their legacy
+    // UserDefaults keys (`com.claudebar.credentials.alibaba-manual-cookie` and
+    // `com.claudebar.credentials.alibaba-api-key`) are read-only: migrated on first
+    // read and removed only after a verified secure write.
+
+    /// Saves the Alibaba manual cookie in the Keychain. An empty cookie clears both stores.
     public func saveAlibabaManualCookie(_ cookie: String) {
-        credentials.set(cookie, forKey: "com.claudebar.credentials.alibaba-manual-cookie")
+        storeSecret(cookie, using: alibabaManualCookieCredential)
     }
 
+    /// Reads the Alibaba manual cookie from the Keychain, migrating a legacy
+    /// UserDefaults value on first read.
     public func getAlibabaManualCookie() -> String? {
-        credentials.string(forKey: "com.claudebar.credentials.alibaba-manual-cookie")
+        alibabaManualCookieCredential.get()
     }
 
+    /// Saves the Alibaba API key in the Keychain. An empty key clears both stores.
     public func saveAlibabaApiKey(_ key: String) {
-        credentials.set(key, forKey: "com.claudebar.credentials.alibaba-api-key")
+        storeSecret(key, using: alibabaApiKeyCredential)
     }
 
+    /// Reads the Alibaba API key from the Keychain, migrating a legacy UserDefaults
+    /// value on first read.
     public func getAlibabaApiKey() -> String? {
-        credentials.string(forKey: "com.claudebar.credentials.alibaba-api-key")
+        alibabaApiKeyCredential.get()
     }
 
+    /// Deletes the Alibaba API key from the Keychain and any legacy UserDefaults copy.
     public func deleteAlibabaApiKey() {
-        credentials.removeObject(forKey: "com.claudebar.credentials.alibaba-api-key")
+        alibabaApiKeyCredential.delete()
     }
 
+    /// Whether an Alibaba API key is available in either store.
     public func hasAlibabaApiKey() -> Bool {
-        credentials.object(forKey: "com.claudebar.credentials.alibaba-api-key") != nil
+        alibabaApiKeyCredential.exists()
     }
 
     // MARK: - HookSettingsRepository
@@ -750,10 +828,11 @@ public final class JSONSettingsRepository:
 
     /// Where the token goes when the Keychain will not take it.
     ///
-    /// The same UserDefaults credential store that already holds the GitHub,
-    /// MiniMax, DeepSeek and Alibaba tokens, so this is the app's existing bar
-    /// rather than a new low. It is a fallback and never the first choice: a
-    /// signed build stores the token in the Keychain and this store stays empty.
+    /// The same UserDefaults credential store that historically held the GitHub,
+    /// MiniMax, DeepSeek and Alibaba tokens (those now live in the Keychain), so
+    /// this is the app's existing bar rather than a new low. It is a fallback and
+    /// never the first choice: a signed build stores the token in the Keychain and
+    /// this store stays empty.
     private var notifyFallbackCredentials: UserDefaultsCredentialRepository {
         UserDefaultsCredentialRepository(defaults: credentials)
     }
@@ -864,22 +943,29 @@ public final class JSONSettingsRepository:
         store.write(value: envVar, key: "minimax.authEnvVar")
     }
 
-    // MiniMax Credentials (UserDefaults for now)
+    // The MiniMax API key now lives in the Keychain. Its legacy UserDefaults key
+    // (`com.claudebar.credentials.minimax-api-key`) is read-only: migrated on first
+    // read and removed only after a verified secure write.
 
+    /// Saves the MiniMax API key in the Keychain. An empty key clears both stores.
     public func saveMinimaxApiKey(_ key: String) {
-        credentials.set(key, forKey: "com.claudebar.credentials.minimax-api-key")
+        storeSecret(key, using: minimaxApiKeyCredential)
     }
 
+    /// Reads the MiniMax API key from the Keychain, migrating a legacy UserDefaults
+    /// value on first read.
     public func getMinimaxApiKey() -> String? {
-        credentials.string(forKey: "com.claudebar.credentials.minimax-api-key")
+        minimaxApiKeyCredential.get()
     }
 
+    /// Deletes the MiniMax API key from the Keychain and any legacy UserDefaults copy.
     public func deleteMinimaxApiKey() {
-        credentials.removeObject(forKey: "com.claudebar.credentials.minimax-api-key")
+        minimaxApiKeyCredential.delete()
     }
 
+    /// Whether a MiniMax API key is available in either store.
     public func hasMinimaxApiKey() -> Bool {
-        getMinimaxApiKey() != nil
+        minimaxApiKeyCredential.exists()
     }
 
     // MARK: - VercelSettingsRepository
@@ -909,7 +995,16 @@ public final class JSONSettingsRepository:
         vercelCredentials.exists()
     }
 
+    // MARK: - Legacy plaintext UserDefaults keys
+
+    // Read-only: the secrets they hold now live in the Keychain and are migrated on
+    // first read, removed only after a verified secure write. Never write to them.
     private static let legacyVercelApiKeyKey = "com.claudebar.credentials.vercel-api-key"
+    private static let legacyGithubTokenKey = "com.claudebar.credentials.github-copilot-token"
+    private static let legacyAlibabaManualCookieKey = "com.claudebar.credentials.alibaba-manual-cookie"
+    private static let legacyAlibabaApiKeyKey = "com.claudebar.credentials.alibaba-api-key"
+    private static let legacyMinimaxApiKeyKey = "com.claudebar.credentials.minimax-api-key"
+    private static let legacyDeepSeekApiKeyKey = "com.claudebar.credentials.deepseek-api-key"
 }
 
 // MARK: - DeepSeekSettingsRepository
@@ -923,22 +1018,29 @@ extension JSONSettingsRepository: DeepSeekSettingsRepository {
         store.write(value: envVar, key: "deepseek.authEnvVar")
     }
 
-    // DeepSeek Credentials (UserDefaults for now)
+    // The DeepSeek API key now lives in the Keychain. Its legacy UserDefaults key
+    // (`com.claudebar.credentials.deepseek-api-key`) is read-only: migrated on first
+    // read and removed only after a verified secure write.
 
+    /// Saves the DeepSeek API key in the Keychain. An empty key clears both stores.
     public func saveDeepSeekApiKey(_ key: String) {
-        credentials.set(key, forKey: "com.claudebar.credentials.deepseek-api-key")
+        storeSecret(key, using: deepseekApiKeyCredential)
     }
 
+    /// Reads the DeepSeek API key from the Keychain, migrating a legacy UserDefaults
+    /// value on first read.
     public func getDeepSeekApiKey() -> String? {
-        credentials.string(forKey: "com.claudebar.credentials.deepseek-api-key")
+        deepseekApiKeyCredential.get()
     }
 
+    /// Deletes the DeepSeek API key from the Keychain and any legacy UserDefaults copy.
     public func deleteDeepSeekApiKey() {
-        credentials.removeObject(forKey: "com.claudebar.credentials.deepseek-api-key")
+        deepseekApiKeyCredential.delete()
     }
 
+    /// Whether a DeepSeek API key is available in either store.
     public func hasDeepSeekApiKey() -> Bool {
-        getDeepSeekApiKey() != nil
+        deepseekApiKeyCredential.exists()
     }
 }
 

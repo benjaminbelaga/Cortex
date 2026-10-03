@@ -26,4 +26,8 @@ public enum CredentialKey {
     public static let githubUsername = "github-username"
     public static let vercelApiKey = "vercel-ai-gateway-api-key"
     public static let notifyDeviceToken = "notify-device-token"
+    public static let minimaxApiKey = "minimax-api-key"
+    public static let deepseekApiKey = "deepseek-api-key"
+    public static let alibabaApiKey = "alibaba-api-key"
+    public static let alibabaManualCookie = "alibaba-manual-cookie"
 }
