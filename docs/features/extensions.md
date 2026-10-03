@@ -110,7 +110,12 @@ Config values are injected into probe scripts as `CLAUDEBAR_*` environment varia
 #### Config Storage
 
 - **Non-secret fields** → `~/.claudebar/settings.json` under `extensions.<id>.<fieldId>`
-- **Secret fields** (`type: "secret"`) → UserDefaults (Keychain migration planned)
+- **Secret fields** (`type: "secret"`) → the macOS Keychain (service
+  `fr.yoyaku.cortex.credentials`, account `ext-<id>-<fieldId>`). A value left in
+  UserDefaults by an older build is migrated on first read — written to the
+  Keychain, read back to prove the write landed, and only then removed; if the
+  write is refused (an ad-hoc-signed build has no stable Keychain identity) the
+  legacy value is kept and returned rather than lost.
 
 ```json
 // ~/.claudebar/settings.json
@@ -549,5 +554,7 @@ xcodebuild test -scheme Cortex-Workspace -workspace Cortex.xcworkspace \
 - JSON-only output — no code injection into the app
 - Extensions cannot access app internals; they only produce data via stdout
 - Extension provider IDs are prefixed with `ext-` to avoid collisions with built-in providers
-- Secret config values are stored in UserDefaults (Keychain migration planned), not in settings JSON
+- Secret config values live in the macOS Keychain, never in settings JSON; the
+  UserDefaults location is read-only legacy, migrated on first read and removed
+  only after the Keychain write is verified
 - Config values are injected via `env` command, not embedded in script arguments

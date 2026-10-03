@@ -2,7 +2,8 @@ import Foundation
 import Mockable
 
 /// Reads and writes extension config values.
-/// Non-secret values are persisted in settings JSON, secrets in UserDefaults.
+/// Non-secret values are persisted in settings JSON, secrets in the Keychain
+/// (UserDefaults is read-only legacy, migrated on first read).
 @Mockable
 public protocol ExtensionConfigRepository: Sendable {
     /// Reads a non-secret config value.

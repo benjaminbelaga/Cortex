@@ -584,7 +584,8 @@ public final class AppSettings {
 
     /// Extension config repository for dynamic extension provider settings.
     public let extensionConfig: any ExtensionConfigRepository = JSONExtensionConfigRepository(
-        settingsStore: .shared
+        settingsStore: .shared,
+        credentialStore: CortexRuntime.credentials
     )
 }
 
