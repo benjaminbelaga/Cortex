@@ -1,0 +1,45 @@
+name: Contributor Build
+# Isolated CI (Cortex plan, Lot 4): a contributor build with NO signing
+# certificate, kept separate from the signed distribution path (release.yml /
+# appstore-release.yml). Dispatch-only on purpose: `pull_request` is not an
+# allowed event for this repository, and the macOS lane bills at 10x when it
+# runs unattended. Same recipe as the README's "Build & Test" block:
+# CODE_SIGNING_ALLOWED=NO means no Developer ID identity is required.
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: 'Exact commit to build (required by gha-safe)'
+        required: true
+        type: string
+
+concurrency:
+  group: cortex-contributor-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Unsigned contributor build
+    runs-on: [self-hosted, macos, arm64, cortex-ci]
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.expected_sha }}
+      - name: Build (unsigned)
+        run: |
+          set -euo pipefail
+          tuist install
+          tuist generate --no-open
+          ./scripts/fix-swiftterm-metal.sh
+          sed -i '' 's/MACOSX_DEPLOYMENT_TARGET = 1[0-3]\.[0-9]*/MACOSX_DEPLOYMENT_TARGET = 14.0/g' \
+            Tuist/.build/tuist-derived/*/*.xcodeproj/project.pbxproj || true
+          xcodebuild build \
+            -workspace Cortex.xcworkspace \
+            -scheme Cortex \
+            -configuration Release \
+            -destination 'platform=macOS,arch=arm64' \
+            -skipMacroValidation \
+            SWIFT_ENABLE_EXPLICIT_MODULES=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            MACOSX_DEPLOYMENT_TARGET=14.0
