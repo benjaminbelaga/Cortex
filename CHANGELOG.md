@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (Cortex — attention feed and mission inspector)
+
+- **« À traiter »** — a read-only, deterministic attention feed built from
+  `llm-router attention --json` (`{"count": N, "items": [...]}`). It reports four
+  kinds — `launch_divergence` (high), `account_reconnect` (high),
+  `result_to_validate` (medium) and `receipt_awaited` (low) — ordered by
+  severity, and keeps any kind a newer router adds as-is rather than dropping it.
+- **Cheap embedding.** `llm-router status --format json-v2 --with-attention`
+  carries the same feed as `attention` / `attention_count` inside the snapshot
+  Cortex already decodes, so the UI never pays for a second subprocess.
+- **Mission Inspector.** `llm-router mission inspect <id>` renders the
+  `recommended → requested / observed / receipt_state / divergence → result /
+  metrics` chain. `result.success` stays a tri-state — `null` means **never
+  evaluated**, not a pass, and a clean `rc=0` validates nothing — missing metrics
+  render as `—` (never `0`), and an unknown mission exits `1`. See
+  [docs/features/attention-feed.md](docs/features/attention-feed.md).
+
 ### Added (Cortex — router-priority dashboard ordering)
 
 - **Priority** is now the default dashboard sort. The list is ordered by

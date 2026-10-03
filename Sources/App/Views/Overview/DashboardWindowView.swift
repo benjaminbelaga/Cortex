@@ -17,6 +17,12 @@ struct DashboardWindowView: View {
     var onRemoveProvider: ((String) -> Void)? = nil
 
     @Environment(\.appTheme) private var theme
+    @Environment(\.openWindow) private var openWindow
+
+    @State private var surface: DashboardSurface = .resources
+    /// Set when a row of the « À traiter » feed is opened; the inspector replaces
+    /// the list in place (a real `.sheet` does not render from the NSPopover).
+    @State private var inspectedMissionId: String?
 
     var body: some View {
         ZStack {
@@ -27,14 +33,9 @@ struct DashboardWindowView: View {
                 header
 
                 ScrollView(.vertical, showsIndicators: true) {
-                    OverviewDashboardView(
-                        providers: providers,
-                        settings: settings,
-                        onRemoveProvider: onRemoveProvider,
-                        rendersAccountCatalog: false
-                    )
-                    .padding(16)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    content
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
         }
@@ -46,6 +47,32 @@ struct DashboardWindowView: View {
         )
     }
 
+    /// The window hosts two surfaces: the existing quota list and the
+    /// « À traiter » feed (what needs a decision now). The inspector takes over
+    /// the whole surface while a mission is open.
+    @ViewBuilder
+    private var content: some View {
+        if let missionId = inspectedMissionId {
+            MissionInspectorView(missionId: missionId) {
+                withAnimation(.easeOut(duration: 0.15)) { inspectedMissionId = nil }
+            }
+        } else if surface == .attention {
+            AttentionFeedView(
+                onOpenMission: { missionId in
+                    withAnimation(.easeOut(duration: 0.15)) { inspectedMissionId = missionId }
+                },
+                onReconnectAccount: { _, _ in openWindow(id: "settings") }
+            )
+        } else {
+            OverviewDashboardView(
+                providers: providers,
+                settings: settings,
+                onRemoveProvider: onRemoveProvider,
+                rendersAccountCatalog: false
+            )
+        }
+    }
+
     private var header: some View {
         HStack(spacing: 8) {
             Image(systemName: "chart.bar.xaxis")
@@ -55,6 +82,17 @@ struct DashboardWindowView: View {
                 .font(theme.font(size: 13, weight: .semibold))
                 .foregroundStyle(theme.textPrimary)
             Spacer(minLength: 0)
+
+            if inspectedMissionId == nil {
+                Picker("", selection: $surface) {
+                    ForEach(DashboardSurface.allCases) { candidate in
+                        Text(candidate.label).tag(candidate)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .labelsHidden()
+                .frame(width: 190)
+            }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -63,6 +101,23 @@ struct DashboardWindowView: View {
             Rectangle()
                 .fill(theme.glassBorder)
                 .frame(height: 1)
+        }
+    }
+}
+
+/// The surfaces the Dashboard window can show.
+enum DashboardSurface: String, CaseIterable, Identifiable {
+    /// Providers and their quota windows (the historical overview).
+    case resources
+    /// The llm-router « À traiter » feed: what needs a decision now.
+    case attention
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .resources: "Ressources"
+        case .attention: "À traiter"
         }
     }
 }
