@@ -19,10 +19,36 @@
 #   scripts/gate-xcode27.sh                 # full test suite (canonical gate)
 #   scripts/gate-xcode27.sh --build         # build only (Debug)
 #   scripts/gate-xcode27.sh --release       # build only (Release)
-#   scripts/gate-xcode27.sh -only-testing:DomainTests/Whatever
+#   scripts/gate-xcode27.sh -only-testing:DomainTests/RouterAttentionTests
 #                                           # extra args are forwarded to xcodebuild
 # Env:
 #   CLAUDEBAR_DD   override DerivedData path (optional)
+#
+# FILTER NAMES FOR SWIFT TESTING SUITES (2026-10-03)
+#   The Cortex tests are Swift Testing suites, and xcodebuild's -only-testing
+#   filter matches the test declaration's TYPE NAME — NOT the @Suite("…") display
+#   string. A file that reads:
+#       @Suite("RouterAttention") struct RouterAttentionTests { … }
+#   is selected by  -only-testing:DomainTests/RouterAttentionTests  and NOT by the
+#   display string "RouterAttention". Same for
+#       @Suite("LLMRouterAttentionClient / LLMRouterMissionInspector")
+#       struct LLMRouterAttentionClientTests
+#   →  -only-testing:InfrastructureTests/LLMRouterAttentionClientTests.
+#
+#   Observed counter-example (2026-10-03, this checkout):
+#       scripts/gate-xcode27.sh \
+#         -only-testing:DomainTests/RouterAttention \
+#         -only-testing:InfrastructureTests/LLMRouterAttentionClient
+#   printed "** TEST SUCCEEDED **" and "GATE PASSED" while having executed ZERO
+#   tests: a filter that matches nothing makes xcodebuild succeed with an empty
+#   run. A targeted verification that verifies nothing must not go green, so a
+#   run whose forwarded args contain -only-testing:/-skip-testing: is now treated
+#   as "targeted": gate-xcode27.sh tees its output to
+#   .build/gate-xcode27-test.log and, before printing GATE PASSED, requires
+#   evidence that at least one test actually executed — a Swift Testing
+#   "Test run with N tests" summary or an XCTest "Executed N tests" line with
+#   N > 0. If neither is found the run fails (exit 1) with an actionable message.
+#   Full (non-targeted) runs are unchanged.
 set -eo pipefail
 cd "$(dirname "$0")/.."
 
@@ -101,9 +127,52 @@ for proj in Tuist/.build/tuist-derived/*/*.xcodeproj; do
 done
 echo "== step 4/4 xcodebuild $MODE (explicit modules off — Xcode 27)"
 if [ "$MODE" = test ]; then
-  xcodebuild test -scheme Cortex -workspace Cortex.xcworkspace \
-    -destination 'platform=macOS,arch=arm64' -skipMacroValidation \
-    SWIFT_ENABLE_EXPLICIT_MODULES=NO "${DD_ARGS[@]}" "${PROVENANCE_ARGS[@]}" "${EXTRA[@]}"
+  # Targeted runs fail closed (2026-10-03): if EXTRA carries any -only-testing:/
+  # -skip-testing: argument, xcodebuild can exit 0 having run ZERO tests when the
+  # filter matches nothing (see the FILTER NAMES note in the header). So classify
+  # the run, and in targeted mode tee the output to a log so we can prove
+  # afterwards that at least one test executed. Full mode keeps the exact old
+  # invocation, byte for byte.
+  # `set -eo pipefail` is untouched: an actual xcodebuild failure still aborts the
+  # pipeline (and the script) before any of the checks below, so GATE PASSED stays
+  # reachable only after a real, non-empty targeted run (or a full run).
+  TARGETED=false
+  for extra in "${EXTRA[@]}"; do
+    case "$extra" in
+      -only-testing:*|-skip-testing:*) TARGETED=true ;;
+    esac
+  done
+  if [ "$TARGETED" = true ]; then
+    GATE_TEST_LOG="$PWD/.build/gate-xcode27-test.log"
+    xcodebuild test -scheme Cortex -workspace Cortex.xcworkspace \
+      -destination 'platform=macOS,arch=arm64' -skipMacroValidation \
+      SWIFT_ENABLE_EXPLICIT_MODULES=NO "${DD_ARGS[@]}" "${PROVENANCE_ARGS[@]}" "${EXTRA[@]}" \
+      2>&1 | tee "$GATE_TEST_LOG"
+    # Count executed tests from the two summary forms the toolchain emits:
+    #   Swift Testing:  "✔ Test run with 12 tests passed after 0.123 seconds."
+    #   XCTest:         "Executed 12 tests, with 0 failures (0 unexpected) in …"
+    # sed (not grep) so a no-match is not an error under `set -e`; awk prints 0
+    # for an empty stream. Requiring the sum > 0 means that a "Test run with 0
+    # tests" line, and no summary line at all, both fail the gate.
+    swift_tests="$(sed -nE 's/.*Test run with ([0-9]+) tests? (passed|failed).*/\1/p' "$GATE_TEST_LOG" | awk '{ n += $1 } END { print n + 0 }')"
+    xctest_tests="$(sed -nE 's/.*Executed ([0-9]+) tests?,.*/\1/p' "$GATE_TEST_LOG" | awk '{ n += $1 } END { print n + 0 }')"
+    executed=$(( swift_tests + xctest_tests ))
+    if [ "$executed" -le 0 ]; then
+      echo "" >&2
+      echo "FAIL: the -only-testing filter matched no tests — a targeted run that verifies nothing must not pass" >&2
+      echo "      xcodebuild exited 0 but no test executed; log: $GATE_TEST_LOG" >&2
+      echo "      Pitfall: Cortex uses Swift Testing suites. Filter by the struct's" >&2
+      echo "      TYPE NAME, not the @Suite(\"…\") display string — e.g." >&2
+      echo "        -only-testing:DomainTests/RouterAttentionTests" >&2
+      echo "      (the display name 'RouterAttention' matches nothing, silently)." >&2
+      exit 1
+    fi
+    echo "== targeted run executed $executed test(s) (Swift Testing: $swift_tests, XCTest: $xctest_tests)"
+  else
+    xcodebuild test -scheme Cortex -workspace Cortex.xcworkspace \
+      -destination 'platform=macOS,arch=arm64' -skipMacroValidation \
+      SWIFT_ENABLE_EXPLICIT_MODULES=NO "${DD_ARGS[@]}" "${PROVENANCE_ARGS[@]}" "${EXTRA[@]}"
+  fi
 else
   xcodebuild build -scheme Cortex -workspace Cortex.xcworkspace \
     -destination 'platform=macOS,arch=arm64' -skipMacroValidation \
