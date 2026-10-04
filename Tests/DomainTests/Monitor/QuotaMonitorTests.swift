@@ -1455,14 +1455,15 @@ struct QuotaMonitorTests {
     }
 
     @Test
-    func `selectedProviderStatus returns healthy when no snapshot`() {
-        // Given
+    func `selectedProviderStatus returns unknown when no snapshot`() {
+        // Given — the selected provider has never reported a measurement
         let settings = makeSettingsRepository()
         let claude = ClaudeProvider(probe: MockUsageProbe(), settingsRepository: settings)
         let monitor = makeMonitor(providers: AIProviders(providers: [claude]))
 
-        // Then
-        #expect(monitor.selectedProviderStatus == .healthy)
+        // Then — no snapshot = no measurement, never a reassuring `.healthy`
+        #expect(monitor.selectedProviderStatus == .unknown)
+        #expect(monitor.selectedProviderStatus != .healthy)
     }
 
     @Test
@@ -1600,16 +1601,18 @@ struct QuotaMonitorTests {
         // When
         await monitor.refresh(providerId: "claude")
 
-        // Then
+        // Then — the first observation has no prior measurement, so the honest
+        // baseline is `.unknown` (not a fabricated `.healthy`); the degradation
+        // to critical is still reported.
         verify(mockAlerter).alert(
             providerId: .value("claude"),
-            previousStatus: .value(.healthy),
+            previousStatus: .value(.unknown),
             currentStatus: .value(.critical)
         ).called(1)
     }
 
     @Test
-    func `alerter not called when status unchanged`() async {
+    func `healthy status never produces a degrading alert`() async {
         // Given
         let mockAlerter = MockQuotaAlerter()
         given(mockAlerter).alert(providerId: .any, previousStatus: .any, currentStatus: .any).willReturn(())
@@ -1625,13 +1628,17 @@ struct QuotaMonitorTests {
         let claude = ClaudeProvider(probe: probe, settingsRepository: settings)
         let monitor = makeMonitor(providers: AIProviders(providers: [claude]), alerter: mockAlerter)
 
-        // When - refresh twice with same status
+        // When - refresh twice with same healthy status
         await monitor.refresh(providerId: "claude")
         await monitor.refresh(providerId: "claude")
 
-        // Then - only notified once (first change from nil/healthy to healthy)
-        // Actually, the first refresh won't trigger because healthy -> healthy
-        verify(mockAlerter).alert(providerId: .any, previousStatus: .any, currentStatus: .any).called(0)
+        // Then - a healthy provider never raises a degradation alert. The first
+        // refresh only records the `unknown → healthy` baseline (there was no
+        // previous measurement), which a real alerter suppresses because healthy
+        // needs no attention; the second refresh is a no-op (healthy → healthy).
+        verify(mockAlerter).alert(providerId: .any, previousStatus: .any, currentStatus: .value(.warning)).called(0)
+        verify(mockAlerter).alert(providerId: .any, previousStatus: .any, currentStatus: .value(.critical)).called(0)
+        verify(mockAlerter).alert(providerId: .any, previousStatus: .any, currentStatus: .value(.depleted)).called(0)
     }
 
     // MARK: - Disabled Provider Skipping

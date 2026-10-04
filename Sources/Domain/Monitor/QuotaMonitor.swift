@@ -205,9 +205,16 @@ public final class QuotaMonitor {
         }
     }
 
-    /// Handles snapshot update and alerts user if status changed
+    /// Handles snapshot update and alerts user if status changed.
+    ///
+    /// On the first observation there is no previous measurement, so the alert
+    /// baseline is `.unknown` — never a fabricated `.healthy`. A cold start that
+    /// lands on a degraded status still reports the degradation honestly
+    /// (`unknown → critical`). `.unknown` is the least severe status, so as a
+    /// *current* status it neither wins `max()` nor satisfies the alerter's
+    /// `current > previous` guard, and can never raise an alert on its own.
     private func handleSnapshotUpdate(provider: any AIProvider, snapshot: UsageSnapshot) async {
-        let previousStatus = previousStatuses[provider.id] ?? .healthy
+        let previousStatus = previousStatuses[provider.id] ?? .unknown
         let newStatus = snapshot.overallStatus
 
         previousStatuses[provider.id] = newStatus
@@ -623,11 +630,13 @@ public final class QuotaMonitor {
         }
     }
 
-    /// Returns the overall status across enabled providers (worst status wins)
+    /// Returns the overall status across enabled providers (worst status wins).
+    /// When no enabled provider holds a snapshot there is no measurement, so the
+    /// result is `.unknown` — a cold start must never read as all-good.
     public var overallStatus: QuotaStatus {
         providers.enabled
             .compactMap(\.snapshot?.overallStatus)
-            .max() ?? .healthy
+            .max() ?? .unknown
     }
 
     // MARK: - Selection
@@ -637,9 +646,11 @@ public final class QuotaMonitor {
         providers.enabled.first { $0.id == selectedProviderId }
     }
 
-    /// Status of the currently selected provider (for menu bar icon)
+    /// Status of the currently selected provider (for menu bar icon). `.unknown`
+    /// when the selected provider has no snapshot yet — an unmeasured provider
+    /// must not paint the menu bar green.
     public var selectedProviderStatus: QuotaStatus {
-        selectedProvider?.snapshot?.overallStatus ?? .healthy
+        selectedProvider?.snapshot?.overallStatus ?? .unknown
     }
 
     /// Whether any provider is currently refreshing

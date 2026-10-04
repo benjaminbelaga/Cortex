@@ -204,8 +204,10 @@ public struct QuotaGroup: Sendable, Equatable, Identifiable {
     public var id: String { title ?? "" }
 
     /// The most critical status within this group — shown while collapsed.
+    /// An empty group holds no measurement, so it reports `.unknown` (mirroring
+    /// `UsageSnapshot.overallStatus`), never a fabricated `.healthy`.
     public var worstStatus: QuotaStatus {
-        quotas.map(\.status).max() ?? .healthy
+        quotas.map(\.status).max() ?? .unknown
     }
 
     /// The quota with the least headroom — summarized while collapsed.

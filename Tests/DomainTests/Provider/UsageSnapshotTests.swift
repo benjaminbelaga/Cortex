@@ -430,6 +430,17 @@ struct UsageSnapshotTests {
     }
 
     @Test
+    func `an empty group reports unknown, never healthy`() {
+        // A group with no quotas holds no measurement — it must not read as
+        // all-good. Note-only sections (e.g. an extension metric that reports
+        // no usage) land here.
+        let group = QuotaGroup(title: "Copilot · work", quotas: [], note: "No usage reported")
+
+        #expect(group.worstStatus == .unknown)
+        #expect(group.worstStatus != .healthy)
+    }
+
+    @Test
     func `grouped metrics become note-only sections after quota sections`() {
         let quotas = [
             UsageQuota(percentRemaining: 90, quotaType: .timeLimit("Claude 5h"), providerId: "omp", group: "Claude"),

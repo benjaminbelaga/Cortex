@@ -47,7 +47,10 @@ struct StatusExportDriverTests {
     /// Builds a driver over a single Claude provider with the given snapshot,
     /// starts it (which writes the payload synchronously), and returns the
     /// decoded export. The temp directory is removed on the way out.
-    private func exportedPayload(providerSnapshot: UsageSnapshot?) throws -> StatusExportDriver.ExportPayload {
+    private func exportedPayload(
+        providerSnapshot: UsageSnapshot?,
+        touchBarEnabled: Bool = true
+    ) throws -> StatusExportDriver.ExportPayload {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         let fileURL = directory.appendingPathComponent("status.json")
 
@@ -58,6 +61,7 @@ struct StatusExportDriverTests {
                 store: JSONSettingsStore(fileURL: directory.appendingPathComponent("settings.json"))
             )
         )
+        settings.touchBarEnabled = touchBarEnabled
         let driver = StatusExportDriver(monitor: monitor, settings: settings, fileURL: fileURL)
         driver.start()
         defer {
@@ -100,5 +104,25 @@ struct StatusExportDriverTests {
         let payload = try exportedPayload(providerSnapshot: healthy)
 
         #expect(payload.providers.first?.status == "healthy")
+    }
+
+    @Test
+    func `disabling the Touch Bar still exports the provider status`() throws {
+        let healthy = UsageSnapshot(
+            providerId: "claude",
+            quotas: [UsageQuota(percentRemaining: 90, quotaType: .session, providerId: "claude")],
+            capturedAt: Date()
+        )
+        let payload = try exportedPayload(providerSnapshot: healthy, touchBarEnabled: false)
+
+        // The display switch still flips the published `enabled` hint (widgets
+        // use it to hide)...
+        #expect(payload.enabled == false)
+        // ...but it no longer blanks the data contract: providers and the
+        // status / menu-bar text are still described.
+        #expect(payload.providers.count == 1)
+        #expect(payload.providers.first?.status == "healthy")
+        #expect(payload.status != "disabled")
+        #expect(payload.menuBarText.isEmpty == false)
     }
 }

@@ -221,11 +221,23 @@ public struct ProviderSnapshot: Identifiable, Sendable, Hashable {
     }
 
     /// Aggregate status across the windows matching `filter`.
+    ///
+    /// No matching window means no measurement for that scope → `.unknown`,
+    /// never a reassuring `.healthy` — this API has no production callers today,
+    /// so the fallback is honest to avoid trapping the next one (honest-states
+    /// doctrine). A row that carries an `errorMessage` keeps `.depleted`: a
+    /// failed account is a real signal, not merely "no data", and that contract
+    /// is pinned by `RouterBackedProviderTests.overviewSurfacesMissingAccount`.
+    ///
+    /// Stale windows are excluded exactly as `OverviewBuilder.fleetSummary` and
+    /// the sort's `worstLiveWindow` exclude them — a days-old 0 % is a
+    /// known-but-old reading, not a live exhaustion, so it must never be
+    /// reported as one.
     public func status(matching filter: OverviewWindowFilter) -> QuotaStatus {
-        let candidates = windows.filter { filter.matches($0.scope) }
+        let candidates = windows.filter { filter.matches($0.scope) && !$0.isStale }
         let worst = candidates.map(\.percentRemaining).min()
         guard let worst else {
-            return errorMessage != nil ? .depleted : .healthy
+            return errorMessage != nil ? .depleted : .unknown
         }
         return QuotaStatus.from(percentRemaining: worst)
     }

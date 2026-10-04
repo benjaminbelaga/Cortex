@@ -188,6 +188,22 @@ struct OverviewBuilderTests {
         #expect(rows[0].status(matching: .weekly) == .critical || rows[0].status(matching: .weekly) == .warning)
     }
 
+    @Test("status ignores stale windows instead of reporting a live exhaustion")
+    func statusIgnoresStaleWindows() {
+        let row = ProviderSnapshot(
+            id: "a", providerId: "a", providerName: "A", accountLabel: nil,
+            windows: [
+                WindowSnapshot(id: "a1", title: "5h", percentRemaining: 0, resetsAt: nil, compactReset: nil, scope: .session, isStale: true),
+                WindowSnapshot(id: "a2", title: "7d", percentRemaining: 40, resetsAt: nil, compactReset: nil, scope: .weekly, isStale: false),
+            ]
+        )
+
+        // The stale 0 % is not a live depletion — no live session window means
+        // `.unknown`; the fresh 40 % still rules the aggregate (`.warning`).
+        #expect(row.status(matching: .session) == .unknown)
+        #expect(row.status(matching: .all) == .warning)
+    }
+
     // MARK: - Sorting
 
     @Test("sort by percent remaining puts worst first and sinks no-match rows")

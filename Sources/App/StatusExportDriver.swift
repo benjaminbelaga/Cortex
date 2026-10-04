@@ -110,19 +110,15 @@ public final class StatusExportDriver {
         sync = nil
     }
 
+    /// Builds the exported payload.
+    ///
+    /// The Touch Bar display preference never blanks the document: external
+    /// widgets read `status`, `menuBarText`, `selectedProvider*` and
+    /// `providers` whether or not the native Touch Bar is on. Only `enabled`
+    /// mirrors that display preference — the published hint the bundled helper
+    /// uses to hide a widget — so a display-surface switch no longer erases the
+    /// quota data an unrelated consumer came for.
     private func buildPayload() -> ExportPayload {
-        guard settings.touchBarEnabled else {
-            return ExportPayload(
-                enabled: false,
-                updatedAt: "",
-                menuBarText: "",
-                status: "disabled",
-                selectedProviderId: "",
-                selectedProviderName: nil,
-                providers: []
-            )
-        }
-
         let label = monitor.menuBarLabel(
             providerId: settings.menuBarPercentageProviderId,
             primaryQuotaKey: settings.menuBarPercentageQuotaKey,
@@ -163,7 +159,10 @@ public final class StatusExportDriver {
         }
 
         return ExportPayload(
-            enabled: true,
+            // Published meaning preserved: `enabled` tracks the Touch Bar
+            // display preference only (widgets use it to hide themselves); it is
+            // no longer a proxy for "the export is dead".
+            enabled: settings.touchBarEnabled,
             updatedAt: "",
             menuBarText: label?.text ?? selected?.name ?? "Cortex",
             status: statusString,

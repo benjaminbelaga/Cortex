@@ -332,9 +332,12 @@ final class StatusItemLabelDriver {
     }
 
     /// Status of the selected provider, considering the burn-rate setting.
-    /// Mirrors the dropdown's status logic for the icon-only fallback.
-    private var effectiveSelectedProviderStatus: QuotaStatus {
-        guard let snapshot = monitor.selectedProvider?.snapshot else { return .healthy }
+    /// Mirrors the dropdown's status logic for the icon-only fallback. Falls
+    /// back to `.unknown` (neutral, never green) when the selected provider has
+    /// no snapshot — an unmeasured provider must not tint the glyph all-good.
+    /// Internal (not private) so tests can pin the honest fallback.
+    var effectiveSelectedProviderStatus: QuotaStatus {
+        guard let snapshot = monitor.selectedProvider?.snapshot else { return .unknown }
         if settings.burnRateWarningEnabled {
             return snapshot.paceAwareOverallStatus(burnRateThreshold: settings.burnRateThreshold)
         }

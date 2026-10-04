@@ -137,8 +137,8 @@ struct MenuBarSpec {
         }
 
         @Test
-        func `no snapshots defaults to healthy`() {
-            // Given — fresh monitor, no refresh yet
+        func `no snapshots reports unknown, never healthy`() {
+            // Given — fresh monitor, no refresh yet: no measurement exists
             let settings = MenuBarSpec.makeSettings()
             let claude = ClaudeProvider(probe: MockUsageProbe(), settingsRepository: settings)
             let monitor = QuotaMonitor(
@@ -146,9 +146,12 @@ struct MenuBarSpec {
                 clock: TestClock()
             )
 
-            // Then
-            #expect(monitor.overallStatus == .healthy)
-            #expect(monitor.selectedProviderStatus == .healthy)
+            // Then — absence of a measurement is `.unknown`, never a reassuring
+            // `.healthy` borrowed from a snapshot that does not exist.
+            #expect(monitor.overallStatus == .unknown)
+            #expect(monitor.overallStatus != .healthy)
+            #expect(monitor.selectedProviderStatus == .unknown)
+            #expect(monitor.selectedProviderStatus != .healthy)
         }
     }
 }

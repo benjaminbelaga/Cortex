@@ -93,8 +93,12 @@ You can toggle the persistent Touch Bar on or off at any time:
 
 When disabled:
 - The native Touch Bar modal is completely dismissed and deallocated.
-- The status export file (`~/.claudebar/status.json`) marks `"enabled": false`.
-- Any external widgets (BTT / MTMR) will automatically hide.
+- The status export file (`~/.claudebar/status.json`) keeps carrying the live
+  provider status (`status`, `menuBarText`, `selectedProvider*`, `providers`).
+  Only `"enabled"` flips to `false` — the Touch Bar display hint the bundled
+  helper uses to hide a widget.
+- External widgets that honour `"enabled"` (the bundled BTT / MTMR helper) hide;
+  anything reading the status fields directly keeps working.
 
 ---
 

@@ -42,8 +42,8 @@ struct NotificationsSpec {
         }
 
         @Test
-        func `quota drops from healthy to critical triggers alert`() async {
-            // Given — Claude was previously healthy (no snapshot = healthy default)
+        func `first observed critical status alerts from an unknown baseline`() async {
+            // Given — Claude has no prior measurement (no snapshot yet)
             let settings = MockProviderSettingsRepository()
             given(settings).isEnabled(forProvider: .any, defaultValue: .any).willReturn(true)
             given(settings).isEnabled(forProvider: .any).willReturn(true)
@@ -70,10 +70,11 @@ struct NotificationsSpec {
             // When — refresh returns 15% (critical)
             await monitor.refresh(providerId: "claude")
 
-            // Then — alerter called with healthy → critical
+            // Then — no fabricated "healthy" baseline: there was no measurement
+            // before, so the degradation is reported from `.unknown`.
             verify(mockAlerter).alert(
                 providerId: .value("claude"),
-                previousStatus: .value(.healthy),
+                previousStatus: .value(.unknown),
                 currentStatus: .value(.critical)
             ).called(1)
         }
@@ -91,7 +92,7 @@ struct NotificationsSpec {
         }
 
         @Test
-        func `repeated healthy refreshes do not trigger alert`() async {
+        func `repeated healthy refreshes never trigger a degrading alert`() async {
             // Given
             let settings = MockProviderSettingsRepository()
             given(settings).isEnabled(forProvider: .any, defaultValue: .any).willReturn(true)
@@ -120,12 +121,13 @@ struct NotificationsSpec {
             await monitor.refresh(providerId: "claude")
             await monitor.refresh(providerId: "claude")
 
-            // Then — no alerts (healthy → healthy is not a degradation)
-            verify(mockAlerter).alert(
-                providerId: .any,
-                previousStatus: .any,
-                currentStatus: .any
-            ).called(0)
+            // Then — a healthy provider never raises a degradation alert. The
+            // first refresh only records the `unknown → healthy` baseline (there
+            // was no previous measurement), which the real alerter suppresses
+            // because healthy needs no attention; the second is a no-op.
+            verify(mockAlerter).alert(providerId: .any, previousStatus: .any, currentStatus: .value(.warning)).called(0)
+            verify(mockAlerter).alert(providerId: .any, previousStatus: .any, currentStatus: .value(.critical)).called(0)
+            verify(mockAlerter).alert(providerId: .any, previousStatus: .any, currentStatus: .value(.depleted)).called(0)
         }
     }
 
