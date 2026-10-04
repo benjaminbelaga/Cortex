@@ -114,8 +114,13 @@ struct RouterAttentionTests {
         #expect(feed.items.count == 5)
 
         let ordered = RouterAttentionFeed.sorted(feed.items).map(\.id)
-        #expect(ordered == ["m-001", "m-002", "WORK", "totally_new:kind from a newer router", "m-003"],
-                "high → medium → low, ties broken by stable id")
+        #expect(ordered == [
+            "launch_divergence:m-001",
+            "result_to_validate:m-002",
+            "account_reconnect:claude:WORK",
+            "totally_new:kind from a newer router",
+            "receipt_awaited:m-003",
+        ], "high → medium → low, ties broken by stable id")
 
         #expect(feed.decisionCount == 2, "launch divergence + result to validate need a human")
         #expect(feed.highestSeverity == .high)
@@ -150,11 +155,44 @@ struct RouterAttentionTests {
         #expect(item.missionId == nil)
         #expect(item.accountId == "WORK")
         #expect(item.target == "WORK", "no mission id → the account is the target")
-        #expect(item.id == "WORK", "same item keeps the same id across refreshes")
+        #expect(item.id == "account_reconnect:claude:WORK",
+                "the reconnect id carries the provider so the same account on another provider stays distinct")
 
         let missionItem = try #require(feed.items.first { $0.kind == .resultToValidate })
         #expect(missionItem.target == "m-002", "a mission-backed item targets its mission")
-        #expect(missionItem.id == "m-002")
+        #expect(missionItem.id == "result_to_validate:m-002",
+                "the mission-backed id carries the kind so several kinds on one mission never collide")
+    }
+
+    @Test("one mission with several kinds yields distinct ids, stable across decodes")
+    func idsAreUniquePerRowAndStable() throws {
+        // The collision the old `missionId ?? accountId ?? kind:detail` id hid: three
+        // rows on the SAME mission_id.
+        let shared = Data(#"""
+        { "count": 3, "items": [
+          { "kind": "launch_divergence", "severity": "high", "mission_id": "m-shared", "detail": "a" },
+          { "kind": "result_to_validate", "severity": "high", "mission_id": "m-shared", "detail": "b" },
+          { "kind": "receipt_awaited", "severity": "low", "mission_id": "m-shared", "detail": "c" }
+        ] }
+        """#.utf8)
+        let feed = try RouterAttentionFeed.parse(shared)
+        let ids = feed.items.map(\.id)
+        #expect(Set(ids).count == ids.count, "one mission with three kinds must yield three distinct ids")
+        #expect(ids == ["launch_divergence:m-shared", "result_to_validate:m-shared", "receipt_awaited:m-shared"])
+
+        // Two reconnects for the same account on different providers must not collide.
+        let reconnects = Data(#"""
+        { "count": 2, "items": [
+          { "kind": "account_reconnect", "severity": "medium", "account_id": "WORK", "provider": "claude", "detail": "x" },
+          { "kind": "account_reconnect", "severity": "medium", "account_id": "WORK", "provider": "codex", "detail": "y" }
+        ] }
+        """#.utf8)
+        let reconnectFeed = try RouterAttentionFeed.parse(reconnects)
+        #expect(Set(reconnectFeed.items.map(\.id)).count == 2)
+
+        // No index / UUID: decoding the same payload twice yields identical ids.
+        let again = try RouterAttentionFeed.parse(shared)
+        #expect(feed.items.map(\.id) == again.items.map(\.id), "ids are stable across two decodes of the same payload")
     }
 
     @Test("cortexProviderId maps through RouterProviderIdMap and is nil for an unmapped id")
@@ -191,8 +229,81 @@ struct RouterAttentionTests {
 
         #expect(feed.isEmpty)
         #expect(feed.count == 0)
+        #expect(feed.declaredCount == 0)
+        #expect(feed.droppedCount == 0)
         #expect(feed.decisionCount == 0)
         #expect(feed.highestSeverity == nil)
+    }
+
+    @Test("a drift that announces items but decodes none keeps the router's count")
+    func allItemsDroppedKeepsDeclaredCount() throws {
+        // None of the three carries the `kind` that identifies it, so lenient
+        // decoding drops all three while the router still declares `count: 3`.
+        let json = Data(#"""
+        { "count": 3, "items": [ { "severity": "high" }, { "severity": "low" }, 42 ] }
+        """#.utf8)
+        let feed = try RouterAttentionFeed.parse(json)
+
+        #expect(feed.items.isEmpty)
+        #expect(feed.isEmpty)
+        #expect(feed.declaredCount == 3, "the router's own count must survive a total decode loss")
+        #expect(feed.count == 3, "count is NOT zeroed when every item failed to decode")
+        #expect(feed.rawItemCount == 3)
+        #expect(feed.droppedCount == 3)
+    }
+
+    @Test("a partial decode reports the dropped items and keeps the readable ones")
+    func partialDropIsReported() throws {
+        let json = Data(#"""
+        { "count": 2, "items": [
+          { "kind": "receipt_awaited", "severity": "low", "mission_id": "m-1" },
+          { "severity": "high" }
+        ] }
+        """#.utf8)
+        let feed = try RouterAttentionFeed.parse(json)
+
+        #expect(feed.items.count == 1)
+        #expect(feed.rawItemCount == 2)
+        #expect(feed.count == 2)
+        #expect(feed.droppedCount == 1)
+        #expect(feed.isEmpty == false)
+    }
+
+    @Test("a genuine empty and an absent count are not mistaken for drift")
+    func cleanEmptyIsNotDrift() throws {
+        let empty = try RouterAttentionFeed.parse(Data(#"{ "count": 0, "items": [] }"#.utf8))
+        #expect(empty.droppedCount == 0)
+        #expect(empty.count == 0)
+
+        // No `count` at all: the fallback is the decoded count, still no drop.
+        let noCount = try RouterAttentionFeed.parse(Data(#"{ "items": [] }"#.utf8))
+        #expect(noCount.declaredCount == nil)
+        #expect(noCount.count == 0)
+        #expect(noCount.droppedCount == 0)
+
+        // No `count`, but a readable item: count falls back to items.count.
+        let noCountWithItem = try RouterAttentionFeed.parse(Data(#"""
+        { "items": [ { "kind": "receipt_awaited", "severity": "low", "mission_id": "m-1" } ] }
+        """#.utf8))
+        #expect(noCountWithItem.declaredCount == nil)
+        #expect(noCountWithItem.count == 1)
+        #expect(noCountWithItem.droppedCount == 0)
+    }
+
+    @Test("a malformed declared count is treated as absent, never trapped on")
+    func malformedDeclaredCountIsAbsent() throws {
+        // `1e30` is finite but far outside `Int`'s range; a naive `Int(value)`
+        // would trap. It must be treated as "no declared count".
+        let weird = try RouterAttentionFeed.parse(Data(#"{ "count": 1e30, "items": [] }"#.utf8))
+        #expect(weird.declaredCount == nil)
+        #expect(weird.count == 0)
+        #expect(weird.droppedCount == 0)
+
+        // A numeric string is accepted, and it announces more than was read.
+        let stringy = try RouterAttentionFeed.parse(Data(#"{ "count": "2", "items": [] }"#.utf8))
+        #expect(stringy.declaredCount == 2)
+        #expect(stringy.count == 2)
+        #expect(stringy.droppedCount == 2)
     }
 
     @Test("an item missing a required field is salvaged when its kind is present")

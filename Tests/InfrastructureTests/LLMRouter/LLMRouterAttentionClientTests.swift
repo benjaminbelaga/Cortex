@@ -50,7 +50,7 @@ struct LLMRouterAttentionClientTests {
 
         #expect(feed.items.count == 1)
         #expect(feed.count == 1)
-        #expect(feed.items.first?.id == "default")
+        #expect(feed.items.first?.id == "account_reconnect:kimi:default")
     }
 
     @Test("both parsers wrap an undecodable payload in a RouterQuotaIssue")
@@ -224,6 +224,9 @@ struct LLMRouterAttentionClientTests {
         } catch let issue as RouterQuotaIssue {
             #expect(issue.message.contains("timed out"))
             #expect(issue.message.contains("router busy"))
+            // The raw-ProcessRunError path must name the subcommand this client ran,
+            // not a hardcoded / mismatched one.
+            #expect(issue.message.contains("attention"))
         } catch {
             Issue.record("expected RouterQuotaIssue, got \(error)")
         }
@@ -245,6 +248,9 @@ struct LLMRouterAttentionClientTests {
         } catch let issue as RouterQuotaIssue {
             #expect(issue.message.contains("could not launch"))
             #expect(issue.message.contains("permission denied"))
+            // `mission inspect`, never the hardcoded "status".
+            #expect(issue.message.contains("mission inspect"))
+            #expect(issue.message.contains("status") == false)
         } catch {
             Issue.record("expected RouterQuotaIssue, got \(error)")
         }

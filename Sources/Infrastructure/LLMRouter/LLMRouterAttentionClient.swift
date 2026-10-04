@@ -35,10 +35,13 @@ private enum RouterCommandInvocation {
                 timeout: timeout
             )
         } catch let error as ProcessRunError {
-            // The default `LLMRouterProcessRunner` already performs this
-            // mapping; repeating it here keeps any other runner — a test double,
-            // a future transport — on exactly the same contract, so a timeout
-            // can never be mistaken for an answer.
+            // Reachable for any runner that surfaces a raw `ProcessRunError` (the
+            // test double, a future transport). The production
+            // `LLMRouterProcessRunner` already maps `ProcessRunError` to a
+            // `RouterQuotaIssue` (and, since it now derives the subcommand from
+            // argv, names the real command). This mapping repeats the contract
+            // with the command this client actually used, so a timeout or launch
+            // failure can never be mistaken for an answer — keep it.
             throw mapped(error, command: command)
         }
 

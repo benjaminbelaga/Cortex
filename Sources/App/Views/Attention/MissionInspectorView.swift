@@ -12,8 +12,11 @@ import Infrastructure
 /// (rc=0 is not a verdict). The view never invents a state — no green tick for an
 /// unverified mission.
 ///
-/// Self-contained, wired by the host through `onBack` (a real `.sheet` does not
-/// render from an `NSPopover`, so the caller stays in-surface).
+/// Self-contained, wired by its only host, `DashboardWindowView`, through
+/// `onBack` (a real `.sheet` does not render from an `NSPopover`, so the caller
+/// stays in-surface). It owns no scroll container — the host's vertical
+/// `ScrollView` already scrolls it (nesting one here would break the host's
+/// height negotiation and swallow gestures).
 struct MissionInspectorView: View {
     let missionId: String
     /// "← Retour" affordance shown only when the host provides it.
@@ -23,18 +26,26 @@ struct MissionInspectorView: View {
     @State private var inspection: MissionInspection?
     @State private var errorMessage: String?
     @State private var isLoading = false
+    /// Monotonic token: a load only writes its result if it is still the newest,
+    /// so a superseded read can never overwrite a newer one (same convention as
+    /// `AttentionFeedView.load()`).
+    @State private var loadGeneration = 0
+    /// The in-flight manual retry, cancelled when a newer retry replaces it or
+    /// when the view goes away.
+    @State private var retryTask: Task<Void, Never>?
 
     private let inspector = LLMRouterMissionInspector()
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: true) {
-            VStack(alignment: .leading, spacing: 10) {
-                header
-                content
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 10) {
+            header
+            content
         }
-        .task { await load() }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        // Keyed on the mission so a new id re-runs (and cancels) the read instead
+        // of leaving the previous mission's chain on screen.
+        .task(id: missionId) { await load() }
+        .onDisappear { retryTask?.cancel() }
     }
 
     // MARK: - Header
@@ -115,7 +126,7 @@ struct MissionInspectorView: View {
                 .foregroundStyle(theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
-            Button("Réessayer") { Task { await load() } }
+            Button("Réessayer") { retry() }
                 .buttonStyle(.plain)
                 .font(theme.font(size: 10, weight: .semibold))
                 .foregroundStyle(theme.accentPrimary)
@@ -386,12 +397,26 @@ struct MissionInspectorView: View {
     }
 
     /// A number as a compact string, `"—"` for a missing value (never `0`), and
-    /// `"—"` for a non-finite value rather than an unsafe cast.
+    /// `"—"` for a non-finite value. Casting to `Int` is only done inside the
+    /// range a `Double` represents exactly (`|value| <= 2^53`); a finite but
+    /// out-of-range value (e.g. `1e30` from a malformed payload) is formatted
+    /// directly, because `String(Int(value))` traps outside `Int`'s range.
     private func metric(_ value: Double?, suffix: String = "") -> String {
         guard let value, value.isFinite else { return "—" }
-        let text = value.rounded() == value ? String(Int(value)) : String(format: "%.2f", value)
+        let text: String
+        if value.rounded() == value {
+            text = value.magnitude <= Self.exactIntegerLimit
+                ? String(Int(value))
+                : String(format: "%.0f", value)
+        } else {
+            text = String(format: "%.2f", value)
+        }
         return text + suffix
     }
+
+    /// 2^53: the largest magnitude a `Double` holds while still representing
+    /// every integer exactly — the safe ceiling for an `Int` cast.
+    private static let exactIntegerLimit = 9_007_199_254_740_992.0
 
     // MARK: - Labels
 
@@ -424,14 +449,30 @@ struct MissionInspectorView: View {
 
     // MARK: - Load
 
+    /// Restart a load, cancelling any superseded retry. `loadGeneration` keeps
+    /// the loop's read and the manual retry from racing: only the newest load may
+    /// write `inspection` / `errorMessage` / clear `isLoading`.
+    private func retry() {
+        retryTask?.cancel()
+        retryTask = Task { await load() }
+    }
+
     private func load() async {
+        loadGeneration &+= 1
+        let generation = loadGeneration
         isLoading = true
-        defer { isLoading = false }
+        defer { if generation == loadGeneration { isLoading = false } }
         do {
             let fresh = try await inspector.inspect(missionId: missionId)
+            guard generation == loadGeneration else { return }
             inspection = fresh
             errorMessage = nil
+        } catch is CancellationError {
+            // Cancellation is control flow (view teardown / a changed mission id),
+            // never a user-facing fault.
+            return
         } catch {
+            guard generation == loadGeneration else { return }
             errorMessage = error.localizedDescription
         }
     }

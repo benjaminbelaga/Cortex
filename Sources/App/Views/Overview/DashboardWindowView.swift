@@ -1,5 +1,6 @@
 import SwiftUI
 import Domain
+import Infrastructure
 
 /// The standalone Cortex Dashboard window root.
 ///
@@ -61,7 +62,9 @@ struct DashboardWindowView: View {
                 onOpenMission: { missionId in
                     withAnimation(.easeOut(duration: 0.15)) { inspectedMissionId = missionId }
                 },
-                onReconnectAccount: { _, _ in openWindow(id: "settings") }
+                onReconnectAccount: { provider, accountId in
+                    reconnectAccount(provider: provider, accountId: accountId)
+                }
             )
         } else {
             OverviewDashboardView(
@@ -71,6 +74,23 @@ struct DashboardWindowView: View {
                 rendersAccountCatalog: false
             )
         }
+    }
+
+    /// The reconnect affordance's destination: the Settings window, where account
+    /// reconnection lives.
+    ///
+    /// KNOWN LIMITATION: Cortex cannot yet steer Settings to the exact
+    /// provider/account the feed names. The provider selection is local `@State`
+    /// in `ProvidersPane`, and the account catalogue is only presented from
+    /// `OverviewDashboardView` — both outside this file, and `"settings"` is a
+    /// value-less `Window`. So the router's `provider`/`accountId` cannot change
+    /// the destination yet; they are logged here rather than silently discarded.
+    /// Deep-linking is a follow-up that needs the Settings window, not this file.
+    private func reconnectAccount(provider: String?, accountId: String?) {
+        AppLog.ui.debug(
+            "Attention reconnect → Settings (router provider=\(provider ?? "-"), account=\(accountId ?? "-")): Settings is not yet deep-linkable to a specific account"
+        )
+        openWindow(id: "settings")
     }
 
     private var header: some View {

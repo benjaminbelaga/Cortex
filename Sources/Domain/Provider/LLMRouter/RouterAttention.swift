@@ -197,10 +197,27 @@ public struct RouterAttentionItem: Codable, Sendable, Equatable, Identifiable {
     public let requested: [String: RouterJSONValue]
     public let observed: [String: RouterJSONValue]
 
-    /// Stable id: the mission, else the account, else the kind+detail pair — so
-    /// the same item keeps its identity across refreshes.
+    /// Stable, unique row identity.
+    ///
+    /// One mission legitimately appears several times in the same feed: e.g.
+    /// `launch_divergence`, `result_to_validate` and `receipt_awaited` all key on
+    /// the same `mission_id`. Keying the identity on the mission alone therefore
+    /// collides and hands `ForEach` duplicate ids (undefined diffing). So the
+    /// `kind` is always part of the identity, and for `account_reconnect` the
+    /// provider is too (the same account id can be reported once per provider).
+    ///
+    /// The identity is derived ONLY from stable payload fields (kind, provider,
+    /// mission/account id, detail) — never a list index and never a random UUID —
+    /// so the same row keeps the same id across refreshes and the list does not
+    /// jump.
     public var id: String {
-        missionId ?? accountId ?? "\(kind.rawValue):\(detail)"
+        let anchor = missionId ?? accountId ?? detail
+        if kind == .accountReconnect {
+            // A reconnect row has no mission; the account alone is ambiguous
+            // across providers, so the provider qualifies it.
+            return "\(kind.rawValue):\(provider ?? ""):\(anchor)"
+        }
+        return "\(kind.rawValue):\(anchor)"
     }
 
     /// missionId ?? accountId — what the row is about.
@@ -304,10 +321,24 @@ fileprivate extension RouterAttentionItem {
 /// The whole feed: `{"count": N, "items": [...]}`.
 public struct RouterAttentionFeed: Codable, Sendable, Equatable {
     public let items: [RouterAttentionItem]
-    /// The router's own count when present, else `items.count`. Never a
-    /// reassuring zero for a failed read — a failed read is a thrown error, not
-    /// an empty feed.
-    public let count: Int
+    /// The router's own declared `count` when the envelope carried one, `nil`
+    /// when it did not (never invented).
+    public let declaredCount: Int?
+    /// How many item objects the router's `items` array held BEFORE lenient
+    /// decoding. Always `>= items.count`; the difference is what decoding dropped.
+    public let rawItemCount: Int
+
+    /// The router's own count when present, else the decoded count. Crucially
+    /// this is never zeroed just because decoding dropped every item: a protocol
+    /// drift that announces items but yields none keeps the router's own number,
+    /// so the view cannot dress it as the honest "rien à traiter" zero.
+    public var count: Int { declaredCount ?? items.count }
+
+    /// Announced rows that did not survive decoding. `> 0` means the feed is
+    /// partial (or wholly unreadable) and must NOT be rendered as a clean empty.
+    public var droppedCount: Int {
+        max(0, (declaredCount ?? rawItemCount) - items.count)
+    }
 
     public var isEmpty: Bool { items.isEmpty }
 
@@ -323,7 +354,8 @@ public struct RouterAttentionFeed: Codable, Sendable, Equatable {
 
     public init(items: [RouterAttentionItem], count: Int? = nil) {
         self.items = items
-        self.count = count ?? items.count
+        self.declaredCount = count
+        self.rawItemCount = items.count
     }
 
     /// Stable ordering: severity rank ascending (high first), then id, so the
@@ -345,9 +377,11 @@ public struct RouterAttentionFeed: Codable, Sendable, Equatable {
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let rawItems = (try? container.decodeIfPresent([RouterJSONValue].self, forKey: .items)) ?? []
-        let items = rawItems.compactMap(RouterAttentionItem.decodeLenient)
-        let declared = Self.declaredCount(in: container)
-        self.init(items: items, count: items.isEmpty ? 0 : declared)
+        self.items = rawItems.compactMap(RouterAttentionItem.decodeLenient)
+        self.rawItemCount = rawItems.count
+        // Preserve the router's declared count even when every item failed to
+        // decode, so a protocol drift is distinguishable from a genuine empty.
+        self.declaredCount = Self.declaredCount(in: container)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -357,11 +391,17 @@ public struct RouterAttentionFeed: Codable, Sendable, Equatable {
     }
 
     /// The router's declared count, accepting a bare number or a numeric string.
+    /// A non-finite or out-of-`Int`-range number is treated as absent rather than
+    /// trapped on (`Int(value)` traps outside `Int`'s range).
     private static func declaredCount(in container: KeyedDecodingContainer<CodingKeys>) -> Int? {
         switch try? container.decodeIfPresent(RouterJSONValue.self, forKey: .count) {
-        case .number(let value)?: Int(value)
-        case .string(let text)?: Int(text)
-        default: nil
+        case .number(let value)?:
+            guard value.isFinite, value.magnitude <= 9_007_199_254_740_992.0 else { return nil }
+            return Int(value)
+        case .string(let text)?:
+            return Int(text)
+        default:
+            return nil
         }
     }
 

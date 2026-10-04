@@ -12,9 +12,11 @@ import Infrastructure
 /// error text and a retry — never a reassuring zero; the "Rien à traiter" state
 /// is reserved for a *successful* read that genuinely returned no item.
 ///
-/// It is wired by the host (`MenuContentView` / Dashboard window) through the two
+/// It is wired by its only host, `DashboardWindowView`, through the two
 /// closures below, so it stays a pure, self-contained surface — no `.sheet`, no
-/// navigation stack of its own.
+/// navigation stack, and no scroll container of its own (the host already owns
+/// the enclosing vertical `ScrollView`; nesting another here would break height
+/// negotiation and swallow gestures — see `MenuContentView.overviewContent`).
 struct AttentionFeedView: View {
     /// Open a mission's inspector. Only rows carrying a `missionId` call this.
     var onOpenMission: ((String) -> Void)? = nil
@@ -26,18 +28,24 @@ struct AttentionFeedView: View {
     @State private var feed: RouterAttentionFeed?
     @State private var errorMessage: String?
     @State private var isLoading = false
+    /// Monotonic token: a load only writes its result if it is still the newest
+    /// one, so a slow failure can never overwrite a newer success (and `isLoading`
+    /// is only cleared by the load that owns it).
+    @State private var loadGeneration = 0
+    /// The in-flight manual retry, cancelled when a newer retry replaces it or
+    /// when the view goes away.
+    @State private var retryTask: Task<Void, Never>?
 
     private let client = LLMRouterAttentionClient()
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: true) {
-            VStack(alignment: .leading, spacing: 10) {
-                header
-                content
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 10) {
+            header
+            content
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .task { await refreshLoop() }
+        .onDisappear { retryTask?.cancel() }
     }
 
     // MARK: - Header
@@ -55,10 +63,20 @@ struct AttentionFeedView: View {
                 ProgressView().controlSize(.mini)
             }
             if let feed, !feed.items.isEmpty {
-                Text("\(feed.decisionCount) décision\(feed.decisionCount > 1 ? "s" : "") · \(feed.items.count) au total")
-                    .font(theme.font(size: 9, weight: .medium))
-                    .foregroundStyle(theme.textTertiary)
-                    .monospacedDigit()
+                HStack(spacing: 4) {
+                    Text("\(feed.decisionCount) décision\(feed.decisionCount > 1 ? "s" : "") · \(feed.items.count) au total")
+                        .font(theme.font(size: 9, weight: .medium))
+                        .foregroundStyle(theme.textTertiary)
+                        .monospacedDigit()
+                    if errorMessage != nil {
+                        // The counters belong to the LAST successful read; without
+                        // this cue they would read as if they were current.
+                        Text("(périmé)")
+                            .font(theme.font(size: 9, weight: .semibold))
+                            .foregroundStyle(theme.statusWarning)
+                            .help("Ces compteurs datent de la dernière lecture RÉUSSIE ; la lecture en cours a échoué. Ils ne reflètent pas l'état présent.")
+                    }
+                }
             }
         }
         .help("Projection en lecture seule du flux d'attention de llm-router. Cortex n'invente aucune décision : il affiche ce que le routeur signale, tel quel.")
@@ -72,20 +90,31 @@ struct AttentionFeedView: View {
             // A failed read is NOT an empty feed: show the error, not a zero.
             errorState(errorMessage)
         } else if let feed, !feed.items.isEmpty {
-            let indexed = RouterAttentionFeed.sorted(feed.items)
-                .enumerated()
-                .map { IndexedAttentionItem(index: $0.offset, item: $0.element) }
-            ForEach(indexed) { entry in
-                if entry.index == 0
-                    || indexed[entry.index - 1].item.severity.rank != entry.item.severity.rank {
-                    severityHeader(entry.item.severity)
-                }
-                row(entry.item)
+            if feed.droppedCount > 0 {
+                droppedBanner(feed)
             }
+            rows(feed)
+        } else if let feed, feed.droppedCount > 0 {
+            // The router announced items and Cortex could read none of them: a
+            // protocol drift, explicitly NOT the "rien à traiter" zero.
+            unreadableState(feed)
         } else if feed != nil {
             emptyState
         } else {
             loadingState
+        }
+    }
+
+    private func rows(_ feed: RouterAttentionFeed) -> some View {
+        let indexed = RouterAttentionFeed.sorted(feed.items)
+            .enumerated()
+            .map { IndexedAttentionItem(index: $0.offset, item: $0.element) }
+        return ForEach(indexed) { entry in
+            if entry.index == 0
+                || indexed[entry.index - 1].item.severity.rank != entry.item.severity.rank {
+                severityHeader(entry.item.severity)
+            }
+            row(entry.item)
         }
     }
 
@@ -122,6 +151,55 @@ struct AttentionFeedView: View {
         .help("Un flux vide est le résultat d'une LECTURE RÉUSSIE : le routeur n'a rien signalé. Une lecture en échec affiche l'erreur ci-dessus, jamais ce zéro rassurant.")
     }
 
+    /// A partial read: some rows decoded, some did not. The readable rows are
+    /// real, but the loss must be visible so the feed is not mistaken for whole.
+    private func droppedBanner(_ feed: RouterAttentionFeed) -> some View {
+        HStack(alignment: .top, spacing: 6) {
+            Image(systemName: "exclamationmark.triangle")
+                .font(theme.font(size: 10))
+                .foregroundStyle(theme.statusWarning)
+            Text("\(feed.droppedCount) élément\(feed.droppedCount > 1 ? "s" : "") annoncé\(feed.droppedCount > 1 ? "s" : "") mais illisible\(feed.droppedCount > 1 ? "s" : "") — protocole llm-router partiellement inattendu.")
+                .font(theme.font(size: 9))
+                .foregroundStyle(theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(theme.statusWarning.opacity(0.12))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 6)
+                .strokeBorder(theme.statusWarning.opacity(0.4), lineWidth: 1)
+        )
+        .help("Le routeur a annoncé plus d'éléments que Cortex n'en a décodé. Les lignes ci-dessous sont réelles ; les manquantes ne sont PAS un « rien à traiter ».")
+    }
+
+    /// The protocol-drift state: the router announced elements and Cortex decoded
+    /// none. Deliberately distinct from `emptyState` — it must never read as calm.
+    private func unreadableState(_ feed: RouterAttentionFeed) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle")
+                    .font(theme.font(size: 11))
+                    .foregroundStyle(theme.statusWarning)
+                Text("Flux illisible")
+                    .font(theme.font(size: 11, weight: .semibold))
+                    .foregroundStyle(theme.textPrimary)
+            }
+            Text("\(feed.count) élément\(feed.count > 1 ? "s" : "") annoncé\(feed.count > 1 ? "s" : ""), \(feed.items.count) lisible\(feed.items.count > 1 ? "s" : "") — protocole llm-router inattendu.")
+                .font(theme.font(size: 10))
+                .foregroundStyle(theme.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .attentionFeedCard(theme)
+        .help("Le routeur a annoncé \(feed.count) élément(s) mais Cortex n'en a décodé aucun : le protocole a probablement changé. Ce n'est PAS un « rien à traiter ».")
+    }
+
     private func errorState(_ message: String) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
@@ -137,7 +215,7 @@ struct AttentionFeedView: View {
                 .foregroundStyle(theme.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
-            Button("Réessayer") { Task { await load() } }
+            Button("Réessayer") { retry() }
                 .buttonStyle(.plain)
                 .font(theme.font(size: 10, weight: .semibold))
                 .foregroundStyle(theme.accentPrimary)
@@ -181,7 +259,7 @@ struct AttentionFeedView: View {
                         decisionPill
                     }
                     Spacer(minLength: 0)
-                    if item.missionId != nil {
+                    if item.missionId != nil, onOpenMission != nil {
                         Image(systemName: "chevron.right")
                             .font(theme.font(size: 9, weight: .bold))
                             .foregroundStyle(theme.textTertiary)
@@ -300,14 +378,33 @@ struct AttentionFeedView: View {
         }
     }
 
+    /// Restart a load, cancelling any superseded retry so at most one manual
+    /// read is in flight. The loop's own `load()` is serialised against it by
+    /// `loadGeneration`, so `feed`, `errorMessage` and `isLoading` can never
+    /// disagree (a slow failure cannot overwrite a newer success).
+    private func retry() {
+        retryTask?.cancel()
+        retryTask = Task { await load() }
+    }
+
     private func load() async {
+        loadGeneration &+= 1
+        let generation = loadGeneration
         isLoading = true
-        defer { isLoading = false }
+        // Only the newest load owns `isLoading`; a superseded one leaves it alone.
+        defer { if generation == loadGeneration { isLoading = false } }
         do {
             let fresh = try await client.attention()
+            // Superseded by a newer read: drop this result entirely.
+            guard generation == loadGeneration else { return }
             feed = fresh
             errorMessage = nil
+        } catch is CancellationError {
+            // Cancellation is control flow (view teardown / superseded retry),
+            // never a user-facing fault.
+            return
         } catch {
+            guard generation == loadGeneration else { return }
             // Keep `feed` for a later retry, but let the error dominate the UI —
             // a stale list is NOT shown as if it were a fresh, honest zero.
             errorMessage = error.localizedDescription

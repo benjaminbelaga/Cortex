@@ -21,6 +21,11 @@ public final class LLMRouterProcessRunner: LLMRouterCommandRunning, @unchecked S
         arguments: [String],
         timeout: TimeInterval
     ) async throws -> Data {
+        // Name the actual subcommand in every failure message. Hardcoding
+        // "status" here mislabelled a failed `attention` read or `mission
+        // inspect` as `llm-router status …` (surfaced verbatim by
+        // `MissionInspectorView.notFoundState`).
+        let command = Self.subcommandLabel(for: arguments)
         let result: ProcessRunResult
         do {
             result = try await runner.run(
@@ -31,10 +36,10 @@ public final class LLMRouterProcessRunner: LLMRouterCommandRunning, @unchecked S
         } catch let error as ProcessRunError {
             switch error {
             case let .launchFailed(message):
-                throw RouterQuotaIssue("llm-router status could not launch: \(message)")
+                throw RouterQuotaIssue("llm-router \(command) could not launch: \(message)")
             case let .timedOut(after, tail):
                 let suffix = tail.isEmpty ? "" : ": \(tail)"
-                throw RouterQuotaIssue("llm-router status timed out after \(Int(after))s\(suffix)")
+                throw RouterQuotaIssue("llm-router \(command) timed out after \(Int(after))s\(suffix)")
             case .cancelled:
                 throw CancellationError()
             }
@@ -43,14 +48,26 @@ public final class LLMRouterProcessRunner: LLMRouterCommandRunning, @unchecked S
         guard result.exitStatus == 0 else {
             let tail = result.stderrTail()
             let suffix = tail.isEmpty ? "" : ": \(tail)"
-            throw RouterQuotaIssue("llm-router status exited \(result.exitStatus)\(suffix)")
+            throw RouterQuotaIssue("llm-router \(command) exited \(result.exitStatus)\(suffix)")
         }
         // A truncated snapshot is not parseable; surface it rather than feed a
         // half JSON document to the decoder.
         if result.stdoutTruncated {
-            throw RouterQuotaIssue("llm-router status output exceeded the size cap")
+            throw RouterQuotaIssue("llm-router \(command) output exceeded the size cap")
         }
         return result.stdout
+    }
+
+    /// The router subcommand named by `argv`, for an honest failure label:
+    /// `["mission", "inspect", id]` → `"mission inspect"`, `["attention",
+    /// "--json"]` → `"attention"`, `["status", …]` → `"status"`. A missing or
+    /// flag-first argv falls back to `"command"` rather than inventing a name.
+    static func subcommandLabel(for arguments: [String]) -> String {
+        guard let first = arguments.first, !first.hasPrefix("-") else { return "command" }
+        if first == "mission", arguments.dropFirst().first == "inspect" {
+            return "mission inspect"
+        }
+        return first
     }
 }
 

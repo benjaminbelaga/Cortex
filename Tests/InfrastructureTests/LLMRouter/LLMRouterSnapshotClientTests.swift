@@ -311,6 +311,43 @@ struct LLMRouterProcessRunnerTests {
         )
         #expect(String(decoding: data, as: UTF8.self) == "{\"ok\":1}")
     }
+
+    @Test("the failure message names the actual subcommand, not a hardcoded status")
+    func failureMessageNamesSubcommand() async {
+        // `/usr/bin/false` exits 1 with no stderr; the label is derived from argv,
+        // so each of the shared runner's three callers is labelled correctly.
+        let runner = LLMRouterProcessRunner()
+
+        func message(_ arguments: [String]) async -> String? {
+            do {
+                _ = try await runner.run(
+                    executable: "/usr/bin/false",
+                    arguments: arguments,
+                    timeout: 10
+                )
+                return nil
+            } catch let issue as RouterQuotaIssue {
+                return issue.message
+            } catch {
+                return nil
+            }
+        }
+
+        #expect(await message(["attention", "--json"]) == "llm-router attention exited 1")
+        #expect(await message(["mission", "inspect", "m-1"]) == "llm-router mission inspect exited 1")
+        #expect(await message(["status", "--format", "json-v2"]) == "llm-router status exited 1")
+    }
+
+    @Test("the subcommand label is derived from argv, with a flag-first fallback")
+    func subcommandLabelFromArguments() {
+        #expect(LLMRouterProcessRunner.subcommandLabel(for: []) == "command")
+        #expect(LLMRouterProcessRunner.subcommandLabel(for: ["-c", "exit 2"]) == "command")
+        #expect(LLMRouterProcessRunner.subcommandLabel(for: ["attention", "--json"]) == "attention")
+        #expect(LLMRouterProcessRunner.subcommandLabel(for: ["mission", "inspect", "m-1"]) == "mission inspect")
+        #expect(LLMRouterProcessRunner.subcommandLabel(for: ["status", "--format", "json-v2"]) == "status")
+        // A bare `mission` without `inspect` keeps just the top-level word.
+        #expect(LLMRouterProcessRunner.subcommandLabel(for: ["mission", "list"]) == "mission")
+    }
 }
 
 private enum StubFailure: Error, LocalizedError {
