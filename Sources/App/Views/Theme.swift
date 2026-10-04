@@ -838,6 +838,8 @@ extension QuotaStatus {
             AppTheme.statusCritical(for: scheme)
         case .depleted:
             AppTheme.statusDepleted(for: scheme)
+        case .unknown:
+            AppTheme.textTertiary(for: scheme)
         }
     }
 
@@ -852,6 +854,8 @@ extension QuotaStatus {
             AppTheme.statusCritical
         case .depleted:
             AppTheme.statusDepleted
+        case .unknown:
+            .secondary
         }
     }
 
@@ -861,6 +865,8 @@ extension QuotaStatus {
         case .warning: "WARNING"
         case .critical: "LOW"
         case .depleted: "EMPTY"
+        // No measurement — says so rather than borrowing a reassuring label.
+        case .unknown: "NO DATA"
         }
     }
 
@@ -870,6 +876,7 @@ extension QuotaStatus {
         case .healthy: .green
         case .warning: .orange
         case .critical, .depleted: .red
+        case .unknown: .secondary
         }
     }
 }

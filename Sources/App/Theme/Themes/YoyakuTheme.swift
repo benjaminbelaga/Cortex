@@ -150,6 +150,7 @@ public struct YoyakuTheme: AppThemeProvider {
         case .warning: "triangle.fill"
         case .critical: "exclamationmark.triangle.fill"
         case .depleted: "xmark.octagon.fill"
+        case .unknown: "circle.dashed"
         }
     }
 

@@ -64,6 +64,7 @@ public protocol MultiAccountProvider: AIProvider {
     func addAccount(_ config: ProviderAccountConfig) -> Bool
 
     /// The aggregate status across all accounts (worst status wins).
+    /// `.unknown` when there are no account snapshots to summarize.
     var aggregateStatus: QuotaStatus { get }
 
     /// The account with the most remaining quota (best candidate for use).
@@ -83,11 +84,16 @@ public extension MultiAccountProvider {
         false
     }
 
-    /// Default: aggregate status is the worst across all account snapshots
+    /// Default: aggregate status is the worst across all account snapshots.
+    ///
+    /// With NO account snapshots (fresh enable, first refresh still running,
+    /// every account failed) there is no measurement to summarize: it reports
+    /// `.unknown`, never a fabricated `.healthy` — matching the per-account
+    /// dots, which correctly show nothing in the same situation.
     var aggregateStatus: QuotaStatus {
         accountSnapshots.values
             .map(\.overallStatus)
-            .max() ?? .healthy
+            .max() ?? .unknown
     }
 
     /// Default: the account with the highest remaining quota percentage

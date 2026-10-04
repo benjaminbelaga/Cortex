@@ -13,6 +13,8 @@ public extension QuotaStatus {
         case .warning: "#FAB859"
         case .critical: "#FA6B85"
         case .depleted: "#D94059"
+        // No measurement: a neutral grey, never a healthy green.
+        case .unknown: "#8E8E93"
         }
     }
 }

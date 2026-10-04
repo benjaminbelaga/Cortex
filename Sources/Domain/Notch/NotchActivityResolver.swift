@@ -85,7 +85,7 @@ public struct NotchActivityResolver: Sendable {
             .filter { quota in
                 switch QuotaStatus.from(percentRemaining: quota.percentRemaining) {
                 case .critical, .depleted: true
-                case .healthy, .warning: false
+                case .healthy, .warning, .unknown: false
                 }
             }
             .min { $0.percentRemaining < $1.percentRemaining }

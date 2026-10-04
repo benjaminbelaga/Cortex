@@ -151,7 +151,10 @@ public final class StatusExportDriver {
             return ExportPayload.ProviderSummary(
                 id: provider.id,
                 name: provider.name,
-                status: statusName(snapshot?.overallStatus ?? .healthy),
+                // A provider that was never probed (or whose probe returned no
+                // windows) has no measurement: export "unknown", never a
+                // reassuring "healthy" borrowed from a snapshot that is absent.
+                status: snapshot.map { statusName($0.overallStatus) } ?? "unknown",
                 percentRemaining: primary?.percentRemaining,
                 percentUsed: primary?.percentUsed,
                 resetsAt: primary?.resetsAt.map { isoFormatter.string(from: $0) },
@@ -176,6 +179,7 @@ public final class StatusExportDriver {
         case .warning: return "warning"
         case .critical: return "critical"
         case .depleted: return "depleted"
+        case .unknown: return "unknown"
         }
     }
 

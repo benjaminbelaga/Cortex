@@ -135,14 +135,20 @@ public struct UsageSnapshot: Sendable, Equatable {
 
     /// The overall status is the worst status among all quotas.
     /// This is a domain rule: overall health reflects the most critical issue.
+    ///
+    /// An EMPTY quota list means no measurement was made — it reports `.unknown`,
+    /// never `.healthy`. Fabricating a healthy state from an absent reading is
+    /// exactly the honesty defect this guards against (a provider that returned
+    /// a snapshot with no windows must not read as all-good).
     public var overallStatus: QuotaStatus {
-        quotas.map(\.status).max() ?? .healthy
+        quotas.map(\.status).max() ?? .unknown
     }
 
     /// The overall status using burn rate when enabled.
     /// Falls back to absolute thresholds for quotas without reset time.
+    /// An empty quota list reports `.unknown`, exactly like `overallStatus`.
     public func paceAwareOverallStatus(burnRateThreshold: Double) -> QuotaStatus {
-        quotas.map { $0.paceAwareStatus(burnRateThreshold: burnRateThreshold) }.max() ?? .healthy
+        quotas.map { $0.paceAwareStatus(burnRateThreshold: burnRateThreshold) }.max() ?? .unknown
     }
 
     /// The quota with the lowest remaining percentage.

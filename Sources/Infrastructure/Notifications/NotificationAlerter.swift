@@ -107,7 +107,7 @@ public final class NotificationAlerter: QuotaAlerter, @unchecked Sendable {
         switch status {
         case .warning, .critical, .depleted:
             return true
-        case .healthy:
+        case .healthy, .unknown:
             return false
         }
     }
@@ -143,6 +143,8 @@ public final class NotificationAlerter: QuotaAlerter, @unchecked Sendable {
             return "Your \(providerName) quota is depleted. Usage may be blocked."
         case .healthy:
             return "Your \(providerName) quota has recovered."
+        case .unknown:
+            return "Your \(providerName) quota data is currently unavailable."
         }
     }
 }

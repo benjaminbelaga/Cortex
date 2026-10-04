@@ -787,7 +787,7 @@ final class StatusItemLabelDriver {
         switch status {
         case .depleted: "chart.bar.xaxis"
         case .critical: "exclamationmark.triangle.fill"
-        case .warning, .healthy: "chart.bar.fill"
+        case .warning, .healthy, .unknown: "chart.bar.fill"
         }
     }
 

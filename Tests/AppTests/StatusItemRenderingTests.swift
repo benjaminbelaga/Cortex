@@ -45,6 +45,15 @@ struct StatusItemRenderingTests {
         #expect(StatusItemLabelDriver.brainColor(isDarkAppearance: true) == .white)
     }
 
+    @Test("an unknown measurement renders neutrally, never the healthy green")
+    func unknownStatusRendersNeutral() {
+        // The menu-bar "—" placeholder and any other missing-measurement badge
+        // must use the neutral tertiary colour, not the all-good green.
+        let theme = ThemeRegistry.shared.resolveTheme(for: "dark", systemColorScheme: .dark)
+        #expect(theme.statusColor(for: .unknown) == theme.textTertiary)
+        #expect(theme.statusColor(for: .unknown) != theme.statusColor(for: .healthy))
+    }
+
     @Test("running cat exposes a complete non-static stride")
     func runningCatExposesCompleteNonStaticStride() throws {
         #expect(RunningCatRenderer.frameCount == 8)

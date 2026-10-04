@@ -58,6 +58,12 @@ struct QuotaStatusTests {
         #expect(QuotaStatus.depleted.needsAttention == true)
     }
 
+    @Test
+    func `unknown status is absence of data and does not need attention`() {
+        // No measurement is not a problem to warn about — it needs a probe.
+        #expect(QuotaStatus.unknown.needsAttention == false)
+    }
+
     // MARK: - Comparison Tests (Severity Order)
 
     @Test
@@ -80,6 +86,18 @@ struct QuotaStatusTests {
         #expect(QuotaStatus.depleted > QuotaStatus.healthy)
         #expect(QuotaStatus.depleted > QuotaStatus.warning)
         #expect(QuotaStatus.depleted > QuotaStatus.critical)
+    }
+
+    @Test
+    func `unknown is the least severe so it never outranks a real reading`() {
+        // `.unknown` is absence of data; when a real status exists, max()
+        // (worst wins) must pick the real one, never the unmeasured one.
+        #expect(QuotaStatus.unknown < QuotaStatus.healthy)
+        let statuses: [QuotaStatus] = [.unknown, .healthy]
+        #expect(statuses.max() == .healthy)
+
+        let mixed: [QuotaStatus] = [.unknown, .warning, .unknown]
+        #expect(mixed.max() == .warning)
     }
 
     @Test

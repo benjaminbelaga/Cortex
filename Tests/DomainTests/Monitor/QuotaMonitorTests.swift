@@ -292,9 +292,14 @@ struct QuotaMonitorTests {
             probe: CountingUsageProbe(providerId: "claude"), settingsRepository: makeSettingsRepository()
         )
         let monitor = makeMonitor(providers: AIProviders(providers: [provider]))
-        #expect(monitor.additionalMenuBarLabels(
+        let labels = monitor.additionalMenuBarLabels(
             providerIds: ["claude"], showPercentage: true, showDuration: false, mode: .remaining
-        ).map(\.text) == ["Claude —"])
+        )
+        #expect(labels.map(\.text) == ["Claude —"])
+        // The "—" placeholder is a MISSING measurement: it must not borrow the
+        // all-good green `.healthy` status.
+        #expect(labels.first?.status == .unknown)
+        #expect(labels.first?.status != .healthy)
     }
 
     @Test

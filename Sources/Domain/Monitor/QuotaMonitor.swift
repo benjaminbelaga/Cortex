@@ -491,8 +491,12 @@ public final class QuotaMonitor {
                     mode: mode, burnRateWarningEnabled: burnRateWarningEnabled,
                     burnRateThreshold: burnRateThreshold
                   ) else {
+                // Enabled but not measured yet: a neutral placeholder, never a
+                // green `.healthy` that would claim an all-good reading we do
+                // not have. `.unknown` tints the "—" with the theme's tertiary
+                // colour (grey), matching the "No data yet" stubs elsewhere.
                 return MenuBarProviderLabel(providerId: id, providerName: provider.name,
-                                            label: MenuBarLabel(text: "—", status: .healthy))
+                                            label: MenuBarLabel(text: "—", status: .unknown))
             }
             return MenuBarProviderLabel(providerId: id, providerName: provider.name, label: label,
                                         stacked: config.stacked, stackedSize: MenuBarStackedSize(storedRawValue: config.stackedSize))

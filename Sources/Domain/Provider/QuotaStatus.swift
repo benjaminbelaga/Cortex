@@ -11,6 +11,15 @@ public enum QuotaStatus: Sendable, Equatable, Hashable, Comparable {
     case critical
     /// Quota is completely exhausted (0%)
     case depleted
+    /// No measurement is available (no probe yet, a probe that returned no
+    /// windows, or a failed probe with no cached data).
+    ///
+    /// Deliberately distinct from `.healthy`: absence of data must never be
+    /// reported as an all-good state (honest-states doctrine). It carries the
+    /// LOWEST severity so an unmeasured reading never outranks a real one when
+    /// the worst status is taken (`max()`), and it never triggers a degradation
+    /// alert.
+    case unknown
 
     // MARK: - Factory Methods
 
@@ -66,19 +75,24 @@ public enum QuotaStatus: Sendable, Equatable, Hashable, Comparable {
 
     // MARK: - Status Behavior
 
-    /// Whether this status indicates a problem that needs attention
+    /// Whether this status indicates a problem that needs attention.
+    /// `.unknown` is absence of data, not a problem — it needs a probe, not a
+    /// warning.
     public var needsAttention: Bool {
         switch self {
-        case .healthy:
+        case .healthy, .unknown:
             false
         case .warning, .critical, .depleted:
             true
         }
     }
 
-    /// The severity level (higher = more severe)
+    /// The severity level (higher = more severe).
+    /// `.unknown` sits BELOW `.healthy` so `max()` (worst status wins) never
+    /// lets an unmeasured reading mask a real one.
     private var severity: Int {
         switch self {
+        case .unknown: -1
         case .healthy: 0
         case .warning: 1
         case .critical: 2

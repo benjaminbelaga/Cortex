@@ -160,13 +160,17 @@ public extension AppThemeProvider {
     /// Default overlay is nil
     @MainActor var overlayView: AnyView? { nil }
 
-    /// Default status color mapping
+    /// Default status color mapping.
+    /// `.unknown` (no measurement) renders in the tertiary/neutral colour —
+    /// never the healthy green, which would assert an all-good reading that
+    /// does not exist (honest-states doctrine).
     func statusColor(for status: QuotaStatus) -> Color {
         switch status {
         case .healthy: statusHealthy
         case .warning: statusWarning
         case .critical: statusCritical
         case .depleted: statusDepleted
+        case .unknown: textTertiary
         }
     }
 
@@ -179,6 +183,7 @@ public extension AppThemeProvider {
         case .depleted: "chart.bar.xaxis"
         case .critical: "exclamationmark.triangle.fill"
         case .warning, .healthy: "chart.bar.fill"
+        case .unknown: "chart.bar.fill"
         }
     }
 

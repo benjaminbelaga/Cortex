@@ -692,7 +692,7 @@ struct StatusBarIcon: View {
             return "chart.bar.xaxis"
         case .critical:
             return "exclamationmark.triangle.fill"
-        case .warning, .healthy:
+        case .warning, .healthy, .unknown:
             return "chart.bar.fill"
         }
     }

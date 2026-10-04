@@ -166,6 +166,23 @@ struct UsageSnapshotTests {
         #expect(snapshot.overallStatus == .depleted)
     }
 
+    @Test
+    func `overall status of an empty quota list is unknown not healthy`() {
+        // A snapshot with no windows is a MISSING measurement: it must not be
+        // reported as an all-good state (honest-states doctrine).
+        let snapshot = UsageSnapshot(providerId: "claude", quotas: [], capturedAt: Date())
+
+        #expect(snapshot.overallStatus == .unknown)
+        #expect(snapshot.overallStatus != .healthy)
+    }
+
+    @Test
+    func `pace aware overall status of an empty quota list is unknown`() {
+        let snapshot = UsageSnapshot(providerId: "claude", quotas: [], capturedAt: Date())
+
+        #expect(snapshot.paceAwareOverallStatus(burnRateThreshold: 1.5) == .unknown)
+    }
+
     // MARK: - Freshness
 
     @Test
@@ -304,7 +321,8 @@ struct UsageSnapshotTests {
         // Then
         #expect(snapshot.providerId == "claude")
         #expect(snapshot.quotas.isEmpty)
-        #expect(snapshot.overallStatus == .healthy)
+        // No quotas = no measurement: unknown, never a fabricated healthy.
+        #expect(snapshot.overallStatus == .unknown)
     }
 
     // MARK: - Age Description

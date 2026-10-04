@@ -160,6 +160,7 @@ public struct TouchBarActiveProviderBadge: View {
         case .warning: return .yellow
         case .critical: return .orange
         case .depleted: return .red
+        case .unknown: return .gray
         }
     }
 }
