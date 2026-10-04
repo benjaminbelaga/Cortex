@@ -86,7 +86,13 @@ if [ "${#COMMITS[@]}" -eq 0 ]; then
   exit 1
 fi
 
-echo "== 2/6 staging branch $BRANCH from $REMOTE/main"
+# Capture the branch we must return to BEFORE any checkout. Reading it from
+# `HEAD@{1}` after `git checkout -b` returns the NEW branch (the reflog entry
+# belongs to it), which left the caller stranded on the staging branch — the
+# bug that put three commits on the Cortex line on 2026-10-04.
+ORIGINAL_REF="$(git symbolic-ref --short -q HEAD || echo main)"
+
+echo "== 2/6 staging branch $BRANCH from $REMOTE/main (returns to $ORIGINAL_REF)"
 echo "   commits: ${COMMITS[*]}"
 git branch -D "$BRANCH" >/dev/null 2>&1 || true
 git checkout -q -b "$BRANCH" "$REMOTE/main"
@@ -97,7 +103,6 @@ cleanup() {
   [ "$rc" -eq 0 ] && git branch -D "$BRANCH" >/dev/null 2>&1 || true
   exit "$rc"
 }
-ORIGINAL_REF="$(git rev-parse --abbrev-ref HEAD@{1} 2>/dev/null || echo main)"
 trap cleanup EXIT INT TERM
 
 echo "== 3/6 cherry-pick"
