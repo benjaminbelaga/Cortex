@@ -85,6 +85,12 @@ public final class ExtensionProvider: AIProvider {
             /// it into `noData` hides the only message that would let the user
             /// fix it (honest states — see `ExtensionProbeError`).
             var actionable: ExtensionProbeError?
+            /// The first failure of ANY other kind, kept with its section id so
+            /// a partial refresh can name the section that vanished instead of
+            /// reporting a healthy card. A crashed, timed-out or unparsable
+            /// section must never be collapsed into silence — that dropped
+            /// message is the only thing that would let the user fix it.
+            var firstFailure: (sectionId: String, error: Error)?
             for await (sectionId, result) in group {
                 switch result {
                 case .success(let snapshot):
@@ -93,23 +99,44 @@ public final class ExtensionProvider: AIProvider {
                     if let probeError = error as? ExtensionProbeError,
                        case .unconfigured = probeError {
                         actionable = actionable ?? probeError
+                    } else if firstFailure == nil {
+                        firstFailure = (sectionId, error)
                     }
                 }
             }
-            return (collected, actionable)
+            return (collected, actionable, firstFailure)
         }
 
         let results = outcome.0
 
         guard !results.isEmpty else {
-            let error: Error = outcome.1 ?? ProbeError.noData
+            // Every section failed: surface the actionable cause first, else the
+            // first concrete failure, else the honest no-data.
+            let error: Error
+            if let actionable = outcome.1 {
+                error = actionable
+            } else if let failure = outcome.2 {
+                error = failure.error
+            } else {
+                error = ProbeError.noData
+            }
             lastError = error
             throw error
         }
 
         let merged = mergeSnapshots(results.map(\.1))
         snapshot = merged
-        lastError = nil
+        // A partial refresh keeps every section that answered (merged card) but
+        // is NOT healthy: the first failure is surfaced. An actionable
+        // `.unconfigured` wins; any other failure is wrapped to name the section
+        // it came from. A genuinely all-success refresh clears the error.
+        if let actionable = outcome.1 {
+            lastError = actionable
+        } else if let failure = outcome.2 {
+            lastError = ExtensionSectionFailure(sectionId: failure.sectionId, underlying: failure.error)
+        } else {
+            lastError = nil
+        }
         return merged
     }
 
@@ -136,5 +163,20 @@ public final class ExtensionProvider: AIProvider {
             dailyUsageReport: dailyReport,
             extensionMetrics: metrics.isEmpty ? nil : metrics
         )
+    }
+}
+
+/// A section probe failed while at least one other section returned data.
+/// Carries the section id and the original error so the merged card can say
+/// WHICH section is missing — the failing section's message is the only thing
+/// that lets the user fix it, so it is never dropped (`ExtensionProvider.refresh`).
+struct ExtensionSectionFailure: Error, LocalizedError, Sendable {
+    /// The manifest section whose probe failed.
+    let sectionId: String
+    /// The error the probe threw.
+    let underlying: Error
+
+    var errorDescription: String? {
+        "Section \(sectionId) failed — \(underlying.localizedDescription)"
     }
 }

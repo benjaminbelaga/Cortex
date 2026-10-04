@@ -262,7 +262,7 @@ struct SessionsCardView: View {
             Text(windowLabel)
                 .font(theme.font(size: 8))
                 .foregroundStyle(theme.textTertiary.opacity(0.6))
-            Text(day.map(String.init) ?? "·")
+            Text(day.map(String.init) ?? "—")
                 .font(theme.font(size: 13, weight: .bold))
                 .foregroundStyle(theme.textPrimary)
                 .monospacedDigit()
@@ -292,8 +292,10 @@ struct SessionsCardView: View {
 
     /// Panes terminaux cmux présents (ouverts ou en travail), lus par la source
     /// de sessions — la cellule du haut et la section partagent ce chiffre.
-    private var cmuxPaneCount: Int {
-        sessionsActivity.observations(for: "cmux").count
+    /// nil quand la source a échoué : la cellule lit alors « — », jamais un
+    /// faux zéro (le modèle sait que la lecture a échoué).
+    private var cmuxPaneCount: Int? {
+        SessionsCounterPresentation.count(sessionsActivity, toolId: "cmux")
     }
 
     /// Cadence partagée des sources d'activité : 30 s, jamais bloquante.
@@ -345,14 +347,7 @@ struct SessionsCardView: View {
     }
 
     private func activitySummary(toolId: String) -> String {
-        let counts = sessionsActivity.counts(for: toolId)
-        var parts = [
-            "\(counts.open) open",
-            "\(counts.working) working",
-            "\(counts.recent) over 24 h",
-        ]
-        if counts.subagents > 0 { parts.append("+\(counts.subagents) sub-agents") }
-        return parts.joined(separator: " · ")
+        SessionsCounterPresentation.headline(sessionsActivity, toolId: toolId)
     }
 
     private var openCodeSection: some View {
@@ -391,14 +386,7 @@ struct SessionsCardView: View {
     }
 
     private var openCodeSummary: String {
-        let counts = sessionsActivity.counts(for: "opencode-go")
-        var parts = [
-            "\(counts.open) open",
-            "\(counts.working) working",
-            "\(counts.recent) over 24 h",
-        ]
-        if counts.subagents > 0 { parts.append("+\(counts.subagents) sub-agents") }
-        return parts.joined(separator: " · ")
+        SessionsCounterPresentation.headline(sessionsActivity, toolId: "opencode-go")
     }
 
     private func openCodeRow(_ observation: SessionObservation) -> some View {
@@ -476,5 +464,41 @@ struct SessionsCardView: View {
                 .font(theme.font(size: 9))
                 .foregroundStyle(theme.textTertiary)
         }
+    }
+}
+
+/// Honest rendering of the session counters. The model already distinguishes a
+/// source that FAILED to read from one that read fine and returned nothing
+/// (`SessionsActivityModel.failure(for:)`, its own doc: « une source en échec
+/// reste visible : jamais un faux zéro »); the headline must honour that — a
+/// failed (or not-yet-collected) source reads "—", never a fabricated all-zero.
+/// A source that read fine keeps its real count, including a legitimate 0.
+@MainActor
+enum SessionsCounterPresentation {
+
+    /// A reading is trustworthy once the source has reported AND did not fail.
+    static func isTrustworthy(_ model: SessionsActivityModel, toolId: String) -> Bool {
+        model.reports[toolId] != nil && model.failure(for: toolId) == nil
+    }
+
+    /// The big count cell ("panes"/"sessions"/"24h"): nil → rendered "—" when
+    /// there is no trustworthy reading.
+    static func count(_ model: SessionsActivityModel, toolId: String) -> Int? {
+        guard isTrustworthy(model, toolId: toolId) else { return nil }
+        return model.observations(for: toolId).count
+    }
+
+    /// The "N open · N working · N over 24 h" headline: "—" when there is no
+    /// trustworthy reading, never an all-zero line for a source that failed.
+    static func headline(_ model: SessionsActivityModel, toolId: String) -> String {
+        guard isTrustworthy(model, toolId: toolId) else { return "—" }
+        let counts = model.counts(for: toolId)
+        var parts = [
+            "\(counts.open) open",
+            "\(counts.working) working",
+            "\(counts.recent) over 24 h",
+        ]
+        if counts.subagents > 0 { parts.append("+\(counts.subagents) sub-agents") }
+        return parts.joined(separator: " · ")
     }
 }

@@ -212,6 +212,40 @@ struct OverviewBuilderTests {
         #expect(allSorted.map(\.id) == ["c", "b", "a"])
     }
 
+    @Test("a stale 0 % window must not outrank a fresh low window")
+    func staleZeroDoesNotOutrankFreshLow() {
+        // A days-old stale reading (only window) must NOT float to the top as
+        // the most critical row — a stale 0 % is not a live exhaustion.
+        let staleOnly = ProviderSnapshot(id: "stale", providerId: "stale", providerName: "S", accountLabel: nil, windows: [
+            WindowSnapshot(id: "s1", title: "5h", percentRemaining: 0, resetsAt: nil, compactReset: nil, scope: .session, isStale: true),
+        ])
+        let fresh = ProviderSnapshot(id: "fresh", providerId: "fresh", providerName: "F", accountLabel: nil, windows: [
+            WindowSnapshot(id: "f1", title: "5h", percentRemaining: 40, resetsAt: nil, compactReset: "1h", scope: .session),
+        ])
+
+        let sorted = OverviewBuilder.sort([staleOnly, fresh], by: .percentRemaining, filter: .session)
+
+        #expect(sorted.map(\.id) == ["fresh", "stale"])
+    }
+
+    @Test("a fresh window drives the sort key even when a stale window is lower")
+    func freshWindowDrivesSortKeyOverStale() {
+        // The row has TWO session windows: a stale 0 % and a fresh 30 %. The
+        // fresh one is the sort key; the stale one must be ignored.
+        let mixed = ProviderSnapshot(id: "mixed", providerId: "mixed", providerName: "M", accountLabel: nil, windows: [
+            WindowSnapshot(id: "m-old", title: "5h", percentRemaining: 0, resetsAt: nil, compactReset: nil, scope: .session, isStale: true),
+            WindowSnapshot(id: "m-new", title: "5h", percentRemaining: 30, resetsAt: nil, compactReset: "1h", scope: .session),
+        ])
+        let fresh = ProviderSnapshot(id: "fresh", providerId: "fresh", providerName: "F", accountLabel: nil, windows: [
+            WindowSnapshot(id: "f1", title: "5h", percentRemaining: 40, resetsAt: nil, compactReset: "1h", scope: .session),
+        ])
+
+        // mixed (fresh 30 %) sorts before fresh (40 %), not first by its stale 0 %.
+        let sorted = OverviewBuilder.sort([fresh, mixed], by: .percentRemaining, filter: .session)
+
+        #expect(sorted.map(\.id) == ["mixed", "fresh"])
+    }
+
     @Test("sort keeps accounts of one provider adjacent while groups stay severity-ordered")
     func sortKeepsAccountsOfOneProviderAdjacent() {
         func row(_ id: String, _ providerId: String, percent: Double) -> ProviderSnapshot {

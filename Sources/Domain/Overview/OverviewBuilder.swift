@@ -354,8 +354,8 @@ public enum OverviewBuilder {
         if mode == .priority, let priority, priority.isAvailable {
             return (0, Double(priority.rank(forProvider: snapshot.providerId)))
         }
-        guard let worst = snapshot.worstWindow(matching: filter) else {
-            return (1, 0) // no matching windows → bottom, stable-ish by id upstream
+        guard let worst = worstLiveWindow(snapshot, filter: filter) else {
+            return (1, 0) // no matching LIVE windows → bottom, stable-ish by id upstream
         }
         switch mode {
         case .priority, .percentRemaining:
@@ -368,6 +368,24 @@ public enum OverviewBuilder {
             }
             return (0, resetsAt.timeIntervalSince1970)
         }
+    }
+
+    /// The worst window matching `filter` that is NOT stale.
+    ///
+    /// A stale reading is known-but-old: `fleetSummary`, the under-10 % footer
+    /// and `ProviderGroup.bindingRemaining` all exclude stale windows, so the
+    /// sort key must too — a days-old 0 % must never float a row to the top as
+    /// if it were a live exhaustion.
+    private static func worstLiveWindow(
+        _ snapshot: ProviderSnapshot,
+        filter: OverviewWindowFilter
+    ) -> WindowSnapshot? {
+        snapshot.windows
+            .filter { filter.matches($0.scope) && !$0.isStale }
+            .min { lhs, rhs in
+                (lhs.isDollarBased ? 101 : lhs.percentRemaining)
+                    < (rhs.isDollarBased ? 101 : rhs.percentRemaining)
+            }
     }
 }
 

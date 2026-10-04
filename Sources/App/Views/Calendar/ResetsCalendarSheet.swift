@@ -203,6 +203,11 @@ private struct ResetsCalendarRow: View {
     let windowEnd: Date
     let theme: any AppThemeProvider
 
+    /// The value label + colour, using the row list's `WindowBarView` vocabulary
+    /// so a stale reading reads "stale" (muted) and an empty window "exhausted"
+    /// — never a hard red 0 % indistinguishable from real exhaustion.
+    private var value: ResetsCalendarValue { ResetsCalendarValue.from(window) }
+
     var body: some View {
         VStack(spacing: 4) {
             HStack(spacing: 6) {
@@ -212,9 +217,9 @@ private struct ResetsCalendarRow: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
                     .frame(width: 46, alignment: .leading)
-                Text("\(Int(window.percentRemaining.rounded()))%")
+                Text(value.label)
                     .font(theme.font(size: 11, weight: .bold))
-                    .foregroundStyle(theme.statusColor(for: QuotaStatus.from(percentRemaining: window.percentRemaining)))
+                    .foregroundStyle(value.status.map { theme.statusColor(for: $0) } ?? theme.textTertiary)
                 Spacer()
                 Text(resetLabel)
                     .font(theme.font(size: 10))
@@ -231,7 +236,7 @@ private struct ResetsCalendarRow: View {
                         let progress = clamped.timeIntervalSince(windowStart) / (windowEnd.timeIntervalSince(windowStart))
                         let x = geo.size.width * CGFloat(progress)
                         Circle()
-                            .fill(theme.statusColor(for: QuotaStatus.from(percentRemaining: window.percentRemaining)))
+                            .fill(value.status.map { theme.statusColor(for: $0) } ?? theme.textTertiary)
                             .frame(width: 10, height: 10)
                             .offset(x: x - 5, y: -2)
                     }
@@ -270,6 +275,43 @@ private struct ResetsCalendarRow: View {
             formatter.dateFormat = "EEE d HH:mm"
             formatter.locale = Locale(identifier: "en_US")
             return formatter.string(from: resetsAt)
+        }
+    }
+}
+
+/// Honest value shown for one window in the resets sheet. Mirrors the row
+/// list's `WindowBarView` vocabulary so a stale reading (old manual sync,
+/// errored provider) reads "stale" and a truly empty window "exhausted" —
+/// never a hard red 0 % that looks like a live exhaustion.
+enum ResetsCalendarValue: Equatable {
+    /// Known but too old to trust — rendered muted, never coloured red.
+    case stale
+    /// A genuinely empty window — the only reading that may read as depleted.
+    case exhausted
+    /// A live percentage remaining.
+    case percent(Double)
+
+    static func from(_ window: WindowSnapshot) -> ResetsCalendarValue {
+        if window.isStale { return .stale }
+        if window.percentRemaining <= 1 { return .exhausted }
+        return .percent(window.percentRemaining)
+    }
+
+    var label: String {
+        switch self {
+        case .stale: "stale"
+        case .exhausted: "exhausted"
+        case .percent(let value): "\(Int(value.rounded()))%"
+        }
+    }
+
+    /// The status colour, or nil when the value must stay muted (a stale reading
+    /// is not a verdict). Mirrors `WindowBarView.valueText`.
+    var status: QuotaStatus? {
+        switch self {
+        case .stale: nil
+        case .exhausted: .depleted
+        case .percent(let value): QuotaStatus.from(percentRemaining: value)
         }
     }
 }
