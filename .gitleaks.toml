@@ -1,0 +1,32 @@
+# Gitleaks configuration for Cortex (public repository).
+#
+# Used by scripts/secret-scan.sh, which runs from scripts/publish-to-cortex.sh
+# (before the push to the public `main`), from the pre-push hook installed by
+# scripts/install-git-hooks.sh, and from the `secret-scan` job in tests.yml.
+#
+# Everything the default gitleaks ruleset flags is a finding unless listed
+# here. Keep this allowlist to literal test fixtures: never allowlist a path
+# under Sources/, never allowlist by rule alone.
+
+title = "Cortex secret scan"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known test fixtures — not credentials"
+regexes = [
+  # Provider fixtures used by the probe / settings-repository tests.
+  '''sk-(ant|zai)-test-key-[0-9]+''',
+  '''sk-live-shouldnotleak''',
+  '''anthropic-fixture-key''',
+  '''login_aliyunid_ticket=abc[0-9]*''',
+]
+
+# scripts/verify-api-key.sh only compares a file's first/last line against the
+# literal PEM header/footer strings. It never contains key material. Scoped to
+# the `private-key` rule so any other rule still fires on that file.
+[[rules]]
+id = "private-key"
+[rules.allowlist]
+paths = ['''^scripts/verify-api-key\.sh$''']
