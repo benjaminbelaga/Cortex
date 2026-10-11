@@ -5,6 +5,11 @@ on:
     branches: [main]
     paths: ['docs/**', '.github/workflows/pages.yml']
   workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: 'HEAD SHA expected by the operator (dispatch contract)'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -21,6 +26,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: [self-hosted, macos, arm64, cortex-ci]
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/configure-pages@v5
