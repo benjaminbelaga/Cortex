@@ -30,6 +30,9 @@
 #
 #   --gate      run scripts/gate-xcode27.sh on the staging branch before pushing
 #   --dry-run   do everything except the final push
+#
+#   Every run also runs scripts/secret-scan.sh (gitleaks) on the commits being
+#   published and refuses on any finding — Cortex is public, there is no undo.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
@@ -138,6 +141,16 @@ if [ -f "$POLICY" ] && [ -f "$SSOT" ]; then
   echo "   ok — workflows pass the Cortex policy"
 else
   echo "   WARN: policy or SSOT missing — skipping the pre-flight lint (the push hook still enforces it)"
+fi
+
+echo "== 4b/6 secret scan ($REMOTE/main..HEAD, redacted output)"
+# Cortex is PUBLIC. A credential that reaches its main is leaked the moment
+# it lands, whatever happens next, so this step cannot be skipped or made
+# advisory. The scanner's allowlist (.gitleaks.toml) holds test fixtures only.
+command -v "${GITLEAKS_BIN:-gitleaks}" >/dev/null 2>&1 || brew install gitleaks
+if ! ./scripts/secret-scan.sh "$REMOTE/main..HEAD"; then
+  echo "publish-to-cortex: REFUSED — a secret is in the commits being published. Rotate it, rewrite the commit, retry." >&2
+  exit 1
 fi
 
 if [ "$GATE" -eq 1 ]; then

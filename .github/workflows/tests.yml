@@ -17,6 +17,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  secret-scan:
+    name: Secret scan (gitleaks, full history)
+    # Cortex is public: a credential anywhere in its history is leaked. Same
+    # scanner and allowlist as scripts/publish-to-cortex.sh and the pre-push
+    # hook (scripts/secret-scan.sh), run here over the whole history.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, macos, arm64, cortex-ci]
+    timeout-minutes: 15
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install gitleaks
+        run: command -v gitleaks >/dev/null || brew install gitleaks
+
+      - name: Scan every commit
+        run: ./scripts/secret-scan.sh --all
+
   test:
     name: Unit Tests with Coverage
     # Anti-fork guard (E2): see build.yml — same rationale.

@@ -277,6 +277,26 @@ tuist test --result-bundle-path TestResults.xcresult -- -enableCodeCoverage YES
 tuist build Cortex -C Release
 ```
 
+### Secret Scan (required before pushing)
+
+Cortex is a public repository: a credential that reaches `main` is leaked the
+moment it lands. Every path to `main` therefore runs the same
+[gitleaks](https://github.com/gitleaks/gitleaks) scan (`scripts/secret-scan.sh`,
+rules in `.gitleaks.toml`): the publish script, the CI `secret-scan` job, and a
+`pre-push` hook you install once per clone:
+
+```bash
+brew install gitleaks
+scripts/install-git-hooks.sh        # installs .git/hooks/pre-push
+
+scripts/secret-scan.sh              # scan origin/main..HEAD by hand
+scripts/secret-scan.sh --worktree   # scan uncommitted changes
+```
+
+A finding aborts the push (output is redacted). Rotate the credential first,
+then rewrite the commit — a rotated key is the only acceptable fix, never an
+allowlist entry. Only literal test fixtures belong in `.gitleaks.toml`.
+
 ### SwiftUI Previews
 
 After opening in Xcode, SwiftUI previews will work with `Cmd+Option+Return`. The project is configured with `ENABLE_DEBUG_DYLIB` for preview support.
